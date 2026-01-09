@@ -28,15 +28,29 @@ const usePeerJS = () => {
 
 // --- COMPONENTES UI DE TRANSMISIÓN (HUD) ---
 const BroadcastHUD = () => {
-    const [time, setTime] = useState('');
+    const [dateTime, setDateTime] = useState('');
     const [log, setLog] = useState('SISTEMA OBR ONLINE');
     const [socialIdx, setSocialIdx] = useState(0);
     
-    // Reloj
+    // Reloj Completo con Fecha
     useEffect(() => {
-        const t = setInterval(() => {
-            setTime(new Date().toLocaleTimeString());
-        }, 1000);
+        const updateTime = () => {
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = String(now.getFullYear()).slice(-2);
+            
+            let h = now.getHours();
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const amp = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12; // Formato 12h
+            
+            setDateTime(`${d}/${m}/${y} ${String(h).padStart(2, '0')}:${min}:${s} ${amp}`);
+        };
+        
+        const t = setInterval(updateTime, 1000);
+        updateTime();
         return () => clearInterval(t);
     }, []);
 
@@ -57,34 +71,36 @@ const BroadcastHUD = () => {
 
     return (
         <div className="absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30">
-            {/* HEADER */}
+            {/* HEADER (Logo + Fecha/Hora) */}
             <div className="absolute top-4 left-4 flex flex-col">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 bg-black/40 px-2 py-1 rounded backdrop-blur-sm border-l-4 border-red-600">
                     <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
                     <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>DETECTOR-OBR</span>
                 </div>
-                <div className="text-xs font-mono text-red-300 ml-5 tracking-[0.2em]">{time}</div>
+                <div className="text-[10px] font-mono text-red-300 ml-1 tracking-widest bg-black/60 px-2 py-0.5 rounded w-fit mt-1 border border-red-900/30">
+                    {dateTime}
+                </div>
             </div>
 
             {/* LOGS */}
-            <div className="absolute bottom-4 left-4">
-                <div className="text-[10px] font-mono text-red-500 bg-black/60 px-2 py-1 border-l-2 border-red-500 animate-pulse">
+            <div className="absolute bottom-12 left-4">
+                <div className="text-[10px] font-mono text-red-500 bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse">
                     {`> ${log}`}
                 </div>
             </div>
 
-            {/* SOCIAL BAR */}
-            <div className="absolute bottom-16 left-0 right-0 flex justify-center items-center">
-                <div className="bg-black/40 backdrop-blur-sm border-t border-b border-red-900/30 w-full py-1 flex justify-center h-8 items-center">
-                    {socialIdx === 0 && <span className="text-white font-bold tracking-[0.3em] animate-fade-in text-sm">SÍGUENOS EN</span>}
+            {/* SOCIAL BAR (AL LIMITE DE PANTALLA) */}
+            <div className="absolute bottom-0 left-0 right-0 flex justify-center items-end">
+                <div className="bg-gradient-to-t from-black via-black/80 to-transparent w-full py-2 flex justify-center h-10 items-end border-t border-red-900/30">
+                    {socialIdx === 0 && <span className="text-white font-bold tracking-[0.3em] animate-fade-in text-xs mb-1">SÍGUENOS EN</span>}
                     {socialIdx === 1 && (
-                        <div className="flex gap-4 text-white text-lg animate-fade-in">
-                            <span className="text-pink-500 font-bold">TikTok</span>
-                            <span className="text-blue-500 font-bold">Facebook</span>
-                            <span className="text-red-500 font-bold">YouTube</span>
+                        <div className="flex gap-6 text-white text-sm animate-fade-in font-bold mb-1 items-center">
+                            <span className="text-pink-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">TT</span> TikTok</span>
+                            <span className="text-blue-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">FB</span> Facebook</span>
+                            <span className="text-red-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">YT</span> YouTube</span>
                         </div>
                     )}
-                    {socialIdx === 2 && <span className="text-red-500 font-mono tracking-widest animate-fade-in text-sm bg-black/80 px-2">@EXPLORACIONES OBR</span>}
+                    {socialIdx === 2 && <span className="text-red-500 font-mono tracking-widest animate-fade-in text-sm bg-black/90 px-3 py-0.5 border-b-2 border-red-600">@EXPLORACIONES OBR</span>}
                 </div>
             </div>
         </div>
@@ -274,7 +290,7 @@ const DockMode = () => {
                   <RemoteVideo stream={cameras[programId].stream} className="w-full h-full object-contain" />
               ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800">BLACK</div>}
               
-              {/* CAPA HUD (Superpuesta en Programa) */}
+              {/* CAPA HUD (Superpuesta en Programa, oculta en Intro/Outro) */}
               {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
               
               <MediaOverlay />
