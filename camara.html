@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v105 (HYBRID)</title> 
+    <title>CAMARA OBR v115 (MAX PERF)</title> 
     <link rel="icon" type="image/png" href="obr-logo.png">
     
     <!-- LIBS -->
@@ -17,122 +17,174 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        * { user-select: none; -webkit-touch-callout: none; box-sizing: border-box; }
-        body { background: #000; overflow: hidden; height: 100vh; width: 100vw; touch-action: none; font-family: 'Orbitron', sans-serif; }
+        * { user-select: none; -webkit-touch-callout: none; box-sizing: border-box; outline: none; }
         
-        /* LAYOUT */
-        #video-wrapper { 
-            position: absolute; inset: 0; background: #000; 
-            transform-origin: center; transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+        /* FORZAR MODO HORIZONTAL (LANDSCAPE) SIEMPRE */
+        body { 
+            background: #000; overflow: hidden; 
+            font-family: 'Orbitron', sans-serif; 
+            width: 100vw; height: 100vh;
+            margin: 0; padding: 0;
         }
-        #video-source { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
-        #render-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+        @media screen and (orientation: portrait) {
+            body {
+                transform: rotate(90deg);
+                transform-origin: bottom left;
+                position: absolute;
+                top: -100vw;
+                left: 0;
+                height: 100vw;
+                width: 100vh;
+            }
+        }
         
-        /* UI LAYER */
-        #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+        /* CONTENEDOR DE CAPAS */
+        #viewport { position: absolute; inset: 0; background: #000; overflow: hidden; }
+        
+        /* CAPA DE TRANSFORMACIÓN (ZOOM) */
+        #zoom-layer { 
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            transform-origin: center center; 
+            transition: transform 0.2s ease-out; 
+            will-change: transform;
+        }
+
+        /* VIDEO NATIVO (FONDO) */
+        #video-source { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 1; 
+        }
+
+        /* CANVAS SLS (ENCIMA) */
+        #sls-canvas { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 2; pointer-events: none; 
+        }
+        
+        /* FILTROS CSS (APLICADOS AL VIDEO) */
+        .filter-night { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.3) saturate(1.2); }
+        .filter-thermal { filter: invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2); }
+        .filter-urbex { filter: sepia(30%) contrast(1.4) brightness(0.9) saturate(0.4); }
+        
+        /* UI LAYER (HUD) */
+        #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
         .interactive { pointer-events: auto; }
         
-        /* TALLY */
+        /* TALLY LIGHT */
         #tally-border { 
             position: absolute; inset: 0; border: 0px solid transparent; 
             transition: border-width 0.2s; z-index: 50; pointer-events: none; 
         }
-        #tally-border.program { border: 10px solid red; box-shadow: inset 0 0 50px red; }
-        #tally-border.preview { border: 10px solid #00ff00; }
+        #tally-border.program { border: 12px solid red; box-shadow: inset 0 0 40px red; }
+        #tally-border.preview { border: 12px solid #00ff00; }
 
-        /* MENUS */
-        .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 20px; z-index: 100; pointer-events: auto; transition: opacity 0.3s; opacity: 0; }
-        .menu-container.visible { opacity: 1; }
+        /* MENUS LATERALES (ZONAS ACTIVAS) */
+        .menu-container { 
+            position: absolute; top: 50%; transform: translateY(-50%); 
+            display: flex; flex-direction: column; gap: 15px; 
+            z-index: 100; pointer-events: auto; 
+            transition: opacity 0.2s; 
+            opacity: 0; pointer-events: none; 
+        }
+        .menu-container.visible { opacity: 1; pointer-events: auto; }
+        .menu-container.left-side { left: 20px; }
+        .menu-container.right-side { right: 20px; }
         
         .menu-btn { 
-            width: 60px; height: 60px; border: 2px solid #ff3333; border-radius: 50%; 
-            background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; 
-            color: #ff3333; font-size: 1.5rem; cursor: pointer; backdrop-filter: blur(5px);
+            width: 55px; height: 55px; border: 2px solid #ff3333; border-radius: 50%; 
+            background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; 
+            color: #ff3333; font-size: 1.4rem; cursor: pointer; backdrop-filter: blur(4px);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5); active:scale-95 transition-transform;
         }
-        .menu-btn:active { background: #ff3333; color: black; transform: scale(0.95); }
         .menu-btn.active { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
-        .menu-label { font-size: 0.6rem; color: white; text-align: center; margin-top: 5px; font-family: 'Share Tech Mono'; text-shadow: 0 0 2px black; }
+        .menu-label { font-size: 0.6rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
 
         /* LOADING */
-        #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .load-btn { background: #111; border: 1px solid #ff3333; color: #ff3333; padding: 20px 50px; font-size: 1.2rem; margin-top: 30px; cursor: pointer; font-weight: bold; }
+        #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #220000 0%, #000000 100%); }
+        .load-btn { background: rgba(20,0,0,0.6); border: 2px solid #ff3333; color: #ff3333; padding: 18px 40px; font-size: 1.1rem; margin-top: 30px; cursor: pointer; font-weight: bold; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: 0.2s; }
+        .load-btn:hover { background: #ff3333; color: black; box-shadow: 0 0 30px #ff3333; }
         
         /* MODALS */
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
         
-        /* ZONES */
-        #touch-zone { position: absolute; inset: 0; z-index: 5; pointer-events: auto; }
-        #sls-pip { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.5); px-2; }
+        /* ZONA TÁCTIL TRANSPARENTE */
+        #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
+        
+        #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-    <div id="video-wrapper">
-        <video id="video-source" autoplay playsinline muted></video>
-        <canvas id="render-canvas"></canvas>
+    <div id="viewport">
+        <!-- CAPA DE ZOOM (VIDEO + SLS) -->
+        <div id="zoom-layer">
+            <video id="video-source" autoplay playsinline muted></video>
+            <canvas id="sls-canvas"></canvas>
+        </div>
     </div>
 
-    <!-- ZONA TÁCTIL -->
-    <div id="touch-zone"></div>
+    <!-- SUPERFICIE TÁCTIL PARA ZOOM Y MENÚS -->
+    <div id="touch-surface"></div>
 
     <div id="ui-layer">
         <div id="tally-border"></div>
-        <div id="sls-pip">SLS: BUSCANDO...</div>
+        <div id="sls-pip">● SLS ACTIVO</div>
         
-        <div id="link-status" class="absolute top-4 left-4 text-[10px] font-mono text-gray-500 bg-black/50 px-2 rounded">OFFLINE</div>
-        <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
+        <div id="link-status" class="absolute top-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
+        <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
 
-        <!-- MENUS -->
-        <div id="menu-left" class="menu-container left-6">
-            <div><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
-            <div><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+        <!-- MENUS (DOBLE CLICK DESACTIVA) -->
+        <div id="menu-left" class="menu-container left-side">
+            <div><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
 
-        <div id="menu-right" class="menu-container right-6">
-            <div><div class="menu-btn" onclick="togglePareidolia()" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+        <div id="menu-right" class="menu-container right-side">
+            <div><div class="menu-btn" onclick="togglePareidolia()" ondblclick="togglePareidolia()" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
             <div><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
             <div><div class="menu-btn" onclick="resetZoom()"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
         <!-- IA FEEDBACK -->
-        <div id="ia-box" class="absolute bottom-4 right-4 bg-black/80 border border-red-500 p-2 hidden max-w-[150px]">
-            <div id="ia-text" class="text-[10px] font-mono text-red-500 uppercase"></div>
+        <div id="ia-box" class="absolute bottom-6 right-6 bg-black/90 border border-red-500 p-3 hidden max-w-[200px] rounded shadow-lg shadow-red-900/20">
+            <div id="ia-text" class="text-xs font-mono text-red-400 uppercase tracking-widest leading-relaxed"></div>
         </div>
     </div>
 
     <!-- PANTALLA CARGA -->
     <div id="loading">
-        <h1 class="text-3xl text-red-600 font-bold mb-2">CAMARA OBR</h1>
-        <p class="text-xs font-mono text-gray-500">SISTEMA HÍBRIDO - VISTA EXPLORADOR</p>
+        <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
+        <p class="text-xs font-mono text-gray-500 mb-8">MAX PERFORMANCE v115</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
-        <button id="pwa-btn" class="text-xs text-green-500 mt-4 border border-green-900 px-3 py-1 hidden interactive" onclick="installPWA()">INSTALAR APP</button>
+        <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
 
     <!-- MODAL CONEXIÓN -->
     <div id="connect-modal" class="modal-bg">
-        <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center">
-            <h3 class="text-cyan-400 mb-6 text-xl">ENLACE PRODOCK</h3>
-            <input type="text" id="dock-id" placeholder="ID DEL DIRECTOR" class="w-full bg-black border border-gray-700 text-white p-4 text-center uppercase mb-6 text-xl outline-none focus:border-cyan-400">
-            <button onclick="connectToProdock()" class="w-full bg-cyan-900 text-white font-bold py-4 hover:bg-cyan-700 mb-4">CONECTAR</button>
-            <button onclick="document.getElementById('connect-modal').classList.remove('active')" class="text-gray-500 text-xs">CANCELAR</button>
+        <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center shadow-[0_0_30px_rgba(0,255,255,0.1)]">
+            <h3 class="text-cyan-400 mb-6 text-xl tracking-widest font-bold">ENLACE PRODOCK</h3>
+            <input type="text" id="dock-id" placeholder="ID DEL DIRECTOR" class="w-full bg-black border border-gray-700 text-white p-4 text-center uppercase mb-6 text-xl outline-none focus:border-cyan-400 transition-colors rounded">
+            <button onclick="connectToProdock()" class="w-full bg-cyan-900 text-white font-bold py-4 hover:bg-cyan-700 mb-4 rounded font-orbitron">CONECTAR</button>
+            <button onclick="document.getElementById('connect-modal').classList.remove('active')" class="text-gray-500 text-xs hover:text-white">CANCELAR</button>
         </div>
     </div>
 
     <!-- MODAL AJUSTES -->
     <div id="settings-modal" class="modal-bg">
-        <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80">
-            <h2 class="text-red-500 font-orbitron mb-4">CONFIGURACIÓN</h2>
-            <input type="password" id="api-key" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white mb-4">
-            <button onclick="saveSettings()" class="w-full border border-green-700 text-green-500 py-2">GUARDAR</button>
-            <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-2 text-gray-500 text-xs">CERRAR</button>
+        <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
+            <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
+            <input type="password" id="api-key" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-3 text-white mb-6 text-sm rounded outline-none focus:border-red-500">
+            <button onclick="saveSettings()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold">GUARDAR</button>
+            <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
         </div>
     </div>
 
 <script>
-    // --- VARIABLES ---
+    // --- VARIABLES GLOBALES ---
     let API_KEY = localStorage.getItem("obr_key") || "";
     let currentFilter = 'normal';
     let isSLSActive = false;
@@ -144,40 +196,71 @@
     let peer, conn;
     let deferredPrompt;
     let menuTimer;
+    let videoStream;
 
     const video = document.getElementById('video-source');
-    const canvas = document.getElementById('render-canvas');
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const slsCanvas = document.getElementById('sls-canvas');
+    const ctx = slsCanvas.getContext('2d');
+    const zoomLayer = document.getElementById('zoom-layer');
 
-    // --- ZOOM INTELIGENTE (IGNORA BORDES) ---
-    document.getElementById('touch-zone').addEventListener('click', (e) => {
+    // --- INTERACCIÓN TÁCTIL (ZOOM A PUNTO + MENUS LATERALES) ---
+    document.getElementById('touch-surface').addEventListener('click', (e) => {
         const w = window.innerWidth;
-        const margin = 80; // Margen seguro para menús (px)
+        const h = window.innerHeight;
+        // Ajustamos coordenadas si está rotado por CSS (Portrait)
+        // En Portrait, width y height se intercambian visualmente, pero clientX/Y siguen siendo de pantalla
         
-        // Mostrar menús al tocar
-        document.getElementById('menu-left').classList.add('visible');
-        document.getElementById('menu-right').classList.add('visible');
-        
-        clearTimeout(menuTimer);
-        menuTimer = setTimeout(() => {
-            document.getElementById('menu-left').classList.remove('visible');
-            document.getElementById('menu-right').classList.remove('visible');
-        }, 4000);
+        const touchX = e.clientX;
+        const touchY = e.clientY;
+        const edgeThreshold = 80; // Zona segura para menús (px)
 
-        // Zoom solo si el toque está en el CENTRO (evita menús)
-        if (e.clientX > margin && e.clientX < (w - margin)) {
-            toggleZoom();
+        // 1. ZONA IZQUIERDA (MENÚ FILTROS)
+        if (touchX < edgeThreshold) {
+            showMenus();
+            return;
+        }
+
+        // 2. ZONA DERECHA (MENÚ HERRAMIENTAS)
+        if (touchX > w - edgeThreshold) {
+            showMenus();
+            return;
+        }
+
+        // 3. ZONA CENTRAL (ZOOM INTELIGENTE)
+        // Zoom Toggle: 1x -> 2.5x -> 1x
+        if (zoomLevel === 1) {
+            zoomLevel = 2.5;
+            // Calcular origen del zoom relativo al toque
+            const originX = (touchX / w) * 100;
+            const originY = (touchY / h) * 100;
+            zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
+            zoomLayer.style.transform = `scale(${zoomLevel})`;
+        } else {
+            resetZoom();
         }
     });
 
-    function toggleZoom() {
-        zoomLevel = zoomLevel === 1 ? 2 : (zoomLevel === 2 ? 3 : 1);
-        document.getElementById('video-wrapper').style.transform = `scale(${zoomLevel})`;
+    function showMenus() {
+        const left = document.getElementById('menu-left');
+        const right = document.getElementById('menu-right');
+        
+        left.classList.add('visible');
+        right.classList.add('visible');
+        
+        clearTimeout(menuTimer);
+        menuTimer = setTimeout(() => {
+            left.classList.remove('visible');
+            right.classList.remove('visible');
+        }, 4000);
     }
-    
+
     function resetZoom() {
         zoomLevel = 1;
-        document.getElementById('video-wrapper').style.transform = `scale(1)`;
+        zoomLayer.style.transform = `scale(1)`;
+        // Reset origin to center smoothly
+        setTimeout(() => {
+            if(zoomLevel === 1) zoomLayer.style.transformOrigin = `center center`;
+        }, 300);
     }
 
     // --- PWA ---
@@ -187,60 +270,76 @@
     });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
 
-    // --- INICIO ---
+    // --- INICIALIZACIÓN SISTEMA ---
     window.onload = () => document.getElementById('api-key').value = API_KEY;
 
     async function initApp() {
         const btn = document.querySelector('.load-btn');
-        btn.innerText = "CARGANDO MOTORES...";
+        btn.innerText = "INICIANDO...";
         btn.disabled = true;
         
         try {
-            // Iniciar Video
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+            // ARRANQUE PARALELO PARA VELOCIDAD
+            const camPromise = navigator.mediaDevices.getUserMedia({ 
+                audio: true, 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 3840 }, // SOLICITAR 4K
+                    height: { ideal: 2160 },
+                    frameRate: { ideal: 60 },
+                    advanced: [{ focusMode: "continuous" }] 
+                } 
+            });
+
+            const aiPromise = tf.setBackend('webgl').then(() => 
+                poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING 
+                })
+            );
+
+            // Esperar ambos
+            const [stream, det] = await Promise.all([camPromise, aiPromise]);
+            
+            videoStream = stream;
             video.srcObject = stream;
-            await new Promise(r => video.onloadedmetadata = () => { video.play(); r(); });
+            detector = det;
             
-            // Iniciar IA Local (Para que el explorador vea el SLS)
-            await tf.setBackend('webgl');
-            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
-            
-            document.getElementById('loading').style.display = 'none';
-            resize(); 
+            video.onloadedmetadata = () => { 
+                video.play();
+                document.getElementById('loading').style.display = 'none';
+                resize(); 
+                // BUCLE PRINCIPAL
+                renderLoop(); 
+                detectionLoop();
+            };
+
+            // Watchdog
             window.addEventListener('resize', resize);
-            
-            // Bucles de Renderizado y Detección
-            loop(); 
-            detectLoop();
+            setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
             
         } catch(e) { 
-            alert("Error iniciando: " + e.message); 
+            alert("Error Inicio: " + e.message); 
             location.reload(); 
         }
     }
 
-    function resize() { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+    function resize() { 
+        slsCanvas.width = window.innerWidth; 
+        slsCanvas.height = window.innerHeight; 
+    }
 
-    // --- RENDER LOOP (FILTROS + SLS DIBUJADO AQUI) ---
-    function loop() {
-        // 1. Aplicar Filtro Visual al Contexto
-        ctx.filter = 'none';
-        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3)';
-        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.3)';
+    // --- RENDER LOOP OPTIMIZADO ---
+    function renderLoop() {
+        // Limpiar canvas de SLS (Transparente)
+        ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
         
-        // Corrección Urbex: Más saturación sucia y contraste
-        if(currentFilter === 'urbex') ctx.filter = 'sepia(0.6) contrast(1.4) brightness(0.9) saturate(0.4)';
-        
-        // Dibujar video con filtro
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // 2. Dibujar SLS (Si está activo)
+        // El video ya se muestra por debajo (capa 0).
+        // Solo dibujamos SLS si es necesario
         if(isSLSActive && poses.length > 0) {
-            ctx.filter = 'none'; // Importante: SLS se dibuja con colores reales sobre el filtro
             drawSLS(poses);
         }
         
-        requestAnimationFrame(loop);
+        requestAnimationFrame(renderLoop);
     }
 
     // --- DIBUJADO SLS (SILUETA ROJA + ESQUELETO) ---
@@ -252,16 +351,14 @@
             const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
             
             // 1. CAPA TÉRMICA (SILUETA ROJA GRUESA)
-            // Aumentamos grosor y blur para simular cuerpo
-            ctx.shadowBlur = 40; 
-            ctx.shadowColor = 'rgba(255, 0, 0, 1)'; 
-            ctx.strokeStyle = 'rgba(200, 0, 0, 0.5)'; 
-            ctx.lineWidth = 25; // Más grueso
+            ctx.shadowBlur = 30; 
+            ctx.shadowColor = 'rgba(255, 0, 0, 0.8)'; 
+            ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)'; 
+            ctx.lineWidth = 20; 
             
             ctx.beginPath();
             edges.forEach(([a,b]) => { 
                 const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
-                // Umbral bajo (0.15) para dibujar incluso detecciones débiles
                 if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } 
             });
             ctx.stroke();
@@ -280,19 +377,22 @@
         });
     }
 
-    async function detectLoop() {
+    async function detectionLoop() {
         while(true) {
+            // Solo detectar si es necesario (Ahorro de batería)
             if(detector && (isSLSActive || isPareidoliaActive)) {
                 try { 
-                    // Sensibilidad alta: scoreThreshold bajo (0.15) para captar pareidolias/ventiladores
+                    // Sensibilidad alta (0.15)
                     poses = await detector.estimatePoses(video, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.15}); 
                 } catch(e){}
             } else { poses = []; }
+            
+            // Intervalo de 50ms (20 FPS de detección es suficiente para fluidez visual)
             await new Promise(r => setTimeout(r, 50));
         }
     }
 
-    // --- CONEXIÓN ---
+    // --- CONEXIÓN PEERJS ---
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
     
     async function connectToProdock() {
@@ -304,8 +404,8 @@
         peer.on('open', myId => {
             conn = peer.connect(id);
             conn.on('open', () => {
-                document.getElementById('link-status').innerText = "ONLINE";
-                document.getElementById('link-status').className = "absolute top-4 left-4 text-[10px] font-mono text-green-500 bg-green-900/30 px-2 rounded border border-green-500";
+                document.getElementById('link-status').innerText = "ONLINE: PRODOCK";
+                document.getElementById('link-status').className = "absolute top-4 left-4 text-[10px] font-mono text-green-400 bg-green-900/40 px-2 py-1 rounded border border-green-500 font-bold";
                 conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
             });
             conn.on('data', d => {
@@ -313,42 +413,47 @@
                 if(d.type === 'cmd') handleCmd(d);
             });
             
-            // ENVIAMOS EL CANVAS CAPTURE STREAM (LO QUE VE EL EXPLORADOR)
-            const s = canvas.captureStream(30);
-            if(video.srcObject.getAudioTracks().length > 0) s.addTrack(video.srcObject.getAudioTracks()[0]);
-            peer.call(id, s);
+            // ENVIAR STREAM (VIDEO DIRECTO PARA MAX CALIDAD)
+            peer.call(id, videoStream);
         });
     }
 
     function handleCmd(d) {
-        // Ejecuta comandos del director en local
         if(d.action === 'filter') setFilter(d.value); 
         if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
         if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
     }
 
-    // --- ACCIONES LOCALES ---
+    // --- ACCIONES DE CÁMARA ---
     function setFilter(f, btn) {
+        // Toggle OFF si ya está activo
+        if(currentFilter === f && f !== 'normal') {
+            setFilter('normal');
+            return;
+        }
+
         currentFilter = f;
         isSLSActive = (f === 'sls');
         
-        // Reset botones UI
+        // UI
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
-        if(btn) btn.classList.add('active');
+        if(btn && f !== 'normal') btn.classList.add('active');
         
-        // Feedback visual
+        // Aplicar clase al video
+        video.className = '';
+        if(f === 'night') video.classList.add('filter-night');
+        if(f === 'thermal') video.classList.add('filter-thermal');
+        if(f === 'urbex') video.classList.add('filter-urbex');
+        
+        // Indicador SLS
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
-        
-        // Auto ocultar menú
-        setTimeout(() => {
-            document.getElementById('menu-left').classList.remove('visible');
-        }, 500);
     }
 
     async function togglePareidolia() {
-        if(!API_KEY) return alert("FALTA API KEY");
+        if(!API_KEY) return alert("FALTA API KEY (AJUSTES)");
         isPareidoliaActive = !isPareidoliaActive;
         const btn = document.getElementById('btn-ia');
+        
         if(isPareidoliaActive) {
             btn.classList.add('active');
             analyzeAI();
@@ -361,8 +466,13 @@
     async function analyzeAI() {
         if(!isPareidoliaActive || isAIWorking) return;
         isAIWorking = true;
+        
+        // Capturar frame pequeño
         const c = document.createElement('canvas'); c.width=640; c.height=360;
-        c.getContext('2d').drawImage(video,0,0,640,360);
+        const cx = c.getContext('2d');
+        // Dibujar con filtros si es necesario (aquí dibujamos raw)
+        cx.drawImage(video,0,0,640,360);
+        
         const b64 = c.toDataURL('image/jpeg', 0.5).split(',')[1];
         
         document.getElementById('ia-box').style.display = 'block';
@@ -374,15 +484,16 @@
                 body: JSON.stringify({ contents: [{ parts: [{ text: "Describe en 3 palabras una amenaza paranormal. Sé breve." }, { inlineData: { mimeType: "image/jpeg", data: b64 } }] }] })
             });
             const d = await r.json();
-            const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || "ERR";
+            const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || "...";
             document.getElementById('ia-text').innerText = txt;
             
             if('speechSynthesis' in window) {
                 const u = new SpeechSynthesisUtterance(txt); u.lang='es-ES'; window.speechSynthesis.speak(u);
             }
         } catch(e) { console.log(e); }
+        
         isAIWorking = false;
-        if(isPareidoliaActive) setTimeout(analyzeAI, 10000);
+        if(isPareidoliaActive) setTimeout(analyzeAI, 8000);
     }
 
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
