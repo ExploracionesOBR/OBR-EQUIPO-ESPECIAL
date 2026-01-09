@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>CAMARA OBR v105 (HYBRID)</title> 
+    <link rel="icon" type="image/png" href="obr-logo.png">
+    
+    <!-- LIBS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * { user-select: none; -webkit-touch-callout: none; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; height: 100vh; width: 100vw; touch-action: none; font-family: 'Orbitron', sans-serif; }
+        
+        /* LAYOUT */
+        #video-wrapper { 
+            position: absolute; inset: 0; background: #000; 
+            transform-origin: center; transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+        }
+        #video-source { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
+        #render-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        
+        /* UI LAYER */
+        #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+        .interactive { pointer-events: auto; }
+        
+        /* TALLY */
+        #tally-border { 
+            position: absolute; inset: 0; border: 0px solid transparent; 
+            transition: border-width 0.2s; z-index: 50; pointer-events: none; 
+        }
+        #tally-border.program { border: 10px solid red; box-shadow: inset 0 0 50px red; }
+        #tally-border.preview { border: 10px solid #00ff00; }
+
+        /* MENUS */
+        .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 20px; z-index: 100; pointer-events: auto; transition: opacity 0.3s; opacity: 0; }
+        .menu-container.visible { opacity: 1; }
+        
+        .menu-btn { 
+            width: 60px; height: 60px; border: 2px solid #ff3333; border-radius: 50%; 
+            background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; 
+            color: #ff3333; font-size: 1.5rem; cursor: pointer; backdrop-filter: blur(5px);
+        }
+        .menu-btn:active { background: #ff3333; color: black; transform: scale(0.95); }
+        .menu-btn.active { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
+        .menu-label { font-size: 0.6rem; color: white; text-align: center; margin-top: 5px; font-family: 'Share Tech Mono'; text-shadow: 0 0 2px black; }
+
+        /* LOADING */
+        #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .load-btn { background: #111; border: 1px solid #ff3333; color: #ff3333; padding: 20px 50px; font-size: 1.2rem; margin-top: 30px; cursor: pointer; font-weight: bold; }
+        
+        /* MODALS */
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
+        .modal-bg.active { display: flex; }
+        
+        /* ZONES */
+        #touch-zone { position: absolute; inset: 0; z-index: 5; pointer-events: auto; }
+        #sls-pip { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.5); px-2; }
+    </style>
+</head>
+<body>
+
+    <div id="video-wrapper">
+        <video id="video-source" autoplay playsinline muted></video>
+        <canvas id="render-canvas"></canvas>
+    </div>
+
+    <!-- ZONA TÁCTIL -->
+    <div id="touch-zone"></div>
+
+    <div id="ui-layer">
+        <div id="tally-border"></div>
+        <div id="sls-pip">SLS: BUSCANDO...</div>
+        
+        <div id="link-status" class="absolute top-4 left-4 text-[10px] font-mono text-gray-500 bg-black/50 px-2 rounded">OFFLINE</div>
+        <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
+
+        <!-- MENUS -->
+        <div id="menu-left" class="menu-container left-6">
+            <div><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+        </div>
+
+        <div id="menu-right" class="menu-container right-6">
+            <div><div class="menu-btn" onclick="togglePareidolia()" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+            <div><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
+            <div><div class="menu-btn" onclick="resetZoom()"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
+        </div>
+
+        <!-- IA FEEDBACK -->
+        <div id="ia-box" class="absolute bottom-4 right-4 bg-black/80 border border-red-500 p-2 hidden max-w-[150px]">
+            <div id="ia-text" class="text-[10px] font-mono text-red-500 uppercase"></div>
+        </div>
+    </div>
+
+    <!-- PANTALLA CARGA -->
+    <div id="loading">
+        <h1 class="text-3xl text-red-600 font-bold mb-2">CAMARA OBR</h1>
+        <p class="text-xs font-mono text-gray-500">SISTEMA HÍBRIDO - VISTA EXPLORADOR</p>
+        <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
+        <button id="pwa-btn" class="text-xs text-green-500 mt-4 border border-green-900 px-3 py-1 hidden interactive" onclick="installPWA()">INSTALAR APP</button>
+    </div>
+
+    <!-- MODAL CONEXIÓN -->
+    <div id="connect-modal" class="modal-bg">
+        <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center">
+            <h3 class="text-cyan-400 mb-6 text-xl">ENLACE PRODOCK</h3>
+            <input type="text" id="dock-id" placeholder="ID DEL DIRECTOR" class="w-full bg-black border border-gray-700 text-white p-4 text-center uppercase mb-6 text-xl outline-none focus:border-cyan-400">
+            <button onclick="connectToProdock()" class="w-full bg-cyan-900 text-white font-bold py-4 hover:bg-cyan-700 mb-4">CONECTAR</button>
+            <button onclick="document.getElementById('connect-modal').classList.remove('active')" class="text-gray-500 text-xs">CANCELAR</button>
+        </div>
+    </div>
+
+    <!-- MODAL AJUSTES -->
+    <div id="settings-modal" class="modal-bg">
+        <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80">
+            <h2 class="text-red-500 font-orbitron mb-4">CONFIGURACIÓN</h2>
+            <input type="password" id="api-key" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white mb-4">
+            <button onclick="saveSettings()" class="w-full border border-green-700 text-green-500 py-2">GUARDAR</button>
+            <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-2 text-gray-500 text-xs">CERRAR</button>
+        </div>
+    </div>
+
+<script>
+    // --- VARIABLES ---
+    let API_KEY = localStorage.getItem("obr_key") || "";
+    let currentFilter = 'normal';
+    let isSLSActive = false;
+    let isPareidoliaActive = false;
+    let isAIWorking = false;
+    let detector = null;
+    let poses = [];
+    let zoomLevel = 1;
+    let peer, conn;
+    let deferredPrompt;
+    let menuTimer;
+
+    const video = document.getElementById('video-source');
+    const canvas = document.getElementById('render-canvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    // --- ZOOM INTELIGENTE (IGNORA BORDES) ---
+    document.getElementById('touch-zone').addEventListener('click', (e) => {
+        const w = window.innerWidth;
+        const margin = 80; // Margen seguro para menús (px)
+        
+        // Mostrar menús al tocar
+        document.getElementById('menu-left').classList.add('visible');
+        document.getElementById('menu-right').classList.add('visible');
+        
+        clearTimeout(menuTimer);
+        menuTimer = setTimeout(() => {
+            document.getElementById('menu-left').classList.remove('visible');
+            document.getElementById('menu-right').classList.remove('visible');
+        }, 4000);
+
+        // Zoom solo si el toque está en el CENTRO (evita menús)
+        if (e.clientX > margin && e.clientX < (w - margin)) {
+            toggleZoom();
+        }
+    });
+
+    function toggleZoom() {
+        zoomLevel = zoomLevel === 1 ? 2 : (zoomLevel === 2 ? 3 : 1);
+        document.getElementById('video-wrapper').style.transform = `scale(${zoomLevel})`;
+    }
+    
+    function resetZoom() {
+        zoomLevel = 1;
+        document.getElementById('video-wrapper').style.transform = `scale(1)`;
+    }
+
+    // --- PWA ---
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault(); deferredPrompt = e;
+        document.getElementById('pwa-btn').style.display = 'inline-block';
+    });
+    async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
+
+    // --- INICIO ---
+    window.onload = () => document.getElementById('api-key').value = API_KEY;
+
+    async function initApp() {
+        const btn = document.querySelector('.load-btn');
+        btn.innerText = "CARGANDO MOTORES...";
+        btn.disabled = true;
+        
+        try {
+            // Iniciar Video
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+            video.srcObject = stream;
+            await new Promise(r => video.onloadedmetadata = () => { video.play(); r(); });
+            
+            // Iniciar IA Local (Para que el explorador vea el SLS)
+            await tf.setBackend('webgl');
+            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
+            
+            document.getElementById('loading').style.display = 'none';
+            resize(); 
+            window.addEventListener('resize', resize);
+            
+            // Bucles de Renderizado y Detección
+            loop(); 
+            detectLoop();
+            
+        } catch(e) { 
+            alert("Error iniciando: " + e.message); 
+            location.reload(); 
+        }
+    }
+
+    function resize() { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+
+    // --- RENDER LOOP (FILTROS + SLS DIBUJADO AQUI) ---
+    function loop() {
+        // 1. Aplicar Filtro Visual al Contexto
+        ctx.filter = 'none';
+        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3)';
+        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.3)';
+        
+        // Corrección Urbex: Más saturación sucia y contraste
+        if(currentFilter === 'urbex') ctx.filter = 'sepia(0.6) contrast(1.4) brightness(0.9) saturate(0.4)';
+        
+        // Dibujar video con filtro
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // 2. Dibujar SLS (Si está activo)
+        if(isSLSActive && poses.length > 0) {
+            ctx.filter = 'none'; // Importante: SLS se dibuja con colores reales sobre el filtro
+            drawSLS(poses);
+        }
+        
+        requestAnimationFrame(loop);
+    }
+
+    // --- DIBUJADO SLS (SILUETA ROJA + ESQUELETO) ---
+    function drawSLS(poses) {
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        
+        poses.forEach(pose => {
+            const k = pose.keypoints;
+            const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
+            
+            // 1. CAPA TÉRMICA (SILUETA ROJA GRUESA)
+            // Aumentamos grosor y blur para simular cuerpo
+            ctx.shadowBlur = 40; 
+            ctx.shadowColor = 'rgba(255, 0, 0, 1)'; 
+            ctx.strokeStyle = 'rgba(200, 0, 0, 0.5)'; 
+            ctx.lineWidth = 25; // Más grueso
+            
+            ctx.beginPath();
+            edges.forEach(([a,b]) => { 
+                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
+                // Umbral bajo (0.15) para dibujar incluso detecciones débiles
+                if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } 
+            });
+            ctx.stroke();
+            
+            // 2. ESQUELETO ESTRUCTURAL (VERDE)
+            ctx.shadowBlur = 0; 
+            ctx.strokeStyle = '#00ff00'; 
+            ctx.lineWidth = 3;
+            
+            ctx.beginPath();
+            edges.forEach(([a,b]) => { 
+                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
+                if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } 
+            });
+            ctx.stroke();
+        });
+    }
+
+    async function detectLoop() {
+        while(true) {
+            if(detector && (isSLSActive || isPareidoliaActive)) {
+                try { 
+                    // Sensibilidad alta: scoreThreshold bajo (0.15) para captar pareidolias/ventiladores
+                    poses = await detector.estimatePoses(video, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.15}); 
+                } catch(e){}
+            } else { poses = []; }
+            await new Promise(r => setTimeout(r, 50));
+        }
+    }
+
+    // --- CONEXIÓN ---
+    function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
+    
+    async function connectToProdock() {
+        const id = document.getElementById('dock-id').value.trim();
+        if(!id) return;
+        document.getElementById('connect-modal').classList.remove('active');
+        
+        peer = new Peer();
+        peer.on('open', myId => {
+            conn = peer.connect(id);
+            conn.on('open', () => {
+                document.getElementById('link-status').innerText = "ONLINE";
+                document.getElementById('link-status').className = "absolute top-4 left-4 text-[10px] font-mono text-green-500 bg-green-900/30 px-2 rounded border border-green-500";
+                conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
+            });
+            conn.on('data', d => {
+                if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
+                if(d.type === 'cmd') handleCmd(d);
+            });
+            
+            // ENVIAMOS EL CANVAS CAPTURE STREAM (LO QUE VE EL EXPLORADOR)
+            const s = canvas.captureStream(30);
+            if(video.srcObject.getAudioTracks().length > 0) s.addTrack(video.srcObject.getAudioTracks()[0]);
+            peer.call(id, s);
+        });
+    }
+
+    function handleCmd(d) {
+        // Ejecuta comandos del director en local
+        if(d.action === 'filter') setFilter(d.value); 
+        if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
+        if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
+    }
+
+    // --- ACCIONES LOCALES ---
+    function setFilter(f, btn) {
+        currentFilter = f;
+        isSLSActive = (f === 'sls');
+        
+        // Reset botones UI
+        document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+        
+        // Feedback visual
+        document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
+        
+        // Auto ocultar menú
+        setTimeout(() => {
+            document.getElementById('menu-left').classList.remove('visible');
+        }, 500);
+    }
+
+    async function togglePareidolia() {
+        if(!API_KEY) return alert("FALTA API KEY");
+        isPareidoliaActive = !isPareidoliaActive;
+        const btn = document.getElementById('btn-ia');
+        if(isPareidoliaActive) {
+            btn.classList.add('active');
+            analyzeAI();
+        } else {
+            btn.classList.remove('active');
+            document.getElementById('ia-box').style.display = 'none';
+        }
+    }
+
+    async function analyzeAI() {
+        if(!isPareidoliaActive || isAIWorking) return;
+        isAIWorking = true;
+        const c = document.createElement('canvas'); c.width=640; c.height=360;
+        c.getContext('2d').drawImage(video,0,0,640,360);
+        const b64 = c.toDataURL('image/jpeg', 0.5).split(',')[1];
+        
+        document.getElementById('ia-box').style.display = 'block';
+        document.getElementById('ia-text').innerText = "ESCAN...";
+        
+        try {
+            const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ contents: [{ parts: [{ text: "Describe en 3 palabras una amenaza paranormal. Sé breve." }, { inlineData: { mimeType: "image/jpeg", data: b64 } }] }] })
+            });
+            const d = await r.json();
+            const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || "ERR";
+            document.getElementById('ia-text').innerText = txt;
+            
+            if('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance(txt); u.lang='es-ES'; window.speechSynthesis.speak(u);
+            }
+        } catch(e) { console.log(e); }
+        isAIWorking = false;
+        if(isPareidoliaActive) setTimeout(analyzeAI, 10000);
+    }
+
+    function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
+    function saveSettings() {
+        API_KEY = document.getElementById('api-key').value;
+        localStorage.setItem("obr_key", API_KEY);
+        document.getElementById('settings-modal').classList.remove('active');
+    }
+</script>
+</body>
+</html>
