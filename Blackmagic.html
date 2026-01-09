@@ -2,13 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PRODOCK STUDIO LIVE</title>
     
-    <!-- Carga de Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Configuración para que funcione React y Lucide directamente en el navegador -->
     <script type="importmap">
     {
       "imports": {
@@ -18,16 +16,12 @@
       }
     }
     </script>
-    
-    <!-- Babel para traducir JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { background-color: #000; color: white; overflow: hidden; }
-        /* Animaciones personalizadas */
+        body { background-color: #000; color: white; overflow: hidden; touch-action: manipulation; }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.5s ease-out; }
-        .animate-in { animation: fade-in 0.3s ease-out; }
     </style>
 </head>
 <body>
@@ -39,20 +33,15 @@
         import { 
             Monitor, Wifi, Mic, MicOff, Activity, Maximize, X, 
             Settings, Eye, Moon, Flame, Ghost, Play, Volume2, VolumeX,
-            Aperture, Radio, Film, Layers, Zap
+            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard
         } from 'lucide-react';
         
-        // NOTA: PeerJS se carga dinámicamente mediante el hook usePeerJS para evitar errores de MediaDevices
-
-        // --- CONFIGURACIÓN DE MEDIOS LOCALES (ESTUDIO) ---
-        // Estos archivos deben estar en la misma carpeta en GitHub
         const STUDIO_ASSETS = {
             intro: './INTRO_1.mp4',
             outro: './FIN_DIRECTO.mp4',
             banner: './BANNER_1.mp4'
         };
 
-        // --- PEERJS LOADER ---
         const usePeerJS = () => {
           const [loaded, setLoaded] = useState(false);
           useEffect(() => {
@@ -66,44 +55,35 @@
           return loaded;
         };
 
-        // --- COMPONENTES UI DE TRANSMISIÓN (HUD) ---
+        // --- HUD DE TRANSMISIÓN ---
         const BroadcastHUD = () => {
             const [dateTime, setDateTime] = useState('');
             const [log, setLog] = useState('SISTEMA OBR ONLINE');
             const [socialIdx, setSocialIdx] = useState(0);
             
-            // Reloj Completo con Fecha
             useEffect(() => {
                 const updateTime = () => {
                     const now = new Date();
                     const d = String(now.getDate()).padStart(2, '0');
                     const m = String(now.getMonth() + 1).padStart(2, '0');
                     const y = String(now.getFullYear()).slice(-2);
-                    
                     let h = now.getHours();
                     const min = String(now.getMinutes()).padStart(2, '0');
                     const s = String(now.getSeconds()).padStart(2, '0');
                     const amp = h >= 12 ? 'pm' : 'am';
-                    h = h % 12 || 12; // Formato 12h
-                    
+                    h = h % 12 || 12;
                     setDateTime(`${d}/${m}/${y} ${String(h).padStart(2, '0')}:${min}:${s} ${amp}`);
                 };
-                
-                const t = setInterval(updateTime, 1000);
-                updateTime();
+                const t = setInterval(updateTime, 1000); updateTime();
                 return () => clearInterval(t);
             }, []);
 
-            // Logs Falsos
             useEffect(() => {
-                const msgs = ["ESCANEO ESPECTRAL...", "SENSORES: OK", "RED P2P: ESTABLE", "BUFFER: 100%", "BUSCANDO EVP...", "ANALISIS DE ENTORNO", "TEMP: NOMINAL"];
-                const t = setInterval(() => {
-                    if(Math.random() > 0.7) setLog(msgs[Math.floor(Math.random() * msgs.length)]);
-                }, 2000);
+                const msgs = ["ESCANEO ESPECTRAL...", "SENSORES: OK", "RED P2P: ESTABLE", "BUFFER: 100%", "BUSCANDO EVP...", "ANALISIS DE ENTORNO"];
+                const t = setInterval(() => { if(Math.random() > 0.7) setLog(msgs[Math.floor(Math.random() * msgs.length)]); }, 2000);
                 return () => clearInterval(t);
             }, []);
 
-            // Secuencia Redes
             useEffect(() => {
                 const t = setInterval(() => setSocialIdx(prev => (prev + 1) % 3), 4000);
                 return () => clearInterval(t);
@@ -111,35 +91,20 @@
 
             return (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30">
-                    {/* HEADER (Logo + Fecha/Hora) */}
                     <div className="absolute top-4 left-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-1 bg-black/40 px-2 py-1 rounded backdrop-blur-sm border-l-4 border-red-600">
                             <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
                             <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>DETECTOR-OBR</span>
                         </div>
-                        <div className="text-[10px] font-mono text-red-300 ml-1 tracking-widest bg-black/60 px-2 py-0.5 rounded w-fit mt-1 border border-red-900/30">
-                            {dateTime}
-                        </div>
+                        <div className="text-[10px] font-mono text-red-300 ml-1 tracking-widest bg-black/60 px-2 py-0.5 rounded w-fit mt-1 border border-red-900/30">{dateTime}</div>
                     </div>
-
-                    {/* LOGS */}
                     <div className="absolute bottom-12 left-4">
-                        <div className="text-[10px] font-mono text-red-500 bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse">
-                            {`> ${log}`}
-                        </div>
+                        <div className="text-[10px] font-mono text-red-500 bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse">{`> ${log}`}</div>
                     </div>
-
-                    {/* SOCIAL BAR (AL LIMITE DE PANTALLA) */}
                     <div className="absolute bottom-0 left-0 right-0 flex justify-center items-end">
                         <div className="bg-gradient-to-t from-black via-black/80 to-transparent w-full py-2 flex justify-center h-10 items-end border-t border-red-900/30">
                             {socialIdx === 0 && <span className="text-white font-bold tracking-[0.3em] animate-fade-in text-xs mb-1">SÍGUENOS EN</span>}
-                            {socialIdx === 1 && (
-                                <div className="flex gap-6 text-white text-sm animate-fade-in font-bold mb-1 items-center">
-                                    <span className="text-pink-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">TT</span> TikTok</span>
-                                    <span className="text-blue-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">FB</span> Facebook</span>
-                                    <span className="text-red-500 drop-shadow-sm flex items-center gap-1"><span className="text-[8px] opacity-50">YT</span> YouTube</span>
-                                </div>
-                            )}
+                            {socialIdx === 1 && <div className="flex gap-6 text-white text-sm animate-fade-in font-bold mb-1 items-center"><span className="text-pink-500 drop-shadow-sm">TikTok</span><span className="text-blue-500 drop-shadow-sm">Facebook</span><span className="text-red-500 drop-shadow-sm">YouTube</span></div>}
                             {socialIdx === 2 && <span className="text-red-500 font-mono tracking-widest animate-fade-in text-sm bg-black/90 px-3 py-0.5 border-b-2 border-red-600">@EXPLORACIONES OBR</span>}
                         </div>
                     </div>
@@ -147,97 +112,130 @@
             );
         };
 
-        // --- PANTALLAS ---
+        // --- MODO DIRECTOR MÓVIL (NUEVO) ---
+        const RemoteDirector = ({ onBack }) => {
+            const [dockId, setDockId] = useState('');
+            const [status, setStatus] = useState('DESCONECTADO');
+            const [isConnected, setIsConnected] = useState(false);
+            const peerRef = useRef(null);
+            const connRef = useRef(null);
 
-        const Lobby = ({ onJoin, onCreate, isReady }) => {
-          const [roomIdInput, setRoomIdInput] = useState('');
-          return (
-            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neutral-800 via-black to-black opacity-50"></div>
-              
-              <div className="relative z-10 max-w-md w-full bg-neutral-900/80 backdrop-blur-xl p-8 rounded-2xl border border-neutral-800 shadow-2xl">
-                <div className="flex flex-col items-center mb-8">
-                  <div className="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center mb-4 border border-neutral-700 shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                    <Activity className="text-red-600" size={32} />
-                  </div>
-                  <h1 className="text-3xl font-bold tracking-tighter text-white">PRODOCK <span className="text-red-600">STUDIO</span></h1>
-                  <p className="text-neutral-500 text-xs tracking-widest mt-1">SISTEMA DE DIRECCIÓN PARANORMAL</p>
-                </div>
+            const connect = () => {
+                if(!dockId) return;
+                setStatus('CONECTANDO...');
+                const peer = new window.Peer();
+                peerRef.current = peer;
+                
+                peer.on('open', () => {
+                    const conn = peer.connect(dockId);
+                    connRef.current = conn;
+                    
+                    conn.on('open', () => {
+                        setStatus('CONECTADO A ESTUDIO');
+                        setIsConnected(true);
+                        conn.send({ type: 'register-director' });
+                    });
+                    
+                    conn.on('close', () => {
+                        setStatus('DESCONECTADO');
+                        setIsConnected(false);
+                    });
+                });
+            };
 
-                {!isReady ? (
-                  <div className="text-center text-yellow-500 animate-pulse text-xs font-mono">INICIALIZANDO MOTORES...</div>
-                ) : (
-                  <div className="space-y-4">
-                    <button onClick={onCreate} className="w-full group relative overflow-hidden bg-white text-black font-bold py-4 rounded-xl transition-all hover:scale-[1.02]">
-                      <div className="relative flex items-center justify-center gap-2">
-                        <Monitor size={20} /> CREAR ESTUDIO
-                      </div>
-                    </button>
-                    <p className="text-[10px] text-center text-neutral-500 mt-4">Asegúrate de tener los archivos .mp4 en la raíz.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        };
+            const send = (category, action, value) => {
+                if(connRef.current) {
+                    // Feedback visual vibración
+                    if(navigator.vibrate) navigator.vibrate(50);
+                    connRef.current.send({ type: 'director-cmd', category, action, value });
+                }
+            };
 
-        const DirectorPanel = ({ activeCam, conn, onCommand, onPlayLocal }) => {
+            if(!isConnected) {
+                return (
+                    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-6">
+                        <h2 className="text-2xl font-bold text-red-500 tracking-widest text-center border-b-2 border-red-800 pb-2">DIRECTOR REMOTO</h2>
+                        <input value={dockId} onChange={e=>setDockId(e.target.value.toUpperCase())} placeholder="ID DEL ESTUDIO (PC)" className="w-full bg-[#111] border border-red-900 p-4 text-center text-xl text-white font-mono rounded-lg outline-none focus:border-red-500 uppercase"/>
+                        <button onClick={connect} className="w-full bg-red-900 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-red-700">CONECTAR AL ESTUDIO</button>
+                        <button onClick={onBack} className="text-gray-500 text-sm mt-4">VOLVER AL MENÚ</button>
+                        <div className="text-xs text-yellow-500 font-mono">{status}</div>
+                    </div>
+                );
+            }
+
             return (
-                <div className="h-full w-80 bg-[#111] border-l border-neutral-800 flex flex-col animate-in slide-in-from-right duration-300">
-                    <div className="p-4 border-b border-neutral-800 bg-neutral-900/30">
-                        <h3 className="text-white font-bold text-sm flex items-center gap-2 mb-3"><Film size={14} className="text-cyan-500" /> MEDIA DE ESTUDIO</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => onPlayLocal('intro')} className="bg-cyan-900/30 hover:bg-cyan-600 hover:text-white text-cyan-400 text-xs py-2 rounded border border-cyan-800 flex items-center justify-center gap-1"><Play size={10}/> INTRO</button>
-                            <button onClick={() => onPlayLocal('outro')} className="bg-red-900/30 hover:bg-red-600 hover:text-white text-red-400 text-xs py-2 rounded border border-red-800 flex items-center justify-center gap-1"><Play size={10}/> OUTRO</button>
-                            <button onClick={() => onPlayLocal('banner')} className="col-span-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs py-2 rounded border border-neutral-600 flex items-center justify-center gap-1"><Layers size={10}/> MOSTRAR BANNER</button>
-                        </div>
+                <div className="min-h-screen bg-black flex flex-col font-sans">
+                    {/* Header */}
+                    <div className="bg-[#111] p-3 border-b border-red-900 flex justify-between items-center">
+                        <span className="text-red-500 font-bold text-sm tracking-widest animate-pulse">● LIVE DIRECTOR</span>
+                        <button onClick={() => { if(connRef.current) connRef.current.close(); }} className="text-xs text-gray-500 border border-gray-700 px-2 py-1 rounded">SALIR</button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                        {!activeCam ? (
-                            <div className="text-center text-neutral-600 py-10"><Aperture size={32} className="mx-auto mb-2 opacity-20" /><p className="text-[10px] font-mono">SELECCIONA CÁMARA</p></div>
-                        ) : (
-                            <>
-                                <div className="pb-2 border-b border-neutral-800 mb-2">
-                                    <h3 className="text-white font-bold text-sm flex items-center gap-2"><Settings size={14} className="text-red-500" /> CAM: {activeCam.name}</h3>
-                                </div>
-                                <section>
-                                    <label className="text-[10px] font-bold text-neutral-500 mb-3 block tracking-wider">FILTROS EN MÓVIL</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => onCommand(conn, 'cmd', 'filter', 'normal')} className="bg-neutral-800 hover:bg-white text-neutral-300 text-xs py-3 rounded border border-neutral-700">NORMAL</button>
-                                        <button onClick={() => onCommand(conn, 'cmd', 'filter', 'night')} className="bg-green-900/20 hover:bg-green-500 text-green-500 text-xs py-3 rounded border border-green-900/50 flex justify-center gap-2"><Moon size={12}/> NOCTURNO</button>
-                                        <button onClick={() => onCommand(conn, 'cmd', 'filter', 'thermal')} className="bg-blue-900/20 hover:bg-blue-500 text-blue-500 text-xs py-3 rounded border border-blue-900/50 flex justify-center gap-2"><Flame size={12}/> TÉRMICO</button>
-                                        <button onClick={() => onCommand(conn, 'cmd', 'filter', 'urbex')} className="bg-orange-900/20 hover:bg-orange-500 text-orange-500 text-xs py-3 rounded border border-orange-900/50">URBEX</button>
-                                    </div>
-                                </section>
-                                <section>
-                                    <label className="text-[10px] font-bold text-neutral-500 mb-3 block tracking-wider">IA & SLS (EN MÓVIL)</label>
-                                    <div className="space-y-2">
-                                        <button onClick={() => onCommand(conn, 'cmd', 'filter', 'sls')} className="w-full bg-purple-900/20 hover:bg-purple-500 text-purple-400 text-xs py-3 rounded border border-purple-900/50 flex justify-center gap-2 font-bold"><Ghost size={14}/> ACTIVAR SLS (CALOR)</button>
-                                        <button onClick={() => onCommand(conn, 'cmd', 'toggle', 'pareidolia')} className="w-full bg-red-900/20 hover:bg-red-600 text-red-500 text-xs py-3 rounded border border-red-900/50 flex justify-center gap-2"><Eye size={14}/> VISION IA</button>
-                                    </div>
-                                </section>
-                                <div className="pt-4 border-t border-neutral-800">
-                                    <button onClick={() => onCommand(conn, 'cmd', 'reset', '')} className="w-full bg-black hover:bg-neutral-800 text-neutral-500 text-[10px] py-2 rounded border border-neutral-800">RESETEAR CÁMARA</button>
-                                </div>
-                            </>
-                        )}
+                        {/* SECCIÓN 1: CÁMARA EN VIVO */}
+                        <div className="space-y-2">
+                            <h3 className="text-xs text-gray-400 font-bold tracking-widest border-b border-gray-800 pb-1">CONTROL CÁMARA EN VIVO</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => send('cam', 'filter', 'night')} className="bg-green-900/30 border border-green-800 text-green-400 py-4 rounded-lg font-bold text-sm active:bg-green-700">NOCTURNO</button>
+                                <button onClick={() => send('cam', 'filter', 'thermal')} className="bg-blue-900/30 border border-blue-800 text-blue-400 py-4 rounded-lg font-bold text-sm active:bg-blue-700">TÉRMICO</button>
+                                <button onClick={() => send('cam', 'filter', 'urbex')} className="bg-orange-900/30 border border-orange-800 text-orange-400 py-4 rounded-lg font-bold text-sm active:bg-orange-700">URBEX</button>
+                                <button onClick={() => send('cam', 'filter', 'normal')} className="bg-gray-800 border border-gray-600 text-white py-4 rounded-lg font-bold text-sm active:bg-gray-600">NORMAL</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                <button onClick={() => send('cam', 'filter', 'sls')} className="bg-purple-900/30 border border-purple-600 text-purple-300 py-4 rounded-lg font-bold text-sm active:bg-purple-700 flex items-center justify-center gap-2"><Ghost size={16}/> SLS (CALOR)</button>
+                                <button onClick={() => send('cam', 'toggle', 'pareidolia')} className="bg-red-900/30 border border-red-600 text-red-300 py-4 rounded-lg font-bold text-sm active:bg-red-700 flex items-center justify-center gap-2"><Eye size={16}/> VISIÓN IA</button>
+                            </div>
+                        </div>
+
+                        {/* SECCIÓN 2: ESTUDIO / MEDIA */}
+                        <div className="space-y-2">
+                            <h3 className="text-xs text-gray-400 font-bold tracking-widest border-b border-gray-800 pb-1">CONTROL DE ESTUDIO (PC)</h3>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button onClick={() => send('media', 'play', 'intro')} className="bg-cyan-900/40 border border-cyan-600 text-cyan-300 py-3 rounded text-xs font-bold active:bg-cyan-700">INTRO</button>
+                                <button onClick={() => send('media', 'play', 'banner')} className="bg-gray-800 border border-gray-600 text-white py-3 rounded text-xs font-bold active:bg-gray-600">BANNER</button>
+                                <button onClick={() => send('media', 'play', 'outro')} className="bg-pink-900/40 border border-pink-600 text-pink-300 py-3 rounded text-xs font-bold active:bg-pink-700">OUTRO</button>
+                            </div>
+                        </div>
+
+                        {/* SECCIÓN 3: MEZCLADOR */}
+                        <div className="space-y-2">
+                            <h3 className="text-xs text-gray-400 font-bold tracking-widest border-b border-gray-800 pb-1">MEZCLADOR</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={() => send('mixer', 'cut', null)} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded font-bold active:border-b-0 active:translate-y-1">CORTE (CUT)</button>
+                                <button onClick={() => send('mixer', 'auto', null)} className="bg-red-700 border-b-4 border-red-900 text-white py-4 rounded font-bold active:border-b-0 active:translate-y-1">AUTO MIX</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
         };
 
-        const RemoteVideo = ({ stream, className }) => {
-            const ref = useRef();
-            useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
-            return <video ref={ref} autoPlay playsInline muted className={className} />;
-        };
+        // --- PANTALLA PRINCIPAL ---
+        const Lobby = ({ onCreate, onRemote }) => {
+          return (
+            <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neutral-900 via-black to-black opacity-60"></div>
+              <div className="relative z-10 w-full max-w-sm bg-[#111] p-8 rounded-2xl border border-[#222] shadow-2xl flex flex-col gap-6">
+                <div className="text-center">
+                    <Activity className="text-red-600 mx-auto mb-4" size={48} />
+                    <h1 className="text-2xl font-bold text-white tracking-widest">PRODOCK <span className="text-red-600">STUDIO</span></h1>
+                    <p className="text-gray-500 text-xs mt-1">SISTEMA CENTRAL DE CONTROL</p>
+                </div>
 
-        const RemoteAudio = ({ stream, isMuted, volume = 1 }) => {
-            const audioRef = useRef();
-            useEffect(() => { if (audioRef.current && stream) audioRef.current.srcObject = stream; }, [stream]);
-            useEffect(() => { if (audioRef.current) { audioRef.current.volume = volume; audioRef.current.muted = isMuted; } }, [isMuted, volume]);
-            return <audio ref={audioRef} autoPlay playsInline />;
+                <button onClick={onCreate} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform">
+                    <Monitor size={20} /> CREAR ESTUDIO (PC)
+                </button>
+
+                <div className="h-px bg-[#333] w-full"></div>
+
+                <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors">
+                    <Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)
+                </button>
+                
+                <p className="text-[9px] text-center text-gray-600 mt-2">v99.0 - Exploraciones OBR</p>
+              </div>
+            </div>
+          );
         };
 
         const DockMode = () => {
@@ -257,15 +255,22 @@
             const peer = new window.Peer(); 
             peerRef.current = peer;
             peer.on('open', (id) => setMyId(id));
+            
             peer.on('connection', (conn) => {
                 conn.on('data', (data) => {
+                    // REGISTRO DE CÁMARA
                     if (data.type === 'register') {
                         updateCameraState(conn.peer, { id: conn.peer, conn: conn, name: data.name, tally: 'idle', stream: camerasRef.current[conn.peer]?.stream });
                         setAudioState(prev => ({ ...prev, [conn.peer]: { muted: false, vol: 1 } }));
                     }
+                    // COMANDOS DE DIRECTOR REMOTO
+                    if (data.type === 'director-cmd') {
+                        handleDirectorCommand(data);
+                    }
                 });
                 conn.on('close', () => removeCamera(conn.peer));
             });
+
             peer.on('call', (call) => {
                 call.answer(); 
                 call.on('stream', (remoteStream) => {
@@ -274,6 +279,30 @@
             });
             return () => peer.destroy();
           }, []); 
+
+          // --- LOGICA DE DIRECTOR REMOTO ---
+          const handleDirectorCommand = (cmd) => {
+              // 1. COMANDOS DE CÁMARA (FILTROS) -> ENVIAR A CÁMARA EN PROGRAMA
+              if (cmd.category === 'cam') {
+                  const targetId = programId; // La cámara que está AL AIRE
+                  if (targetId && camerasRef.current[targetId]?.conn) {
+                      camerasRef.current[targetId].conn.send({ 
+                          type: 'cmd', 
+                          action: cmd.action, 
+                          value: cmd.value 
+                      });
+                  }
+              }
+              // 2. COMANDOS DE MEDIOS -> EJECUTAR EN PC
+              if (cmd.category === 'media') {
+                  handlePlayLocal(cmd.value);
+              }
+              // 3. COMANDOS DE MEZCLA -> EJECUTAR EN PC
+              if (cmd.category === 'mixer') {
+                  if(cmd.action === 'cut') handleCut();
+                  if(cmd.action === 'auto') handleAuto();
+              }
+          };
 
           const updateCameraState = (peerId, newData) => {
               setCameras(prev => {
@@ -288,8 +317,6 @@
               if (programId === peerId) setProgramId(null);
               if (previewId === peerId) setPreviewId(null);
           };
-
-          const sendCommand = (conn, type, action, value) => { if (conn) conn.send({ type, action, value }); };
 
           const sendTallyUpdate = (pId, pvId) => {
               Object.values(camerasRef.current).forEach(cam => {
@@ -306,12 +333,19 @@
 
           const handleCut = () => { if (previewId) { setProgramId(previewId); setPreviewId(null); sendTallyUpdate(previewId, null); } };
           const handleAuto = () => { if (previewId) { const old = programId; setProgramId(previewId); setPreviewId(old); sendTallyUpdate(previewId, old); } };
-          const handlePlayLocal = (type) => { setActiveMedia(type); if (videoPlayerRef.current) { videoPlayerRef.current.currentTime = 0; videoPlayerRef.current.play(); } };
+          
+          const handlePlayLocal = (type) => { 
+              setActiveMedia(type); 
+              if (videoPlayerRef.current) { 
+                  videoPlayerRef.current.currentTime = 0; 
+                  videoPlayerRef.current.play(); 
+              } 
+          };
+          
           const toggleMute = (id, e) => { e.stopPropagation(); setAudioState(prev => ({ ...prev, [id]: { ...prev[id], muted: !prev[id]?.muted } })); };
 
           const camList = Object.values(cameras);
-          const previewCam = previewId ? cameras[previewId] : null;
-
+          
           const MediaOverlay = () => {
               if (!activeMedia) return null;
               const src = STUDIO_ASSETS[activeMedia];
@@ -322,17 +356,14 @@
               );
           };
 
-          // --- RENDER SALIDA LIMPIA ---
+          // RENDER SALIDA LIMPIA
           if (cleanFeed) {
               return (
                   <div className="h-screen w-full bg-black relative flex items-center justify-center overflow-hidden cursor-none">
                       {programId && cameras[programId]?.stream ? (
-                          <RemoteVideo stream={cameras[programId].stream} className="w-full h-full object-contain" />
+                          <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-contain" />
                       ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800">BLACK</div>}
-                      
-                      {/* CAPA HUD (Superpuesta en Programa, oculta en Intro/Outro) */}
                       {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
-                      
                       <MediaOverlay />
                       {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} volume={1} />)}
                       <div className="absolute top-0 right-0 w-20 h-20 z-50 cursor-pointer opacity-0 hover:opacity-10 bg-white" onClick={() => setCleanFeed(false)}></div>
@@ -356,13 +387,13 @@
                             <div className="flex-1 bg-black rounded-xl border border-neutral-800 relative overflow-hidden flex flex-col shadow-lg">
                                 <div className="absolute top-3 left-3 z-10 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-wider shadow-md">PREVIEW</div>
                                 <div className="flex-1 relative flex items-center justify-center bg-[#050505]">
-                                    {previewId && cameras[previewId]?.stream ? <RemoteVideo stream={cameras[previewId].stream} className="w-full h-full object-contain" /> : <div className="text-neutral-700 font-mono text-2xl flex flex-col items-center"><Monitor size={48} className="mb-2 opacity-20"/>NO SIGNAL</div>}
+                                    {previewId && cameras[previewId]?.stream ? <VideoDisplay stream={cameras[previewId].stream} className="w-full h-full object-contain" /> : <div className="text-neutral-700 font-mono text-2xl flex flex-col items-center"><Monitor size={48} className="mb-2 opacity-20"/>NO SIGNAL</div>}
                                 </div>
                             </div>
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/50 relative overflow-hidden flex flex-col shadow-[0_0_30px_rgba(200,0,0,0.1)]">
                                  <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-wider shadow-md flex items-center gap-1"><span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> PROGRAM</div>
                                  <div className="flex-1 relative flex items-center justify-center bg-[#050505]">
-                                    {programId && cameras[programId]?.stream ? <RemoteVideo stream={cameras[programId].stream} className="w-full h-full object-contain" /> : <div className="text-neutral-800 font-mono text-4xl font-black tracking-tighter">BLACK</div>}
+                                    {programId && cameras[programId]?.stream ? <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-contain" /> : <div className="text-neutral-800 font-mono text-4xl font-black tracking-tighter">BLACK</div>}
                                     {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
                                     <MediaOverlay />
                                  </div>
@@ -379,26 +410,33 @@
                             <div className="grid grid-cols-4 gap-3 h-full content-start">
                                 {camList.map(cam => (
                                     <div key={cam.id} onClick={() => { if(programId === cam.id) return; setPreviewId(cam.id); sendTallyUpdate(programId, cam.id); }} className={`aspect-video bg-black rounded-lg overflow-hidden border-2 relative cursor-pointer group transition-all ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,0,0,0.4)] ring-1 ring-red-900' : cam.tally === 'preview' ? 'border-green-600 shadow-[0_0_15px_rgba(0,220,0,0.4)] ring-1 ring-green-900' : 'border-neutral-800 hover:border-neutral-600'}`}>
-                                        {cam.stream ? <RemoteVideo stream={cam.stream} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" /> : <div className="w-full h-full flex items-center justify-center text-neutral-600"><Wifi size={24} className="opacity-20"/></div>}
+                                        {cam.stream ? <VideoDisplay stream={cam.stream} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" /> : <div className="w-full h-full flex items-center justify-center text-neutral-600"><Wifi size={24} className="opacity-20"/></div>}
                                         <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm px-2 py-1 flex justify-between items-center"><span className="text-[10px] font-bold text-white truncate">{cam.name}</span><button onClick={(e) => toggleMute(cam.id, e)} className={`${audioState[cam.id]?.muted ? 'text-red-500' : 'text-green-500'} hover:scale-110 transition-transform`}>{audioState[cam.id]?.muted ? <MicOff size={10}/> : <Volume2 size={10}/>}</button></div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
-                    <DirectorPanel activeCam={previewCam} conn={previewCam?.conn} onCommand={sendCommand} onPlayLocal={handlePlayLocal} />
                 </div>
             </div>
           );
         };
 
+        const VideoDisplay = ({ stream, className }) => {
+            const ref = useRef();
+            useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
+            return <video ref={ref} autoPlay playsInline muted className={className} />;
+        };
+
         const App = () => {
           const isPeerReady = usePeerJS();
           const [mode, setMode] = useState('lobby'); 
+          
           return (
             <>
-              {mode === 'lobby' && <Lobby onCreate={() => setMode('dock')} onJoin={()=>{}} isReady={isPeerReady} />}
+              {mode === 'lobby' && <Lobby onCreate={() => setMode('dock')} onRemote={() => setMode('remote-director')} isReady={isPeerReady} />}
               {mode === 'dock' && (isPeerReady ? <DockMode /> : <div className="h-screen bg-black flex items-center justify-center text-white">Cargando...</div>)}
+              {mode === 'remote-director' && <RemoteDirector onBack={() => setMode('lobby')} />}
             </>
           );
         };
