@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PRODOCK STUDIO LIVE</title>
+    <title>EXPLORACIONES OBR | STUDIO</title>
+    <link rel="icon" type="image/png" href="./obr-logo.png">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -112,9 +113,10 @@
             return (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30">
                     <div className="absolute top-4 left-4 flex flex-col">
-                        <div className="flex items-center gap-2 mb-1 bg-black/40 px-2 py-1 rounded backdrop-blur-sm border-l-4 border-red-600">
-                            <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
-                            <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>DETECTOR-OBR</span>
+                        <div className="flex items-center gap-2 mb-1 bg-black/60 px-3 py-1 rounded backdrop-blur-sm border-l-4 border-red-600 shadow-lg">
+                            {/* LOGO EN HUD */}
+                            <img src="./obr-logo.png" className="w-8 h-8 object-contain drop-shadow-[0_0_5px_rgba(255,0,0,0.8)]" alt="OBR" />
+                            <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>EXPLORACIONES OBR</span>
                         </div>
                         <div className="text-[10px] font-mono text-red-300 ml-1 tracking-widest bg-black/60 px-2 py-0.5 rounded w-fit mt-1 border border-red-900/30">{dateTime}</div>
                     </div>
@@ -218,9 +220,15 @@
             if(!isConnected) {
                 return (
                     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-6">
-                        <h2 className="text-2xl font-bold text-red-500 tracking-widest text-center border-b-2 border-red-800 pb-2">DIRECTOR REMOTO</h2>
+                        <div className="flex flex-col items-center mb-4">
+                            {/* LOGO EN LOGIN DIRECTOR */}
+                            <img src="./obr-logo.png" className="w-20 h-20 object-contain mb-4 drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]" alt="Logo" />
+                            <h2 className="text-2xl font-bold text-white tracking-widest">EXPLORACIONES <span className="text-red-600">OBR</span></h2>
+                            <p className="text-xs text-gray-500 mt-1">ACCESO DE DIRECTOR</p>
+                        </div>
+                        
                         <input value={dockId} onChange={e=>setDockId(e.target.value.toUpperCase())} placeholder="ID DEL ESTUDIO (PC)" className="w-full bg-[#111] border border-red-900 p-4 text-center text-xl text-white font-mono rounded-lg outline-none focus:border-red-500 uppercase"/>
-                        <button onClick={connect} className="w-full bg-red-900 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-red-700">CONECTAR AL ESTUDIO</button>
+                        <button onClick={connect} className="w-full bg-red-900 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-red-700">CONECTAR</button>
                         <button onClick={onBack} className="text-gray-500 text-sm mt-4">VOLVER AL MENÚ</button>
                         <div className="text-xs text-yellow-500 font-mono">{status}</div>
                     </div>
@@ -230,7 +238,10 @@
             return (
                 <div className="min-h-screen bg-black flex flex-col font-sans">
                     <div className="bg-[#111] p-3 border-b border-red-900 flex justify-between items-center">
-                        <span className="text-red-500 font-bold text-sm tracking-widest animate-pulse">● LIVE DIRECTOR</span>
+                        <div className="flex items-center gap-2">
+                            <img src="./obr-logo.png" className="w-6 h-6 object-contain" alt="OBR" />
+                            <span className="text-red-500 font-bold text-sm tracking-widest animate-pulse">DIRECTOR VIVO</span>
+                        </div>
                         <button onClick={() => { if(connRef.current) connRef.current.close(); }} className="text-xs text-gray-500 border border-gray-700 px-2 py-1 rounded">SALIR</button>
                     </div>
 
@@ -284,9 +295,10 @@
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neutral-900 via-black to-black opacity-60"></div>
               <div className="relative z-10 w-full max-w-sm bg-[#111] p-8 rounded-2xl border border-[#222] shadow-2xl flex flex-col gap-6">
                 <div className="text-center">
-                    <Activity className="text-red-600 mx-auto mb-4" size={48} />
-                    <h1 className="text-2xl font-bold text-white tracking-widest">PRODOCK <span className="text-red-600">STUDIO</span></h1>
-                    <p className="text-gray-500 text-xs mt-1">SISTEMA CENTRAL DE CONTROL</p>
+                    {/* LOGO PRINCIPAL */}
+                    <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" alt="OBR Logo" />
+                    <h1 className="text-2xl font-bold text-white tracking-widest">EXPLORACIONES <span className="text-red-600">OBR</span></h1>
+                    <p className="text-gray-500 text-xs mt-1">SISTEMA DE DIRECCIÓN PARANORMAL</p>
                 </div>
 
                 <button onClick={onCreate} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform">
@@ -299,7 +311,7 @@
                     <Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)
                 </button>
                 
-                <p className="text-[9px] text-center text-gray-600 mt-2">v99.6 - Exploraciones OBR</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v100.0 - OBR EQUIPO ESPECIAL</p>
               </div>
             </div>
           );
@@ -397,8 +409,6 @@
                   if (cmd.action === 'stop') sendObsCommand('StopStream');
               }
               if (cmd.category === 'cam') {
-                  // Necesitamos la cámara en programa, pero no podemos acceder a programId en este closure sin ref
-                  // Solución rápida: iterar cámaras y ver cuál tiene tally 'program'
                   const targetCam = Object.values(camerasRef.current).find(c => c.tally === 'program');
                   if (targetCam && targetCam.conn) {
                       targetCam.conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
@@ -406,10 +416,6 @@
               }
               if (cmd.category === 'media') handlePlayLocal(cmd.value);
               if (cmd.category === 'mixer') {
-                  // Nota: handleCut/handleAuto necesitan estado actual. 
-                  // En esta estructura simple, esto requeriría mover lógica a refs o usar reducer.
-                  // Para evitar refactoring masivo, simularemos click en botones si fuera DOM, pero aquí estamos en lógica.
-                  // Disparamos evento personalizado o usamos un ref global temporal.
                   window.dispatchEvent(new CustomEvent('remote-mix', { detail: cmd.action }));
               }
           };
@@ -437,6 +443,8 @@
               if (programId === peerId) setProgramId(null);
               if (previewId === peerId) setPreviewId(null);
           };
+
+          const sendCommand = (conn, type, action, value) => { if (conn) conn.send({ type, action, value }); };
 
           const sendTallyUpdate = (pId, pvId) => {
               Object.values(camerasRef.current).forEach(cam => {
@@ -488,7 +496,10 @@
                 {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} volume={1} />)}
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-between px-4 z-10 shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2"><Radio className="text-red-600 animate-pulse" size={16} /><span className="font-bold text-white tracking-widest text-xs">PRODOCK STUDIO</span></div>
+                        <div className="flex items-center gap-2">
+                            <img src="./obr-logo.png" className="w-6 h-6 object-contain" alt="OBR" />
+                            <span className="font-bold text-white tracking-widest text-xs">EXPLORACIONES OBR</span>
+                        </div>
                         <div className={`px-2 py-0.5 rounded text-[10px] font-bold border ${obsConnected ? 'bg-green-900/30 text-green-500 border-green-800' : 'bg-red-900/30 text-red-500 border-red-800'}`}>OBS: {obsConnected ? (obsStreaming ? "🔴 EN VIVO" : "🟢 LISTO") : "❌ DESC"}</div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -525,7 +536,7 @@
                             <div className="grid grid-cols-4 gap-3 h-full content-start">
                                 {camList.map(cam => (
                                     <div key={cam.id} onClick={() => { if(programId === cam.id) return; setPreviewId(cam.id); sendTallyUpdate(programId, cam.id); }} className={`aspect-video bg-black rounded-lg overflow-hidden border-2 relative cursor-pointer group transition-all ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,0,0,0.4)] ring-1 ring-red-900' : cam.tally === 'preview' ? 'border-green-600 shadow-[0_0_15px_rgba(0,220,0,0.4)] ring-1 ring-green-900' : 'border-neutral-800 hover:border-neutral-600'}`}>
-                                        {cam.stream ? <VideoDisplay stream={cam.stream} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" /> : <div className="w-full h-full flex items-center justify-center text-neutral-600"><Wifi size={24} className="opacity-20"/></div>}
+                                        {cam.stream ? <RemoteVideo stream={cam.stream} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" /> : <div className="w-full h-full flex items-center justify-center text-neutral-600"><Wifi size={24} className="opacity-20"/></div>}
                                         <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm px-2 py-1 flex justify-between items-center"><span className="text-[10px] font-bold text-white truncate">{cam.name}</span><button onClick={(e) => toggleMute(cam.id, e)} className={`${audioState[cam.id]?.muted ? 'text-red-500' : 'text-green-500'} hover:scale-110 transition-transform`}>{audioState[cam.id]?.muted ? <MicOff size={10}/> : <Volume2 size={10}/>}</button></div>
                                     </div>
                                 ))}
