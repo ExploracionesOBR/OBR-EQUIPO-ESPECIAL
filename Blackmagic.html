@@ -13,6 +13,7 @@
       "imports": {
         "react": "https://esm.sh/react@18.2.0",
         "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
         "lucide-react": "https://esm.sh/lucide-react@0.263.1"
       }
     }
@@ -29,12 +30,13 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useRef } from 'react';
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
+        import { createPortal } from 'react-dom';
         import { 
             Monitor, Wifi, Mic, MicOff, Activity, Maximize, X, 
             Settings, Eye, Moon, Flame, Ghost, Play, Volume2, VolumeX,
-            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power
+            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink
         } from 'lucide-react';
         
         const STUDIO_ASSETS = {
@@ -56,7 +58,48 @@
           return loaded;
         };
 
-        // --- 1. COMPONENTES BASE (DEFINIR PRIMERO) ---
+        // --- VENTANA FLOTANTE (OBS OUTPUT) ---
+        const OBSWindow = ({ children, onClose }) => {
+            const [container, setContainer] = useState(null);
+            const externalWindow = useRef(null);
+
+            useEffect(() => {
+                const win = window.open('', 'OBS_OUTPUT', 'width=1280,height=720,left=200,top=200,menubar=no,toolbar=no,location=no,status=no');
+                if (!win) {
+                    alert("Permite las ventanas emergentes para la Salida OBS");
+                    onClose();
+                    return;
+                }
+                
+                externalWindow.current = win;
+                const div = win.document.createElement('div');
+                div.id = 'obs-root';
+                win.document.body.appendChild(div);
+                
+                // Estilos básicos
+                win.document.body.style.margin = "0";
+                win.document.body.style.backgroundColor = "black";
+                win.document.body.style.overflow = "hidden";
+                win.document.title = "SALIDA OBS - EXPLORACIONES OBR";
+
+                // Inyectar Tailwind en la ventana hija
+                const script = win.document.createElement('script');
+                script.src = "https://cdn.tailwindcss.com";
+                win.document.head.appendChild(script);
+
+                setContainer(div);
+
+                win.addEventListener('beforeunload', onClose);
+                return () => {
+                    win.removeEventListener('beforeunload', onClose);
+                    win.close();
+                };
+            }, []);
+
+            return container ? createPortal(children, container) : null;
+        };
+
+        // --- COMPONENTES BASE ---
 
         const RemoteAudio = ({ stream, isMuted, volume = 1 }) => {
             const audioRef = useRef();
@@ -114,7 +157,6 @@
                 <div className="absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30">
                     <div className="absolute top-4 left-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-1 bg-black/60 px-3 py-1 rounded backdrop-blur-sm border-l-4 border-red-600 shadow-lg">
-                            {/* LOGO EN HUD */}
                             <img src="./obr-logo.png" className="w-8 h-8 object-contain drop-shadow-[0_0_5px_rgba(255,0,0,0.8)]" alt="OBR" />
                             <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>EXPLORACIONES OBR</span>
                         </div>
@@ -221,7 +263,6 @@
                 return (
                     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-6">
                         <div className="flex flex-col items-center mb-4">
-                            {/* LOGO EN LOGIN DIRECTOR */}
                             <img src="./obr-logo.png" className="w-20 h-20 object-contain mb-4 drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]" alt="Logo" />
                             <h2 className="text-2xl font-bold text-white tracking-widest">EXPLORACIONES <span className="text-red-600">OBR</span></h2>
                             <p className="text-xs text-gray-500 mt-1">ACCESO DE DIRECTOR</p>
@@ -295,7 +336,6 @@
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-neutral-900 via-black to-black opacity-60"></div>
               <div className="relative z-10 w-full max-w-sm bg-[#111] p-8 rounded-2xl border border-[#222] shadow-2xl flex flex-col gap-6">
                 <div className="text-center">
-                    {/* LOGO PRINCIPAL */}
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" alt="OBR Logo" />
                     <h1 className="text-2xl font-bold text-white tracking-widest">EXPLORACIONES <span className="text-red-600">OBR</span></h1>
                     <p className="text-gray-500 text-xs mt-1">SISTEMA DE DIRECCIÓN PARANORMAL</p>
@@ -311,19 +351,18 @@
                     <Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)
                 </button>
                 
-                <p className="text-[9px] text-center text-gray-600 mt-2">v100.0 - OBR EQUIPO ESPECIAL</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v101.0 - OBR EQUIPO ESPECIAL</p>
               </div>
             </div>
           );
         };
 
-        // --- MODO DOCK (CEREBRO) ---
         const DockMode = () => {
           const [myId, setMyId] = useState(null);
           const [cameras, setCameras] = useState({}); 
           const [programId, setProgramId] = useState(null);
           const [previewId, setPreviewId] = useState(null);
-          const [cleanFeed, setCleanFeed] = useState(false);
+          const [obsWindowOpen, setObsWindowOpen] = useState(false);
           const [audioState, setAudioState] = useState({}); 
           const [activeMedia, setActiveMedia] = useState(null);
           
@@ -331,9 +370,14 @@
           const [obsStreaming, setObsStreaming] = useState(false);
 
           const peerRef = useRef(null);
-          const camerasRef = useRef({});
-          const videoPlayerRef = useRef(null);
+          const camerasRef = useRef({}); // Referencia Mutable para sincronizar P2P
+          const programIdRef = useRef(null); // Referencia Mutable
           const obsSocketRef = useRef(null);
+          const videoPlayerRef = useRef(null);
+
+          // Sincronizar Refs con State
+          useEffect(() => { camerasRef.current = cameras; }, [cameras]);
+          useEffect(() => { programIdRef.current = programId; }, [programId]);
 
           // OBS Websocket
           useEffect(() => {
@@ -387,6 +431,7 @@
                         updateCameraState(conn.peer, { id: conn.peer, conn: conn, name: data.name, tally: 'idle', stream: camerasRef.current[conn.peer]?.stream });
                         setAudioState(prev => ({ ...prev, [conn.peer]: { muted: false, vol: 1 } }));
                     }
+                    // CORRECCIÓN: Director remoto ahora funciona porque accede a Refs actualizadas
                     if (data.type === 'director-cmd') {
                         handleDirectorCommand(data);
                     }
@@ -404,23 +449,29 @@
           }, []); 
 
           const handleDirectorCommand = (cmd) => {
+              // 1. OBS
               if (cmd.category === 'obs') {
                   if (cmd.action === 'start') sendObsCommand('StartStream');
                   if (cmd.action === 'stop') sendObsCommand('StopStream');
               }
+              // 2. CAMARA (USANDO REFS PARA OBTENER ESTADO ACTUAL)
               if (cmd.category === 'cam') {
-                  const targetCam = Object.values(camerasRef.current).find(c => c.tally === 'program');
-                  if (targetCam && targetCam.conn) {
-                      targetCam.conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
+                  // Obtener cámara en programa usando REF
+                  const currentProgId = programIdRef.current;
+                  if (currentProgId && camerasRef.current[currentProgId]?.conn) {
+                      camerasRef.current[currentProgId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
                   }
               }
+              // 3. MEDIA
               if (cmd.category === 'media') handlePlayLocal(cmd.value);
+              
+              // 4. MIXER (DISPARAR EVENTO PARA ACTUALIZAR STATE REACT)
               if (cmd.category === 'mixer') {
                   window.dispatchEvent(new CustomEvent('remote-mix', { detail: cmd.action }));
               }
           };
 
-          // Listener para mix remoto (parche para estado)
+          // Listener para mix remoto
           useEffect(() => {
               const handler = (e) => {
                   if (e.detail === 'cut') handleCut();
@@ -428,18 +479,17 @@
               };
               window.addEventListener('remote-mix', handler);
               return () => window.removeEventListener('remote-mix', handler);
-          }); // Sin deps para acceder a state fresco
+          }); 
 
           const updateCameraState = (peerId, newData) => {
               setCameras(prev => {
                   const updated = { ...prev, [peerId]: { ...(prev[peerId] || {}), ...newData } };
-                  camerasRef.current = updated;
                   return updated;
               });
           };
 
           const removeCamera = (peerId) => {
-              setCameras(prev => { const n = { ...prev }; delete n[peerId]; camerasRef.current = n; return n; });
+              setCameras(prev => { const n = { ...prev }; delete n[peerId]; return n; });
               if (programId === peerId) setProgramId(null);
               if (previewId === peerId) setPreviewId(null);
           };
@@ -461,52 +511,84 @@
 
           const handleCut = () => { if (previewId) { setProgramId(previewId); setPreviewId(null); sendTallyUpdate(previewId, null); } };
           const handleAuto = () => { if (previewId) { const old = programId; setProgramId(previewId); setPreviewId(old); sendTallyUpdate(previewId, old); } };
-          const handlePlayLocal = (type) => { setActiveMedia(type); if (videoPlayerRef.current) { videoPlayerRef.current.currentTime = 0; videoPlayerRef.current.play(); } };
+          
+          const handlePlayLocal = (type) => { 
+              setActiveMedia(type); 
+              // Forzar reset de video si existe
+              setTimeout(() => {
+                  const v = document.getElementById('studio-media-player');
+                  if (v) { v.currentTime = 0; v.play(); }
+              }, 50);
+          };
+          
           const toggleMute = (id, e) => { e.stopPropagation(); setAudioState(prev => ({ ...prev, [id]: { ...prev[id], muted: !prev[id]?.muted } })); };
 
           const camList = Object.values(cameras);
           const previewCam = previewId ? cameras[previewId] : null;
 
+          // COMPONENTE OVERLAY MEDIA
           const MediaOverlay = () => {
               if (!activeMedia) return null;
               const src = STUDIO_ASSETS[activeMedia];
+              const isBanner = activeMedia === 'banner';
+              
+              // Estilo: Si es Banner, ocupa solo la parte inferior
+              const containerStyle = isBanner 
+                ? "absolute bottom-[60px] left-0 w-full h-[400px] z-40 flex items-end pointer-events-none" 
+                : "absolute inset-0 z-50 bg-black flex items-center justify-center";
+                
+              const videoStyle = isBanner
+                ? "w-full h-full object-cover"
+                : "w-full h-full object-contain";
+
               return (
-                  <div className="absolute inset-0 z-50 bg-black flex items-center justify-center">
-                      <video ref={videoPlayerRef} src={src} autoPlay className="w-full h-full object-contain" onEnded={() => setActiveMedia(null)} onError={() => { setActiveMedia(null); alert("Falta video: " + src); }} />
+                  <div className={containerStyle}>
+                      <video 
+                        id="studio-media-player"
+                        src={src} 
+                        autoPlay 
+                        className={videoStyle} 
+                        onEnded={() => setActiveMedia(null)} 
+                        onError={() => { setActiveMedia(null); alert("Falta video: " + src); }} 
+                      />
                   </div>
               );
           };
 
-          if (cleanFeed) {
-              return (
-                  <div className="h-screen w-full bg-black relative flex items-center justify-center overflow-hidden cursor-none">
-                      {programId && cameras[programId]?.stream ? (
-                          <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-contain" />
-                      ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800">BLACK</div>}
-                      {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
-                      <MediaOverlay />
-                      {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} volume={1} />)}
-                      <div className="absolute top-0 right-0 w-20 h-20 z-50 cursor-pointer opacity-0 hover:opacity-10 bg-white" onClick={() => setCleanFeed(false)}></div>
-                  </div>
-              );
-          }
+          const ProgramContent = () => (
+              <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+                  {programId && cameras[programId]?.stream ? (
+                      <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-contain absolute inset-0" />
+                  ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
+                  
+                  {/* Banner va sobre el HUD de "Siguenos", Intro/Outro tapan todo */}
+                  {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
+                  <MediaOverlay />
+              </div>
+          );
 
           return (
             <div className="h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden">
+                {/* PRELOAD HIDDEN ASSETS */}
+                <div style={{display:'none'}}>
+                    <video preload="auto" src={STUDIO_ASSETS.intro} />
+                    <video preload="auto" src={STUDIO_ASSETS.outro} />
+                    <video preload="auto" src={STUDIO_ASSETS.banner} />
+                </div>
+
                 {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} volume={1} />)}
+                
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-between px-4 z-10 shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <img src="./obr-logo.png" className="w-6 h-6 object-contain" alt="OBR" />
-                            <span className="font-bold text-white tracking-widest text-xs">EXPLORACIONES OBR</span>
-                        </div>
+                        <div className="flex items-center gap-2"><Radio className="text-red-600 animate-pulse" size={16} /><span className="font-bold text-white tracking-widest text-xs">PRODOCK STUDIO</span></div>
                         <div className={`px-2 py-0.5 rounded text-[10px] font-bold border ${obsConnected ? 'bg-green-900/30 text-green-500 border-green-800' : 'bg-red-900/30 text-red-500 border-red-800'}`}>OBS: {obsConnected ? (obsStreaming ? "🔴 EN VIVO" : "🟢 LISTO") : "❌ DESC"}</div>
                     </div>
                     <div className="flex items-center gap-4">
                         {myId ? <div className="flex items-center gap-2 bg-[#111] px-3 py-1 rounded border border-[#333] cursor-pointer" onClick={() => {navigator.clipboard.writeText(myId); alert("ID Copiado");}}><span className="text-[10px] text-neutral-500">DOCK ID:</span><span className="font-mono text-cyan-400 font-bold text-xs select-all">{myId}</span></div> : <span className="text-yellow-500 text-[10px]">CONECTANDO...</span>}
-                        <button onClick={() => setCleanFeed(true)} className="text-[10px] font-bold bg-white text-black px-3 py-1 rounded flex items-center gap-1 hover:bg-neutral-200 transition-colors"><Maximize size={12} /> SALIDA OBS</button>
+                        <button onClick={() => setObsWindowOpen(true)} className="text-[10px] font-bold bg-white text-black px-3 py-1 rounded flex items-center gap-1 hover:bg-neutral-200 transition-colors"><Maximize size={12} /> SALIDA OBS</button>
                     </div>
                 </div>
+                
                 <div className="flex-1 flex overflow-hidden">
                     <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                         <div className="h-[50%] flex gap-4">
@@ -518,11 +600,10 @@
                             </div>
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/50 relative overflow-hidden flex flex-col shadow-[0_0_30px_rgba(200,0,0,0.1)]">
                                  <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-wider shadow-md flex items-center gap-1"><span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> PROGRAM</div>
-                                 <div className="flex-1 relative flex items-center justify-center bg-[#050505]">
-                                    {programId && cameras[programId]?.stream ? <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-contain" /> : <div className="text-neutral-800 font-mono text-4xl font-black tracking-tighter">BLACK</div>}
-                                    {activeMedia !== 'intro' && activeMedia !== 'outro' && <BroadcastHUD />}
-                                    <MediaOverlay />
-                                 </div>
+                                 
+                                 {/* CONTENIDO DE PROGRAMA (Se renderiza aquí si NO hay ventana externa) */}
+                                 {!obsWindowOpen && <ProgramContent />}
+                                 {obsWindowOpen && <div className="flex items-center justify-center h-full text-neutral-600 text-xs font-mono">MOSTRANDO EN VENTANA EXTERNA...</div>}
                             </div>
                         </div>
                         <div className="h-16 bg-[#111] rounded-xl border border-neutral-800 flex items-center justify-center gap-8 px-8 shadow-inner shrink-0">
@@ -545,6 +626,13 @@
                     </div>
                     <DirectorPanel activeCam={previewCam} conn={previewCam?.conn} onCommand={sendCommand} onPlayLocal={handlePlayLocal} />
                 </div>
+
+                {/* VENTANA FLOTANTE OBS */}
+                {obsWindowOpen && (
+                    <OBSWindow onClose={() => setObsWindowOpen(false)}>
+                        <ProgramContent />
+                    </OBSWindow>
+                )}
             </div>
           );
         };
