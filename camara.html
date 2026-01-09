@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v129 (URBEX FIX)</title> 
+    <title>CAMARA OBR v131 (FILTER FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -47,18 +47,21 @@
         #zoom-layer { 
             position: absolute; inset: 0; width: 100%; height: 100%;
             transform-origin: center center; 
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+            transition: transform 0.5s cubic-bezier(0.1, 0.7, 1.0, 0.1);
             will-change: transform;
         }
 
-        #video-source { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
-        
-        /* FILTROS */
-        .filter-night { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.3) saturate(1.2); }
-        .filter-thermal { filter: invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2); }
-        /* CORRECCIÓN URBEX */
-        .filter-urbex { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
+        /* VIDEO FUENTE (OCULTO VISUALMENTE, PROCESADO EN CANVAS) */
+        #video-source { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 0; opacity: 0; pointer-events: none;
+        }
+
+        /* CANVAS DE RENDERIZADO (LO QUE SE VE Y SE ENVÍA) */
+        #sls-canvas { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 2; pointer-events: none; 
+        }
         
         /* UI LAYERS */
         #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
@@ -145,19 +148,33 @@
             80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
             100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
         }
+        
+        /* ZOOM INDICATOR */
+        #zoom-indicator {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%; width: 50px; height: 50px;
+            pointer-events: none; opacity: 0; transition: opacity 0.3s;
+            z-index: 80;
+        }
+        #zoom-indicator.active { opacity: 1; animation: zoomPulse 0.5s ease-out; }
+        @keyframes zoomPulse { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 50% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } }
     </style>
 </head>
 <body>
 
     <div id="viewport">
         <div id="zoom-layer">
+            <!-- VIDEO SOURCE (Oculto, solo para alimentar el canvas) -->
             <video id="video-source" autoplay playsinline muted></video>
+            <!-- CANVAS (Visible y transmitido) -->
             <canvas id="sls-canvas"></canvas>
         </div>
     </div>
 
     <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
     <div id="touch-surface"></div>
+    <div id="zoom-indicator"></div>
 
     <div id="ui-layer">
         <div id="tally-border"></div>
@@ -182,13 +199,12 @@
             <div><div class="menu-btn" onclick="resetZoom()"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
-        <!-- IA VISION UI (IZQUIERDA) -->
+        <!-- IA VISION UI -->
         <div id="ai-vision-header">
             <img id="ai-mini-img" alt="Scan">
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
         
-        <!-- ELEMENTOS OCULTOS PARA COMPATIBILIDAD -->
         <div id="ai-feedback-overlay" style="display:none"></div>
     </div>
 
@@ -196,7 +212,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v129</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v131</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
         <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
@@ -244,31 +260,65 @@
 
     const video = document.getElementById('video-source');
     const slsCanvas = document.getElementById('sls-canvas');
-    const ctx = slsCanvas.getContext('2d');
+    const ctx = slsCanvas.getContext('2d', { alpha: false }); // Optimización Alpha
     const zoomLayer = document.getElementById('zoom-layer');
+    const touchSurface = document.getElementById('touch-surface');
 
-    // --- ZOOM ---
-    document.getElementById('touch-surface').addEventListener('click', (e) => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        const touchX = e.clientX;
-        const touchY = e.clientY;
-        const edgeThreshold = 80;
+    // --- ZOOM PROGRESIVO (LONG PRESS) ---
+    let pressTimer = null;
+    let isDragging = false;
+    const LONG_PRESS_MS = 600;
 
-        if (touchX < edgeThreshold || touchX > w - edgeThreshold) { showMenus(); return; }
+    touchSurface.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) return;
+        isDragging = false;
+        const touch = e.touches[0];
+        
+        pressTimer = setTimeout(() => {
+            handleZoom(touch.clientX, touch.clientY);
+        }, LONG_PRESS_MS);
+    }, {passive: false});
 
-        zoomStage = (zoomStage + 1) % 3;
-        if (zoomStage === 0) {
-            resetZoom();
-        } else {
-            const scale = zoomStage === 1 ? 3 : 5;
-            const originX = (touchX / w) * 100;
-            const originY = (touchY / h) * 100;
-            zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
-            zoomLayer.style.transform = `scale(${scale})`;
-            zoomLevel = scale;
+    touchSurface.addEventListener('touchmove', (e) => {
+        isDragging = true;
+        clearTimeout(pressTimer);
+    }, {passive: false});
+
+    touchSurface.addEventListener('touchend', (e) => {
+        clearTimeout(pressTimer);
+        if (!isDragging) {
+            handleTap(e.changedTouches[0].clientX);
         }
     });
+
+    function handleZoom(x, y) {
+        if(navigator.vibrate) navigator.vibrate(50);
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        if (zoomLevel === 1) zoomLevel = 3;
+        else if (zoomLevel === 3) zoomLevel = 5;
+        
+        const originX = (x / w) * 100;
+        const originY = (y / h) * 100;
+        
+        zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
+        zoomLayer.style.transform = `scale(${zoomLevel})`;
+        
+        const ind = document.getElementById('zoom-indicator');
+        ind.style.left = x + 'px';
+        ind.style.top = y + 'px';
+        ind.classList.remove('active');
+        void ind.offsetWidth; 
+        ind.classList.add('active');
+    }
+
+    function handleTap(x) {
+        const w = window.innerWidth;
+        const edge = 80;
+        if (x < edge || x > w - edge) { showMenus(); return; }
+        if (zoomLevel > 1) { resetZoom(); }
+    }
 
     function showMenus() {
         const left = document.getElementById('menu-left');
@@ -279,9 +329,9 @@
     }
 
     function resetZoom() {
-        zoomStage = 0; zoomLevel = 1;
+        zoomLevel = 1;
         zoomLayer.style.transform = `scale(1)`;
-        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
+        setTimeout(() => { if(zoomLevel===1) zoomLayer.style.transformOrigin = `center center`; }, 500);
     }
 
     // --- PWA & INIT ---
@@ -293,13 +343,25 @@
 
     async function initApp() {
         const btn = document.querySelector('.load-btn');
-        btn.innerText = "CARGANDO IA..."; btn.disabled = true;
+        btn.innerText = "INICIANDO..."; btn.disabled = true;
         try {
-            const camPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } });
+            const camPromise = navigator.mediaDevices.getUserMedia({ 
+                audio: true, 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 3840 }, 
+                    height: { ideal: 2160 }, 
+                    frameRate: { ideal: 60 }, 
+                    advanced: [{ focusMode: "continuous" }] 
+                } 
+            });
+
             const aiPromise = tf.setBackend('webgl').then(() => poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }));
             
             const [stream, det] = await Promise.all([camPromise, aiPromise]);
-            videoStream = stream; video.srcObject = stream; detector = det;
+            videoStream = stream; 
+            video.srcObject = stream; 
+            detector = det;
             
             const dummyVideo = document.createElement('video');
             await detector.estimatePoses(dummyVideo).catch(()=>{}); 
@@ -307,7 +369,9 @@
             video.onloadedmetadata = () => { 
                 video.play();
                 document.getElementById('loading').style.display = 'none';
-                resize(); renderLoop(); detectionLoop();
+                resize(); 
+                renderLoop(); 
+                detectionLoop();
             };
             window.addEventListener('resize', resize);
             setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
@@ -316,6 +380,7 @@
 
     function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; }
 
+    // --- RENDER LOOP: EL CORAZON DEL PROCESAMIENTO ---
     function renderLoop() {
         const now = performance.now(); frameCount++;
         if (now - lastTime >= 1000) {
@@ -323,19 +388,43 @@
             document.getElementById('perf-stats').innerText = t ? `${t.width}x${t.height} @ ${frameCount}FPS` : `${frameCount}FPS`;
             frameCount = 0; lastTime = now;
         }
-        ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
-        if(isSLSActive && poses.length > 0) drawSLS(poses);
+
+        // 1. APLICAR FILTROS (CANVAS CONTEXT)
+        ctx.filter = 'none'; // Reset
+        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.3) saturate(1.2)';
+        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
+        if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
+
+        // 2. DIBUJAR VIDEO EN CANVAS (CON EL FILTRO APLICADO)
+        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
+        
+        // 3. DIBUJAR SLS (SOBRE EL VIDEO FILTRADO)
+        if(isSLSActive && poses.length > 0) {
+            ctx.filter = 'none'; // Importante: SLS se dibuja con colores reales
+            drawSLS(poses);
+        }
+
         requestAnimationFrame(renderLoop);
     }
 
+    // --- SLS (CUERPO TERMICO) ---
     function drawSLS(poses) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
-            ctx.shadowBlur = 30; ctx.shadowColor = 'rgba(255, 0, 0, 0.8)'; ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)'; ctx.lineWidth = 20; 
+            
+            ctx.shadowBlur = 40; 
+            ctx.shadowColor = 'rgba(255, 69, 0, 0.8)'; // Rojo Anaranjado
+            ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; 
+            ctx.lineWidth = 40; 
+            
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }); ctx.stroke();
-            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
+            
+            ctx.shadowBlur = 0; 
+            ctx.strokeStyle = '#00ff41'; 
+            ctx.lineWidth = 3;
+            
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }); ctx.stroke();
         });
     }
@@ -350,6 +439,7 @@
     }
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
+    
     async function connectToProdock() {
         const id = document.getElementById('dock-id').value.trim();
         if(!id) return;
@@ -370,7 +460,14 @@
                     if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
                 }
             });
-            peer.call(id, videoStream);
+            
+            // CORRECCIÓN CRÍTICA: ENVÍO DEL CANVAS PROCESADO
+            const streamToSend = slsCanvas.captureStream(30); // 30 FPS para transmisión
+            // Inyectar audio original
+            const audioTrack = video.srcObject.getAudioTracks()[0];
+            if(audioTrack) streamToSend.addTrack(audioTrack);
+            
+            peer.call(id, streamToSend);
         });
     }
 
@@ -380,11 +477,7 @@
         isSLSActive = (f === 'sls');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
-        
-        video.className = '';
-        if(f === 'night') video.classList.add('filter-night');
-        if(f === 'thermal') video.classList.add('filter-thermal');
-        if(f === 'urbex') video.classList.add('filter-urbex');
+        // El filtro ahora se aplica en el renderLoop a través de la variable currentFilter
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
     }
 
@@ -417,13 +510,17 @@
         } else { setTimeout(() => { isAIProcessing = false; }, 2000); }
     }
 
+    // --- IA VISION (TU CÓDIGO) ---
     async function triggerPareidolia() { 
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         
         isAIProcessing = true; 
         spawnScanRects();
-
+        
+        // Se captura del canvas actual (que ya tiene filtros aplicados si los hubiera)
+        // O mejor: capturar del video original si queremos que la IA vea claro?
+        // Generalmente mejor video original para la IA:
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
@@ -447,6 +544,8 @@
             const aiImg = document.getElementById('ai-mini-img'); 
             const aiText = document.getElementById('ai-mini-text');
             
+            // Mostrar imagen que vio la IA (con filtro aplicado visualmente si usamos toDataURL del slsCanvas)
+            // Aquí usamos la captura raw para display negativo
             aiImg.src = canvas.toDataURL(); 
             aiText.innerText = text.toUpperCase(); 
             aiHeader.classList.add('active');
