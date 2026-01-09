@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v141 (SLS 192PX)</title> 
+    <title>CAMARA OBR v145 (FILTER RESTORE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -25,16 +25,15 @@
         /* BLOQUEO TOTAL DE SELECCIÓN */
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; }
         
+        :root { --hud-primary: #ff3333; }
+
         body { 
             background: #000; overflow: hidden; 
             font-family: 'Orbitron', sans-serif; 
             width: 100vw; height: 100vh;
             margin: 0; padding: 0;
         }
-        
-        :root { --hud-primary: #ff3333; }
 
-        /* FORZAR HORIZONTAL */
         @media screen and (orientation: portrait) {
             body {
                 transform: rotate(90deg);
@@ -45,27 +44,20 @@
             }
         }
         
-        /* ESTRUCTURA DE VISTA (Compatibilidad CSS Usuario) */
+        /* ESTRUCTURA PRINCIPAL (IDs RESTAURADOS) */
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
         
-        #zoom-container { 
+        #zoom-layer { 
             position: absolute; inset: 0; width: 100%; height: 100%;
             transform-origin: center center; 
-            transition: transform 0.5s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
             will-change: transform;
         }
 
-        #shared-video-element { 
-            position: absolute; inset: 0; width: 100%; height: 100%; 
-            object-fit: cover; z-index: 1; 
-        }
-
-        #sls-canvas { 
-            position: absolute; inset: 0; width: 100%; height: 100%; 
-            object-fit: cover; z-index: 2; pointer-events: none; 
-        }
+        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
         
-        /* FILTROS (CÓDIGO USUARIO) */
+        /* --- FILTROS RESTAURADOS (VERSIÓN BASE) --- */
         .filter-night-vision #shared-video-element { filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; }
         .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); z-index: 5; mix-blend-mode: hard-light; }
         
@@ -85,14 +77,17 @@
         #tally-border.program { border: 12px solid red; box-shadow: inset 0 0 40px red; }
         #tally-border.preview { border: 12px solid #00ff00; }
 
-        /* ANIMACIONES HEADER */
-        #live-header-container { position: absolute; top: 20px; left: 20px; transition: all 0.5s ease-in-out; transform-origin: top left; }
+        /* HEADER ANIMATIONS */
+        #live-header-container { 
+            position: absolute; top: 20px; left: 20px; 
+            transition: all 0.5s ease-in-out; transform-origin: top left;
+        }
         .water-pop-hide { opacity: 0; transform: scale(0.8) translateY(-20px); filter: blur(5px); }
         .glitch-restore { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
 
-        /* AI VISION HEADER UI */
+        /* AI VISION UI */
         #ai-vision-header {
-            position: absolute; top: 20px; left: 20px; 
+            position: absolute; top: 80px; left: 20px; 
             display: flex; flex-direction: column; align-items: flex-start;
             opacity: 0; pointer-events: none; transition: opacity 0.5s;
             z-index: 60; width: 220px;
@@ -134,21 +129,25 @@
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
         
-        /* ZONA TÁCTIL */
         #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
-        #zoom-target-indicator { position: absolute; width: 40px; height: 40px; border: 2px solid #00ff00; border-radius: 50%; opacity: 0; pointer-events: none; transform: translate(-50%, -50%); transition: opacity 0.5s; box-shadow: 0 0 10px #00ff00; z-index: 80; }
         
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
 
+        /* RECUADROS DE ESCANEO */
         .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
-        @keyframes scanBlinkBlur { 0% { opacity: 0; transform: scale(0.8); filter: blur(0px); } 30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; } 80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; } 100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; } }
+        @keyframes scanBlinkBlur {
+            0% { opacity: 0; transform: scale(0.8); filter: blur(0px); }
+            30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; }
+            80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
+            100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
+        }
     </style>
 </head>
 <body>
 
     <div id="main-view-area">
-        <div id="zoom-container">
+        <div id="zoom-layer">
             <video id="shared-video-element" autoplay playsinline muted></video>
             <canvas id="sls-canvas"></canvas>
         </div>
@@ -156,18 +155,18 @@
 
     <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
     <div id="touch-surface"></div>
-    <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
         
+        <!-- HEADER RESTAURADO -->
         <div id="live-header-container">
             <div class="flex items-center gap-2 mb-1">
                 <img src="obr-logo.png" class="w-8 h-8 object-contain drop-shadow-[0_0_5px_red]">
-                <span class="font-orbitron text-lg font-bold text-white tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">OBR CAM</span>
+                <span class="font-orbitron text-lg font-bold text-white tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">EXPLORACIONES OBR</span>
             </div>
-            <div id="clock" class="text-xs font-mono text-red-400 ml-10 tracking-widest">--:--:--</div>
+            <div id="clock" class="text-xs font-mono text-red-400 ml-10 tracking-widest">--/--/-- --:--:--</div>
         </div>
 
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
@@ -177,16 +176,16 @@
 
         <!-- MENUS -->
         <div id="menu-left" class="menu-container left-side">
-            <div><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
-            <div><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
 
         <div id="menu-right" class="menu-container right-side">
-            <div><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
-            <div><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
-            <div><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom()"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
         <!-- IA VISION UI -->
@@ -202,7 +201,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v141</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v145</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
         <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
@@ -240,107 +239,54 @@
     let detector = null;
     let poses = [];
     let zoomLevel = 1; 
+    let zoomStage = 0; 
     let peer, conn;
     let deferredPrompt;
     let menuTimer;
     let videoStream;
     let fps = 0, frameCount = 0, lastTime = performance.now();
     let pareidoliaInterval = null;
-    let zoomTimer = null;
 
     const video = document.getElementById('shared-video-element');
     const slsCanvas = document.getElementById('sls-canvas');
-    const ctx = slsCanvas.getContext('2d', { alpha: true }); // Alpha necesario para sobreponer video
-    const zoomContainer = document.getElementById('zoom-container');
-    const touchSurface = document.getElementById('touch-surface');
+    const ctx = slsCanvas.getContext('2d', { alpha: true });
+    const zoomLayer = document.getElementById('zoom-layer');
 
-    // CANVAS DE DETECCIÓN OPTIMIZADO (192px)
-    const detCanvas = document.createElement('canvas');
-    detCanvas.width = 192; detCanvas.height = 108;
-    const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
-
-    // --- INTERACCIÓN ZOOM & MENÚ ---
-    touchSurface.addEventListener('pointerdown', (e) => {
+    // --- ZOOM ---
+    document.getElementById('touch-surface').addEventListener('click', (e) => {
         const w = window.innerWidth;
         const h = window.innerHeight;
         const touchX = e.clientX;
         const touchY = e.clientY;
-        const edge = 100;
+        const edgeThreshold = 100;
 
-        // Menús laterales
-        if (touchX < edge || touchX > w - edge) { 
-            showMenus(); 
-            return; 
+        if (touchX < edgeThreshold || touchX > w - edgeThreshold) { showMenus(); return; }
+
+        zoomStage = (zoomStage + 1) % 3;
+        if (zoomStage === 0) {
+            resetZoom();
+        } else {
+            const scale = zoomStage === 1 ? 3 : 5;
+            const originX = (touchX / w) * 100;
+            const originY = (touchY / h) * 100;
+            zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
+            zoomLayer.style.transform = `scale(${scale})`;
+            zoomLevel = scale;
         }
-
-        // Lógica Zoom al mantener presionado (300ms)
-        resetMenuTimer();
-        zoomTimer = setTimeout(() => {
-            const rect = video.getBoundingClientRect();
-            // Calcular posición relativa al video escalado
-            let x = touchX - rect.left;
-            let y = touchY - rect.top;
-            
-            // Ajustar coordenadas si ya hay zoom
-            if (zoomLevel > 1) {
-               x = x / zoomLevel;
-               y = y / zoomLevel;
-            }
-
-            if(zoomLevel === 1) executeZoomAt(x, y, 3);
-            else if(zoomLevel === 3) executeZoomAt(x, y, 5);
-            else resetZoom();
-        }, 300);
     });
-
-    touchSurface.addEventListener('pointerup', () => clearTimeout(zoomTimer));
-    touchSurface.addEventListener('pointermove', () => { clearTimeout(zoomTimer); }); // Cancelar si arrastra
-
-    function executeZoomAt(x, y, scale) {
-        if(navigator.vibrate) navigator.vibrate(50);
-        const w = video.offsetWidth;
-        const h = video.offsetHeight;
-        const xPct = (x / w) * 100;
-        const yPct = (y / h) * 100;
-
-        zoomContainer.style.transformOrigin = `${xPct}% ${yPct}%`;
-        zoomContainer.style.transform = `scale(${scale})`;
-        zoomLevel = scale;
-
-        // Indicador visual
-        const ind = document.getElementById('zoom-target-indicator'); 
-        ind.style.left = event.clientX + 'px'; 
-        ind.style.top = event.clientY + 'px'; 
-        ind.style.opacity = 1; 
-        setTimeout(() => ind.style.opacity = 0, 500);
-    }
-
-    function resetZoom(btnElement) {
-        if(btnElement) { 
-            btnElement.classList.add('active-state'); 
-            setTimeout(()=>btnElement.classList.remove('active-state'), 200); 
-        }
-        zoomContainer.style.transform = `scale(1)`;
-        zoomLevel = 1;
-        setTimeout(() => zoomContainer.style.transformOrigin = `center center`, 500);
-        hideMenus();
-    }
 
     function showMenus() {
         const left = document.getElementById('menu-left');
         const right = document.getElementById('menu-right');
         left.classList.add('visible'); right.classList.add('visible');
-        resetMenuTimer();
-    }
-    
-    function hideMenus() {
-        document.getElementById('menu-left').classList.remove('visible');
-        document.getElementById('menu-right').classList.remove('visible');
-    }
-    
-    function resetMenuTimer() {
         clearTimeout(menuTimer);
-        menuTimer = setTimeout(hideMenus, 4000);
+        menuTimer = setTimeout(() => { left.classList.remove('visible'); right.classList.remove('visible'); }, 4000);
+    }
+
+    function resetZoom() {
+        zoomStage = 0; zoomLevel = 1;
+        zoomLayer.style.transform = `scale(1)`;
+        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
     }
 
     // --- PWA & INIT ---
@@ -348,9 +294,21 @@
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
     window.onload = () => {
         if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
+        
         setInterval(() => {
-            const d = new Date();
-            document.getElementById('clock').innerText = d.toLocaleTimeString();
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = String(now.getFullYear()).slice(-2);
+            let h = now.getHours();
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const amp = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12;
+            const timeStr = `${d}/${m}/${y} ${String(h).padStart(2, '0')}:${min}:${s} ${amp}`;
+            
+            const clock = document.getElementById('clock');
+            if(clock) clock.innerText = timeStr;
         }, 1000);
     };
 
@@ -360,17 +318,17 @@
         try {
             const camPromise = navigator.mediaDevices.getUserMedia({ 
                 audio: true, 
-                video: { 
-                    facingMode: 'environment', 
-                    width: { ideal: 1920 }, height: { ideal: 1080 }, 
-                    frameRate: { ideal: 60 } 
-                } 
-            });
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
+            }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
+            
             const aiPromise = tf.setBackend('webgl').then(() => poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }));
             
             const [stream, det] = await Promise.all([camPromise, aiPromise]);
             videoStream = stream; video.srcObject = stream; detector = det;
             
+            const dummyVideo = document.createElement('video');
+            await detector.estimatePoses(dummyVideo).catch(()=>{}); 
+
             video.onloadedmetadata = () => { 
                 video.play();
                 document.getElementById('loading').style.display = 'none';
@@ -383,7 +341,7 @@
 
     function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; }
 
-    // --- RENDER LOOP ---
+    // --- RENDER LOOP: EL CORAZON DEL PROCESAMIENTO ---
     function renderLoop() {
         const now = performance.now(); frameCount++;
         if (now - lastTime >= 1000) {
@@ -392,10 +350,18 @@
             frameCount = 0; lastTime = now;
         }
 
-        ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
+        // 1. APLICAR FILTROS (CANVAS CONTEXT para Stream)
+        ctx.filter = 'none'; 
+        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
+        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
+        if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
+
+        // 2. DIBUJAR VIDEO EN CANVAS
+        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
         
-        // El video se ve a través del CSS filter. El canvas dibuja SOLO SLS.
+        // 3. DIBUJAR SLS
         if(isSLSActive && poses.length > 0) {
+            ctx.filter = 'none'; 
             drawSLS(poses);
         }
 
@@ -404,57 +370,22 @@
 
     function drawSLS(poses) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        
-        // Escalar coordenadas del canvas de detección (192px) al canvas de pantalla
-        const scaleX = slsCanvas.width / detCanvas.width;
-        const scaleY = slsCanvas.height / detCanvas.height;
-
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
-            
-            // Cuerpo Térmico (Rojo/Naranja Opacidad 40%)
-            ctx.shadowBlur = 0; 
-            ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; 
-            ctx.lineWidth = 25 * scaleX / 4; // Ajustar grosor relativo
-            
-            ctx.beginPath(); 
-            edges.forEach(([a,b]) => { 
-                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
-                if(p1.score>0.3 && p2.score>0.3) { 
-                    ctx.moveTo(p1.x * scaleX, p1.y * scaleY); 
-                    ctx.lineTo(p2.x * scaleX, p2.y * scaleY); 
-                } 
-            }); 
-            ctx.stroke();
-            
-            // Esqueleto Verde (Centro)
-            ctx.strokeStyle = '#00ff41'; 
-            ctx.lineWidth = 3;
-            ctx.beginPath(); 
-            edges.forEach(([a,b]) => { 
-                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
-                if(p1.score>0.3 && p2.score>0.3) { 
-                    ctx.moveTo(p1.x * scaleX, p1.y * scaleY); 
-                    ctx.lineTo(p2.x * scaleX, p2.y * scaleY); 
-                } 
-            }); 
-            ctx.stroke();
+            ctx.shadowBlur = 40; ctx.shadowColor = 'rgba(255, 69, 0, 0.8)'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 40; 
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }); ctx.stroke();
+            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 3;
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }); ctx.stroke();
         });
     }
 
-    // --- DETECCIÓN OPTIMIZADA (192px) ---
     async function detectionLoop() {
         while(true) {
             if(detector && (isSLSActive || isPareidoliaActive)) {
-                try { 
-                    // Dibujar video en canvas pequeño
-                    detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    // Detectar en canvas pequeño
-                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25}); 
-                } catch(e){}
+                try { poses = await detector.estimatePoses(video, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.15}); } catch(e){}
             } else { poses = []; }
-            await new Promise(r => setTimeout(r, 40)); // ~25 FPS de detección
+            await new Promise(r => setTimeout(r, 50));
         }
     }
 
@@ -476,18 +407,9 @@
                 if(d.type === 'cmd') {
                     if(d.action === 'filter') setFilter(d.value); 
                     if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
-                    if(d.action === 'reset') resetZoom(); 
+                    if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
                 }
             });
-            
-            // STREAM: Enviamos el canvas capturado (que contiene el SLS)
-            // IMPORTANTE: Para que los filtros CSS se vean en Prodock, necesitaríamos dibujarlos en canvas.
-            // En esta versión, enviamos el canvas (con SLS) sobre el video.
-            // Para máximo rendimiento, enviamos el video raw + overlay canvas si es posible, 
-            // pero PeerJS solo envía un stream. 
-            // Compromiso: Enviamos captureStream del canvas. Dibujamos video + filtro (si es posible) en canvas.
-            // Ajuste en renderLoop: Dibujar video con filtro manual si queremos transmitir filtro.
-            
             const streamToSend = slsCanvas.captureStream(30); 
             const audioTrack = video.srcObject.getAudioTracks()[0];
             if(audioTrack) streamToSend.addTrack(audioTrack);
@@ -503,42 +425,15 @@
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
         
-        // Aplicar clases CSS al BODY para afectar todo el contenedor de vista
+        // CSS Fallback
         document.body.className = '';
         if(f === 'night') document.body.classList.add('filter-night-vision');
         if(f === 'thermal') document.body.classList.add('filter-thermal');
         if(f === 'urbex') document.body.classList.add('filter-urbex');
-        if(f === 'sls') {
-            document.body.classList.add('filter-pareidolia');
-            document.getElementById('sls-pip').style.display = 'block';
-        } else {
-            document.getElementById('sls-pip').style.display = 'none';
-        }
-        
-        // LINTERNA
-        const track = video.srcObject.getVideoTracks()[0];
-        const caps = track.getCapabilities();
-        if(caps.torch) {
-            track.applyConstraints({ advanced: [{ torch: (f === 'night') }] }).catch(()=>{});
-        }
+        if(f === 'sls') document.body.classList.add('filter-pareidolia');
 
-        hideMenus();
-    }
-
-    function spawnScanRects() {
-        const layer = document.getElementById('scan-layer');
-        for(let i=0; i<5; i++) {
-            setTimeout(() => {
-                const rect = document.createElement('div');
-                rect.className = 'scan-rect';
-                const w = Math.random() * 80 + 40; const h = Math.random() * 80 + 40;
-                rect.style.width = w + 'px'; rect.style.height = h + 'px';
-                rect.style.left = Math.random() * (window.innerWidth - w) + 'px';
-                rect.style.top = Math.random() * (window.innerHeight - h) + 'px';
-                layer.appendChild(rect);
-                setTimeout(() => rect.remove(), 700);
-            }, i * 250);
-        }
+        document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
+        if(isPareidoliaActive) togglePareidolia();
     }
 
     function speakText(t) { 
@@ -552,15 +447,15 @@
         } else { setTimeout(() => { isAIProcessing = false; }, 2000); }
     }
 
-    // --- IA INTEGRADA ---
     async function triggerPareidolia() { 
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         isAIProcessing = true; 
-        
         spawnScanRects();
+
         const header = document.getElementById('live-header-container');
-        header.classList.remove('glitch-restore'); header.classList.add('water-pop-hide');
+        if(header) { header.classList.remove('glitch-restore'); header.classList.add('water-pop-hide'); }
+
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
@@ -580,23 +475,25 @@
             const aiHeader = document.getElementById('ai-vision-header'); const aiImg = document.getElementById('ai-mini-img'); const aiText = document.getElementById('ai-mini-text');
             aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiHeader.classList.add('active');
             speakText(text); 
-        } catch(e) { console.log(e); isAIProcessing = false; header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); } 
+        } catch(e) { console.log(e); isAIProcessing = false; if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); } } 
     }
 
     function togglePareidolia(btnElement) { 
         if(!GEMINI_API_KEY) { alert("NO API KEY"); return; } 
+        const btn = btnElement || document.getElementById('btn-ia');
         isPareidoliaActive = !isPareidoliaActive; 
         if(isPareidoliaActive) { 
-            if(btnElement) btnElement.classList.add('active-state');
+            if(btn) btn.classList.add('active-state');
             document.body.classList.add('filter-pareidolia'); 
-            speakText("VISIÓN ACTIVADA"); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 6000); 
+            speakText("VISIÓN ACTIVADA"); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 8000); 
         } else { 
-            if(btnElement) btnElement.classList.remove('active-state');
+            if(btn) btn.classList.remove('active-state');
             document.body.classList.remove('filter-pareidolia'); 
             speakText("VISIÓN DESACTIVADA"); clearInterval(pareidoliaInterval); 
             isAIProcessing = false; 
             const header = document.getElementById('live-header-container'); const aiHeader = document.getElementById('ai-vision-header');
-            aiHeader.classList.remove('active'); header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore');
+            if(aiHeader) aiHeader.classList.remove('active'); 
+            if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); }
         } 
         showMenus(); 
     }
