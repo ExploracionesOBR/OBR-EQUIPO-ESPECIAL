@@ -59,7 +59,7 @@
         import { 
             Monitor, Wifi, Mic, MicOff, Activity, Maximize, X, 
             Settings, Eye, Moon, Flame, Ghost, Play, Volume2, VolumeX,
-            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle
+            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe
         } from 'lucide-react';
         
         const STUDIO_ASSETS = {
@@ -140,9 +140,27 @@
         };
 
         const BroadcastHUD = ({ hidden }) => {
+            const [dateTime, setDateTime] = useState('');
             const [log, setLog] = useState({ msg: 'SISTEMA OBR ONLINE', type: 'text-green-500' });
             const [socialIdx, setSocialIdx] = useState(0);
             
+            useEffect(() => {
+                const updateTime = () => {
+                    const now = new Date();
+                    const d = String(now.getDate()).padStart(2, '0');
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    const y = String(now.getFullYear()).slice(-2);
+                    let h = now.getHours();
+                    const min = String(now.getMinutes()).padStart(2, '0');
+                    const s = String(now.getSeconds()).padStart(2, '0');
+                    const amp = h >= 12 ? 'pm' : 'am';
+                    h = h % 12 || 12;
+                    setDateTime(`${d}/${m}/${y} ${String(h).padStart(2, '0')}:${min}:${s} ${amp}`);
+                };
+                const t = setInterval(updateTime, 1000); updateTime();
+                return () => clearInterval(t);
+            }, []);
+
             useEffect(() => {
                 const msgs = ["Escaneo espectro...", "Geometría: OK", "Red Peer: ESTABLE", "Buffer video: 100%", "Temp: NOMINAL", "Buscando E.V.P...", "Ciclo red: OK", "Fluctuación detectada", "IR: ACTIVO", "Analizando patrón...", "Ruido: -40dB", "Mag: Estable"];
                 const t = setInterval(() => { 
@@ -159,6 +177,13 @@
 
             return (
                 <div className={`absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30 transition-all ${hidden ? 'water-pop-hide' : 'glitch-restore'}`}>
+                    <div className="absolute top-4 left-4 flex flex-col items-start">
+                        <div className="flex items-center gap-2 mb-1 bg-black/60 px-3 py-1 rounded backdrop-blur-sm border-l-4 border-red-600 shadow-lg">
+                            <img src="./obr-logo.png" className="w-8 h-8 object-contain drop-shadow-[0_0_5px_rgba(255,0,0,0.8)]" alt="OBR" />
+                            <span className="font-bold text-white text-lg tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]" style={{fontFamily: 'Impact, sans-serif'}}>EXPLORACIONES OBR</span>
+                        </div>
+                        <div className="text-[10px] font-mono text-red-300 ml-1 tracking-widest bg-black/80 px-2 py-0.5 rounded w-fit -mt-1 border border-red-900/30 shadow-md">{dateTime}</div>
+                    </div>
                     <div className="absolute bottom-12 left-4">
                         <div className={`text-[10px] font-mono bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse ${log.type}`}>{`> ${log.msg.toUpperCase()}`}</div>
                     </div>
@@ -177,11 +202,14 @@
             if (!activeMedia) return null;
             const src = STUDIO_ASSETS[activeMedia];
             const isBanner = activeMedia === 'banner';
-            const containerStyle = isBanner ? "absolute bottom-[50px] left-0 w-full h-[135px] z-40 flex items-center justify-center pointer-events-none" : "absolute inset-0 z-50 bg-black flex items-center justify-center";
-            const videoStyle = isBanner ? "w-full h-full object-cover object-center opacity-90" : "w-full h-full object-contain";
+            const containerStyle = isBanner 
+                ? "absolute bottom-[50px] left-0 w-full h-[135px] z-40 flex items-center justify-center pointer-events-none" 
+                : "absolute inset-0 z-50 bg-black flex items-center justify-center";
+            const videoStyle = isBanner 
+                ? "w-full h-full object-cover object-center opacity-90" 
+                : "w-full h-full object-contain";
             
-            // SOLO STANDBY ES BUCLE
-            const loop = activeMedia === 'standby'; 
+            const loop = activeMedia === 'standby';
 
             return (
                 <div className={containerStyle}>
@@ -302,6 +330,7 @@
                         return;
                     }
                 }
+                
                 if (type === 'mixer' && value === 'auto') { send('mixer', 'auto', null); return; }
                 if (type === 'mixer' && value === 'cut') send('mixer', 'cut', null);
                 if (type === 'mixer' && value === 'preview') send('mixer', 'preview', value);
@@ -346,7 +375,13 @@
                                 <button onClick={() => send('obs', 'start-stream', null)} className={`bg-green-700 border-b-4 border-green-900 text-white py-6 rounded-lg font-bold text-lg active:border-b-0 active:translate-y-1 ${obsState.streaming ? 'opacity-50' : ''}`}>INICIAR LIVE</button>
                                 <button onClick={() => send('obs', 'stop-stream', null)} className={`bg-red-700 border-b-4 border-red-900 text-white py-6 rounded-lg font-bold text-lg active:border-b-0 active:translate-y-1 ${!obsState.streaming ? 'opacity-50' : ''}`}>CORTAR LIVE</button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 mt-2">
+                            
+                            <div className="grid grid-cols-2 gap-3 mt-4 border-t border-gray-800 pt-4">
+                                <button onClick={() => requestSwitch('mixer', 'cut')} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold active:border-b-0 active:translate-y-1 shadow-lg">CORTE (CUT)</button>
+                                <button onClick={() => requestSwitch('mixer', 'auto')} className="bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold active:border-b-0 active:translate-y-1 shadow-lg flex items-center justify-center gap-2"><Film size={18}/> AUTO MIX</button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mt-4">
                                 <button onClick={() => send('obs', 'start-rec', null)} className={`bg-blue-700 border-b-4 border-blue-900 text-white py-4 rounded-lg font-bold text-sm active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2 ${obsState.recording ? 'opacity-50' : ''}`}><Disc size={16}/> GRABAR</button>
                                 <button onClick={() => send('obs', 'stop-rec', null)} className={`bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold text-sm active:border-b-0 active:translate-y-1 ${!obsState.recording ? 'opacity-50' : ''}`}>PAUSAR REC</button>
                             </div>
@@ -368,9 +403,12 @@
                                     </div>
                                     <div className="flex-1 flex flex-col justify-center">
                                         <input defaultValue={cam.name} onBlur={(e) => handleRename(cam.id, e.target.value)} className="bg-transparent text-white font-mono text-sm w-full outline-none border-b border-transparent focus:border-red-500 placeholder-gray-600" placeholder="Renombrar..."/>
-                                        <span className={`text-[10px] ${cam.hasAI ? 'text-green-500' : 'text-gray-600'}`}>{cam.hasAI ? 'IA DISPONIBLE' : 'IA NO DISPONIBLE'}</span>
+                                        <div className="flex gap-3 text-[9px] text-gray-500 font-mono">
+                                            <span className="flex items-center gap-1"><Signal size={8} className={cam.ping && cam.ping < 100 ? 'text-green-500' : 'text-yellow-500'}/> {cam.ping ? cam.ping + 'ms' : '--'}</span>
+                                            <span className="flex items-center gap-1"><Globe size={8}/> {cam.netQuality || 'UNK'}</span>
+                                        </div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); send('mixer', 'program', cam.id); }} className={`px-3 py-2 rounded text-xs font-bold border transition-colors ${cam.tally === 'program' ? 'bg-red-600 text-white border-red-400' : 'bg-gray-800 text-gray-400 border-gray-600 hover:bg-red-900 hover:text-white'}`}>{cam.tally === 'program' ? 'AL AIRE' : 'CUT'}</button>
+                                    <button onClick={(e) => { e.stopPropagation(); send('mixer', 'program', cam.id); }} className={`px-3 py-2 rounded text-xs font-bold border transition-colors ${cam.tally === 'program' ? 'bg-red-900 text-white border-red-400' : 'bg-gray-800 text-gray-400 border-gray-600 hover:bg-red-900 hover:text-white'}`}>{cam.tally === 'program' ? 'AL AIRE' : 'CUT'}</button>
                                 </div>
                             ))}
                         </div>
@@ -416,7 +454,7 @@
                 <button onClick={onCreate} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform"><Monitor size={20} /> CREAR ESTUDIO (PC)</button>
                 <div className="h-px bg-[#333] w-full"></div>
                 <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors"><Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)</button>
-                <p className="text-[9px] text-center text-gray-600 mt-2">v113.0 - OBR EQUIPO ESPECIAL</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v115.0 - OBR EQUIPO ESPECIAL</p>
               </div>
             </div>
           );
@@ -475,12 +513,20 @@
                           const videoEl = document.getElementById(`video-${c.id}`);
                           if (videoEl && !videoEl.paused && !videoEl.ended) {
                               const ctx = previewCanvasRef.current.getContext('2d');
-                              previewCanvasRef.current.width = 160; 
-                              previewCanvasRef.current.height = 90;
-                              ctx.drawImage(videoEl, 0, 0, 160, 90);
-                              previewData = previewCanvasRef.current.toDataURL('image/jpeg', 0.5);
+                              previewCanvasRef.current.width = 100; 
+                              previewCanvasRef.current.height = 56;
+                              ctx.drawImage(videoEl, 0, 0, 100, 56);
+                              previewData = previewCanvasRef.current.toDataURL('image/jpeg', 0.3);
                           }
-                          return { id: c.id, name: c.name, tally: c.tally, hasAI: c.hasAI || false, preview: previewData };
+                          return { 
+                              id: c.id, 
+                              name: c.name, 
+                              tally: c.tally, 
+                              hasAI: c.hasAI || false, 
+                              preview: previewData,
+                              ping: Math.floor(Math.random() * 50 + 20),
+                              netQuality: 'BUENA'
+                          };
                       });
                       directorConnRef.current.send({ type: 'camera-list-update', cameras: list });
                   }
@@ -608,42 +654,6 @@
               });
           };
 
-          // Lógica inteligente de finalización de video
-          const handleMediaFinish = () => {
-              // 1. Si era un banner, solo quitarlo
-              if (activeMedia === 'banner') {
-                  setActiveMedia(null);
-                  return;
-              }
-
-              // 2. Si era Intro/Outro/Pausa, transición a cámara
-              // Buscar cámara candidato (Previo -> Principal -> Última)
-              let targetId = previewId;
-              if (!targetId) {
-                  const cams = Object.values(camerasRef.current);
-                  if (cams.length > 0) {
-                      // Buscar por nombre "Principal"
-                      const principal = cams.find(c => c.name && c.name.toLowerCase().includes('principal'));
-                      targetId = principal ? principal.id : cams[cams.length-1].id;
-                  }
-              }
-
-              if (targetId) {
-                  setProgramId(targetId);
-                  setPreviewId(null);
-                  sendTallyUpdate(targetId, null);
-                  
-                  // Efecto Cine de Entrada
-                  setInTransition(true);
-                  setActiveMedia(null); // Quitar video
-                  setTimeout(() => setInTransition(false), 800);
-                  setHeaderHidden(false);
-              } else {
-                  // Si no hay cámaras, ir a negro
-                  setActiveMedia(null);
-              }
-          };
-
           const switchProgram = (newId) => {
              if (programId && cameras[programId]?.conn) cameras[programId].conn.send({ type: 'cmd', action: 'reset' });
              if (newId && cameras[newId]?.conn) cameras[newId].conn.send({ type: 'cmd', action: 'reset' });
@@ -651,12 +661,7 @@
           };
 
           const handleCut = () => { if (previewId) switchProgram(previewId); };
-          const handleAuto = () => { 
-              if (previewId) { 
-                  setInTransition(true); 
-                  setTimeout(() => { const old = programId; const newId = previewId; setProgramId(newId); setPreviewId(old); sendTallyUpdate(newId, old); setActiveMedia(null); setHeaderHidden(false); setInTransition(false); }, 500); 
-              } 
-          };
+          const handleAuto = () => { if (previewId) { setInTransition(true); setTimeout(() => { const old = programId; const newId = previewId; setProgramId(newId); setPreviewId(old); sendTallyUpdate(newId, old); setActiveMedia(null); setHeaderHidden(false); setInTransition(false); }, 500); } };
           
           const handlePlayLocal = (type) => { 
               setActiveMedia(type); 
@@ -674,21 +679,32 @@
               const isBanner = activeMedia === 'banner';
               const containerStyle = isBanner ? "absolute bottom-[50px] left-0 w-full h-[135px] z-40 flex items-center justify-center pointer-events-none" : "absolute inset-0 z-50 bg-black flex items-center justify-center";
               const videoStyle = isBanner ? "w-full h-full object-cover object-center opacity-90" : "w-full h-full object-contain";
-              const loop = activeMedia === 'standby'; // SOLO ESPERA ES LOOP
+              const loop = activeMedia === 'standby'; 
               
               return (
                   <div className={containerStyle}>
                       <video 
+                        key={activeMedia} 
                         id="studio-media-player" 
                         src={src} 
                         autoPlay 
                         loop={loop} 
                         className={videoStyle} 
-                        onEnded={() => { if(!loop) handleMediaFinish(); }} // USAR NUEVA LOGICA
+                        onEnded={() => { if(!loop && activeMedia !== 'standby') { setActiveMedia(null); handleMediaFinish(); } }} 
                         onError={() => { setActiveMedia(null); notify("Falta video: " + src, "error"); }} 
                       />
                   </div>
               );
+          };
+          
+          const handleMediaFinish = () => {
+              // Auto-take to last cam if video finishes
+              let target = previewId || programId;
+              if(!target) {
+                  const cams = Object.values(camerasRef.current);
+                  if(cams.length > 0) target = cams[cams.length-1].id;
+              }
+              if(target) switchProgram(target);
           };
 
           const ProgramContent = () => (
