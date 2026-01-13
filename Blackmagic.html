@@ -71,11 +71,15 @@
             standby: './VIDEO-ESPERA.mp4'
         };
 
+        // CONFIGURACIÓN DE RED MEJORADA (SOLUCIÓN PROBLEMA 4G/5G)
         const PEER_CONFIG = {
             config: {
                 iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
                     { urls: 'stun:global.stun.twilio.com:3478' }
                 ],
                 iceCandidatePoolSize: 10,
@@ -162,7 +166,6 @@
 
             return (
                 <div className={`absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30 transition-all ${hidden ? 'water-pop-hide' : 'glitch-restore'}`}>
-                    {/* SE ELIMINÓ EL HEADER SUPERIOR IZQUIERDO (LOGO, TEXTO, HORA) */}
                     
                     <div className="absolute bottom-12 left-4">
                         <div className={`text-[10px] font-mono bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse ${log.type}`}>{`> ${log.msg.toUpperCase()}`}</div>
@@ -237,11 +240,11 @@
             const connect = () => {
                 if(!dockId) return;
                 setStatus('CONECTANDO...');
-                const peer = new window.Peer(null, PEER_CONFIG.config);
+                const peer = new window.Peer(null, PEER_CONFIG); // USA LA CONFIGURACION ICE CORRECTA AQUI
                 peerRef.current = peer;
                 
                 peer.on('open', () => {
-                    const conn = peer.connect(dockId);
+                    const conn = peer.connect(dockId.trim()); // TRIM ID
                     connRef.current = conn;
                     conn.on('open', () => {
                         setStatus('CONECTADO A ESTUDIO');
@@ -369,7 +372,7 @@
                 <button onClick={onCreate} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform"><Monitor size={20} /> CREAR ESTUDIO (PC)</button>
                 <div className="h-px bg-[#333] w-full"></div>
                 <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors"><Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)</button>
-                <p className="text-[9px] text-center text-gray-600 mt-2">v106.0 - OBR EQUIPO ESPECIAL</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v108.0 - OBR EQUIPO ESPECIAL</p>
               </div>
             </div>
           );
@@ -469,7 +472,7 @@
           };
 
           useEffect(() => {
-            const peer = new window.Peer(null, PEER_CONFIG.config); 
+            const peer = new window.Peer(null, PEER_CONFIG); 
             peerRef.current = peer;
             peer.on('open', (id) => setMyId(id));
             
