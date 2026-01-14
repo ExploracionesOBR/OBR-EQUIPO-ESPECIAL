@@ -48,12 +48,22 @@
         #heatmap-buffer { display: none; }
 
         /* FILTROS */
-        .filter-night-vision #sls-canvas { filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; }
-        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); z-index: 5; mix-blend-mode: hard-light; }
-        .filter-thermal #sls-canvas { filter: invert(100%) contrast(1.2); }
+        .filter-night-vision #shared-video-element { 
+            filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; 
+        }
+        .filter-night-vision #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; 
+            background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); 
+            background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); 
+            z-index: 5; mix-blend-mode: hard-light; 
+        }
+        .filter-thermal #sls-canvas { filter: invert(1) contrast(1.5) brightness(0.6) grayscale(100%); }
         .filter-thermal #main-view-area::after { display: none; }
-        .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
-        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); mix-blend-mode: multiply; }
+        .filter-urbex #sls-canvas {filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5);}
+        .filter-urbex #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; 
+            box-shadow: inset 0 0 150px rgba(50,30,0,0.6); 
+            mix-blend-mode: multiply;}
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
         /* UI */
@@ -86,7 +96,7 @@
 
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
-        #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
+        #touch-surface {position: absolute; inset: 0; z-index: 60; display: flex; pointer-events: auto;}
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
         #ai-feedback-overlay { display: none; }
