@@ -3,37 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v160 (FIXED LOOP)</title> 
+    <title>CAMARA OBR v171 (AUTO CACHE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-   <!-- TENSORFLOW CORE (CONFIGURACIÓN ANTES DE MODELOS) -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script>
-/* === TFJS PRODUCCIÓN === */
-tf.env().set('WEBGL_PACK', true);
-tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
-tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', 0);
-tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
-</script>
-
-<!-- MODELOS AI -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
-
+    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM","short_name":"OBR","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- LIBRERÍAS LOCALES (OFFLINE PRIORITY) -->
+    <!-- Asegúrate de tener la carpeta /js/ con estos archivos en la raíz -->
+    <script src="js/tf.min.js"></script>
+    <script src="js/pose-detection.min.js"></script>
+    <script src="js/face_mesh.js"></script>
+    <script src="js/peerjs.min.js"></script>
+
+    <!-- FALLBACK CDN (Por si no has subido la carpeta js aún, para que no rompa ahora mismo) -->
+    <script>
+        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"><\/script>');
+        if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"><\/script>');
+    </script>
+
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
+        /* BLOQUEO TOTAL DE SELECCIÓN */
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
         
         :root { --hud-primary: #ff3333; }
@@ -45,6 +45,7 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
             margin: 0; padding: 0;
         }
 
+        /* ANTI-GIRO */
         @media screen and (orientation: portrait) {
             body {
                 transform: rotate(90deg);
@@ -64,25 +65,33 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
             will-change: transform;
         }
 
-        #shared-video-element { 
-            position: absolute; inset: 0; width: 100%; height: 100%; 
-            object-fit: cover; z-index: 0; 
+        /* VIDEO Y CANVAS */
+        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
+        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
+        
+        /* HEATMAP BUFFER (Invisible) */
+        #heatmap-buffer { display: none; }
+
+        /* --- FILTROS VISUALES --- */
+        .filter-night-vision #sls-canvas { 
+            filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; 
+        }
+        .filter-night-vision #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; 
+            background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); 
+            background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); 
+            z-index: 5; mix-blend-mode: hard-light; 
         }
         
-        #sls-canvas { 
-            position: absolute; inset: 0; width: 100%; height: 100%; 
-            object-fit: cover; z-index: 2; pointer-events: none; 
-        }
-        
-        /* FILTROS CSS */
-        .filter-night-vision #shared-video-element { filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; }
-        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); z-index: 5; mix-blend-mode: hard-light; }
-        
-        .filter-thermal #shared-video-element { filter: invert(100%) contrast(1.2); }
+        .filter-thermal #sls-canvas { filter: invert(100%) contrast(1.2); }
         .filter-thermal #main-view-area::after { display: none; }
         
-        .filter-urbex #shared-video-element { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
-        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); mix-blend-mode: multiply; }
+        .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
+        .filter-urbex #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; 
+            z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); 
+            mix-blend-mode: multiply; 
+        }
         
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
@@ -96,7 +105,7 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
 
         /* AI VISION UI */
         #ai-vision-header {
-            position: absolute; top: 80px; left: 20px; 
+            position: absolute; top: 20px; left: 20px; 
             display: flex; flex-direction: column; align-items: flex-start;
             opacity: 0; pointer-events: none; transition: opacity 0.5s;
             z-index: 60; width: 220px;
@@ -104,7 +113,8 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
         #ai-vision-header.active { opacity: 1; }
         
         #ai-mini-img {
-            width: 100%; height: auto; border: 2px solid #ff3333;
+            width: 100%; height: auto;
+            border: 2px solid #ff3333;
             box-shadow: 0 0 25px rgba(255, 0, 0, 0.4);
             filter: invert(1) hue-rotate(180deg) contrast(1.5);
             margin-bottom: 0; background: black; display: block;
@@ -133,6 +143,10 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
         #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #220000 0%, #000000 100%); }
         .load-btn { background: rgba(20,0,0,0.6); border: 2px solid #ff3333; color: #ff3333; padding: 18px 40px; font-size: 1.1rem; margin-top: 30px; cursor: pointer; font-weight: bold; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: 0.2s; }
         
+        #progress-container { width: 80%; max-width: 300px; height: 4px; background: #333; margin-top: 20px; border-radius: 2px; overflow: hidden; display: none; }
+        #progress-bar { height: 100%; width: 0%; background: #00ff41; transition: width 0.3s ease-out; box-shadow: 0 0 10px #00ff41; }
+        #progress-text { font-family: 'Share Tech Mono'; color: #00ff41; font-size: 0.7rem; margin-top: 5px; min-height: 1.2em; }
+
         /* MODALS */
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
@@ -151,28 +165,18 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
         
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
-
-        /* RECUADROS DE ESCANEO */
-        .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
-        @keyframes scanBlinkBlur {
-            0% { opacity: 0; transform: scale(0.8); filter: blur(0px); }
-            30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; }
-            80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
-            100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
-        }
     </style>
 </head>
 <body>
 
     <div id="main-view-area">
         <div id="zoom-container">
-            <!-- VIDEO SOURCE -->
             <video id="shared-video-element" autoplay playsinline muted></video>
-            <!-- CANVAS VISIBLE -->
             <canvas id="sls-canvas"></canvas>
         </div>
     </div>
-
+    
+    <canvas id="heatmap-buffer"></canvas>
     <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
     <div id="touch-surface"></div>
     <div id="zoom-target-indicator"></div>
@@ -180,42 +184,38 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
     <div id="ui-layer">
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
-        
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
         <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
-
         <div id="perf-stats">INIT...</div>
 
         <!-- MENUS -->
         <div id="menu-left" class="menu-container left-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
-
         <div id="menu-right" class="menu-container right-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
-        <!-- IA VISION UI -->
         <div id="ai-vision-header">
             <img id="ai-mini-img" alt="Scan">
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
-        
-        <div id="ai-feedback-overlay" style="display:none"></div>
+        <div id="ai-feedback-overlay"></div>
     </div>
 
     <!-- PANTALLA CARGA -->
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v160</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v171</p>
+        <div id="progress-container"><div id="progress-bar"></div></div>
+        <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
-        <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
 
     <!-- MODALS -->
@@ -232,7 +232,7 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
         <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
             <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
             <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
-            <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold">VALIDAR Y GUARDAR</button>
+            <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
             <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
             <a href="https://aistudio.google.com/api-keys" target="_blank" class="block w-full text-center text-[10px] text-blue-400 mt-4 underline cursor-pointer pointer-events-auto">CREAR API KEY</a>
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
@@ -248,17 +248,13 @@ tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
     let isSLSActive = false;
     let isPareidoliaActive = false;
     let isAIProcessing = false;
-    let poseDetector = null; // Renamed to poseDetector
-    let faceDetector = null;
+    
+    // MODELOS
+    let poseDetector = null;
+    let faceMesh = null;
     let poses = [];
     let faces = [];
-    // ===============================
-// HEATMAP DE ACTIVIDAD (GLOBAL)
-// ===============================
-const HEATMAP_RESOLUTION = 60;
-let heatmap = [];
-let heatmapW = 0;
-let heatmapH = 0;
+    
     let zoomLevel = 1; 
     let zoomStage = 0; 
     let peer, conn;
@@ -267,55 +263,114 @@ let heatmapH = 0;
     let videoStream;
     let fps = 0, frameCount = 0, lastTime = performance.now();
     let pareidoliaInterval = null;
+    let audioCtx, micSource, destNode; 
 
     const video = document.getElementById('shared-video-element');
     const slsCanvas = document.getElementById('sls-canvas');
+    const heatCanvas = document.getElementById('heatmap-buffer');
     const ctx = slsCanvas.getContext('2d', { alpha: true });
+    const heatCtx = heatCanvas.getContext('2d', { alpha: true });
     const zoomLayer = document.getElementById('zoom-container');
     const touchSurface = document.getElementById('touch-surface');
 
-    // CANVAS DE DETECCIÓN OPTIMIZADO (192px PARA 60FPS)
+    // CANVAS DE DETECCIÓN (192px)
     const detCanvas = document.createElement('canvas');
     detCanvas.width = 192; detCanvas.height = 108; 
     const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
 
-    // --- ZOOM PROGRESIVO ---
+    function updateProgress(percent, text) {
+        document.getElementById('progress-bar').style.width = percent + '%';
+        document.getElementById('progress-text').innerText = text;
+    }
+
+    function initAudioMix(stream) {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            micSource = audioCtx.createMediaStreamSource(stream);
+            destNode = audioCtx.createMediaStreamDestination();
+            micSource.connect(destNode);
+        } catch(e) { console.error("Audio mix failed", e); }
+    }
+
+    // --- CARGA INTELIGENTE DE MOVENET (AUTO-CACHE) ---
+    async function loadMoveNetWithCache() {
+        const MODEL_PATH = 'indexeddb://obr-movenet-lightning';
+        const MODEL_URL = 'https://tfhub.dev/google/tfjs-model/movenet/multipose/lightning/1'; 
+
+        try {
+            console.log("Busco modelo en caché...");
+            try {
+                // Intento cargar de IDB
+                const model = await tf.loadGraphModel(MODEL_PATH);
+                console.log("Modelo encontrado en caché");
+                // Liberar el modelo cargado para que createDetector lo use limpiamente o pasar la URL de IDB
+                // poseDetection.createDetector maneja URLs de IDB
+                return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+                    modelUrl: MODEL_PATH
+                });
+            } catch (cacheError) {
+                console.log("No está en caché, descargando...");
+                throw cacheError; // Ir al paso de descarga
+            }
+        } catch (e) {
+            updateProgress(55, "DESCARGANDO Y GUARDANDO...");
+            try {
+                // Descargar y guardar
+                const model = await tf.loadGraphModel(MODEL_URL, { fromTFHub: true });
+                await model.save(MODEL_PATH);
+                console.log("Modelo guardado en caché");
+                
+                return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+                    modelUrl: MODEL_PATH
+                });
+            } catch (netError) {
+                console.warn("Fallo caché, usando online directo", netError);
+                return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING
+                });
+            }
+        }
+    }
+
+    // --- GARBAGE COLLECTOR ---
+    setInterval(() => {
+        if(window.tf) {
+            const numTensors = tf.memory().numTensors;
+            if (numTensors > 300) {
+                if (tf.getBackend() === 'webgl') {
+                    try { const gl = tf.backend().gpgpu.gl; if(gl) gl.flush(); } catch(e){}
+                }
+            }
+        }
+        if(poses.length > 5) poses = [];
+        if(faces.length > 5) faces = [];
+    }, 10000);
+
+    // --- ZOOM ---
     let pressTimer = null;
     const LONG_PRESS_MS = 600;
-
     touchSurface.addEventListener('pointerdown', (e) => {
         const w = window.innerWidth;
-        const h = window.innerHeight;
-        const touchX = e.clientX;
-        const touchY = e.clientY;
         const edgeThreshold = 100;
-
-        if (touchX < edgeThreshold || touchX > w - edgeThreshold) { showMenus(); return; }
-
-        pressTimer = setTimeout(() => { handleZoomPress(touchX, touchY); }, LONG_PRESS_MS);
+        if (e.clientX < edgeThreshold || e.clientX > w - edgeThreshold) { showMenus(); return; }
+        pressTimer = setTimeout(() => { handleZoomPress(e.clientX, e.clientY); }, LONG_PRESS_MS);
     });
-
     touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer));
     touchSurface.addEventListener('pointerleave', () => clearTimeout(pressTimer));
     touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
 
     function handleZoomPress(x, y) {
         if(navigator.vibrate) navigator.vibrate(50);
-        
-        let nextZoom = 1;
-        if(zoomLevel === 1) nextZoom = 3;
-        else if(zoomLevel === 3) nextZoom = 5;
+        let nextZoom = (zoomLevel === 1) ? 3 : (zoomLevel === 3 ? 5 : 5);
         if(zoomLevel === 5) return;
-
         const ind = document.getElementById('zoom-target-indicator');
-        ind.style.left = x + 'px';
-        ind.style.top = y + 'px';
-        ind.classList.add('active');
-        setTimeout(() => ind.classList.remove('active'), 500);
-
+        ind.style.left = x + 'px'; ind.style.top = y + 'px';
+        ind.classList.add('active'); setTimeout(() => ind.classList.remove('active'), 500);
         const originX = (x / window.innerWidth) * 100;
         const originY = (y / window.innerHeight) * 100;
-
         zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
         zoomLayer.style.transform = `scale(${nextZoom})`;
         zoomLevel = nextZoom;
@@ -328,7 +383,6 @@ let heatmapH = 0;
         clearTimeout(menuTimer);
         menuTimer = setTimeout(() => { left.classList.remove('visible'); right.classList.remove('visible'); }, 4000);
     }
-
     function resetZoom(btn) {
         if(btn) { btn.classList.add('active-state'); setTimeout(()=>btn.classList.remove('active-state'), 200); }
         zoomStage = 0; zoomLevel = 1;
@@ -337,348 +391,150 @@ let heatmapH = 0;
         hideMenus();
     }
 
-    // --- PWA & INIT ---
+    // --- INIT ---
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
     window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
 
-async function initApp() {
-    const btn = document.querySelector('.load-btn');
-    btn.innerText = "INICIANDO...";
-    btn.disabled = true;
+    async function initApp() {
+        const btn = document.querySelector('.load-btn');
+        const pBar = document.getElementById('progress-container');
+        btn.disabled = true; btn.style.display = 'none'; pBar.style.display = 'block';
+        
+        try {
+            updateProgress(10, "INICIANDO CÁMARA...");
+            const camPromise = navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true }, 
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
+            }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
+            
+            const stream = await camPromise;
+            videoStream = stream; video.srcObject = stream;
+            initAudioMix(stream);
+            updateProgress(30, "CÁMARA LISTA");
 
-    try {
-        /* === CAMARA === */
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: {
-                facingMode: 'environment',
-                width: { ideal: 4096 },
-                height: { ideal: 2160 },
-                frameRate: { ideal: 60 },
-                advanced: [{ focusMode: "continuous" }]
-            }
-        }).catch(() =>
-            navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: { facingMode: 'environment' }
-            })
-        );
+            updateProgress(35, "CARGANDO IA...");
+            await tf.setBackend('webgl');
+            await tf.ready();
 
-        /* ASIGNACIÓN CORRECTA */
-        videoStream = stream;
-        video.srcObject = stream;
+            // 1. CARGA MOVENET CON CACHE
+            poseDetector = await loadMoveNetWithCache();
 
-        await video.play();
+            // 2. CARGA FACEMESH (LOCAL/CDN)
+            updateProgress(70, "CARGANDO FACEMESH...");
+            faceMesh = new FaceMesh({locateFile: (file) => `face_mesh/${file}`}); // LOCAL PRIMERO
+            // Fallback implícito: Si falla local, se podría reintentar con CDN, pero el usuario dijo que ya tiene los archivos.
+            // Para seguridad, si falla la carga local, el error detendría el flujo. 
+            // Podríamos envolver en try/catch para fallback CDN, pero seguiremos instrucciones de 'archivos en raíz'.
+            
+            faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
 
-        /* === BACKEND TF === */
-        await tf.setBackend('webgl');
-        await tf.ready();
-
-        /* === POSE DETECTOR === */
-        poseDetector = await poseDetection.createDetector(
-            poseDetection.SupportedModels.MoveNet,
-            {
-                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-                enableSmoothing: false,
-                minPoseScore: 0.05
-            }
-        );
-
-        /* === FACE DETECTOR === */
-        faceDetector = await faceLandmarksDetection.createDetector(
-            faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-            {
-                runtime: 'tfjs',
-                refineLandmarks: true,
-                maxFaces: 2
-            }
-        );
-
-        /* === ARRANQUE DE LOOPS === */
-        renderLoop();
-        poseDetectionLoop();
-        faceDetectionLoop();
-
-        document.getElementById('loading').style.display = "none";
-
-    } catch (err) {
-        alert("ERROR INICIANDO SISTEMA\n" + err.message);
-        console.error(err);
-    }
-}
-    function resize() { 
-    slsCanvas.width = window.innerWidth; 
-    slsCanvas.height = window.innerHeight; 
-    initHeatmap(slsCanvas.width, slsCanvas.height);
-}
-    function initHeatmap(width, height) {
-    heatmapW = Math.floor(width / HEATMAP_RESOLUTION);
-    heatmapH = Math.floor(height / HEATMAP_RESOLUTION);
-    heatmap = new Float32Array(heatmapW * heatmapH);
-}
-    function accumulateHeatmap(keypoints, sX, sY, sW, sH) {
-    if (!keypoints) return;
-
-    for (const kp of keypoints) {
-        if (kp.score < 0.1) continue;
-
-        const rx = ((kp.x - sX) / sW) * slsCanvas.width;
-        const ry = ((kp.y - sY) / sH) * slsCanvas.height;
-
-        const x = Math.floor(rx / HEATMAP_RESOLUTION);
-        const y = Math.floor(ry / HEATMAP_RESOLUTION);
-
-        if (x < 0 || y < 0 || x >= heatmapW || y >= heatmapH) continue;
-
-        const idx = y * heatmapW + x;
-        heatmap[idx] = Math.min(heatmap[idx] + kp.score * 3, 100);
-    }
-}
-function decayHeatmap() {
-    for (let i = 0; i < heatmap.length; i++) {
-        heatmap[i] *= 0.985;
-    }
-}
-function drawHeatmap(ctx) {
-    for (let y = 0; y < heatmapH; y++) {
-        for (let x = 0; x < heatmapW; x++) {
-            const v = heatmap[y * heatmapW + x];
-            if (v < 1) continue;
-
-            let r = 0, g = 255;
-            if (v > 30) r = 255;
-            if (v > 60) g = 0;
-
-            ctx.fillStyle = `rgba(${r},${g},0,${Math.min(v / 80, 0.6)})`;
-            ctx.fillRect(
-                x * HEATMAP_RESOLUTION,
-                y * HEATMAP_RESOLUTION,
-                HEATMAP_RESOLUTION,
-                HEATMAP_RESOLUTION
-            );
-        }
-    }
-}
-let currentFPS = 60;
-
-function renderLoop() {
-    const now = performance.now();
-    frameCount++;
-
-    if (now - lastTime >= 1000) {
-        currentFPS = frameCount;
-        document.getElementById('perf-stats').innerText = `${currentFPS} FPS`;
-        frameCount = 0;
-        lastTime = now;
-    }
-
-    ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
-    ctx.filter = 'none';
-
-    if (video.readyState >= 2) {
-        // cover calc
-        const vRatio = video.videoWidth / video.videoHeight;
-        const cRatio = slsCanvas.width / slsCanvas.height;
-        let sW, sH, sX, sY;
-
-        if (cRatio > vRatio) {
-            sW = video.videoWidth;
-            sH = video.videoWidth / cRatio;
-            sX = 0;
-            sY = (video.videoHeight - sH) / 2;
-        } else {
-            sW = video.videoHeight * cRatio;
-            sH = video.videoHeight;
-            sX = (video.videoWidth - sW) / 2;
-            sY = 0;
-        }
-
-        ctx.drawImage(video, sX, sY, sW, sH, 0, 0, slsCanvas.width, slsCanvas.height);
-
-        if (isSLSActive) {
-            if (poses.length > 0) accumulateHeatmap(poses[0].keypoints, sX, sY, sW, sH);
-            decayHeatmap();
-            drawHeatmap(ctx);
-            drawSLS(poses, sX, sY, sW, sH);
-            drawFaceMesh(faces, sX, sY, sW, sH);
-        }
-    }
-
-    requestAnimationFrame(renderLoop);
-}
-
-    
-    function getRenderCoords(xNorm, yNorm, sX, sY, sW, sH) {
-        // xNorm/yNorm son pixeles en video original (no normalizados por MoveNet)
-        const canvasX = ((xNorm - sX) / sW) * slsCanvas.width;
-        const canvasY = ((yNorm - sY) / sH) * slsCanvas.height;
-        return { x: canvasX, y: canvasY };
-    }
-    function adaptiveKeypoints(prev, curr) {
-    if (!prev) return curr;
-
-    return curr.map((kp, i) => {
-        if (kp.score < 0.15 && prev[i]?.score > 0.3) {
-            return {
-                x: prev[i].x,
-                y: prev[i].y,
-                score: prev[i].score * 0.95
+            updateProgress(90, "CALIBRANDO...");
+            const dummy = document.createElement('canvas'); dummy.width=192; dummy.height=192;
+            await poseDetector.estimatePoses(dummy);
+            
+            video.onloadedmetadata = () => { 
+                video.play();
+                updateProgress(100, "¡LISTO!");
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                    resize(); renderLoop(); poseDetectionLoop(); faceDetectionLoop(); 
+                }, 500);
             };
-        }
-        return {
-            x: kp.x,
-            y: kp.y,
-            score: Math.max(kp.score, 0.1)
-        };
-    });
-}
-    function humanShapeBoost(keypoints) {
-    const head = keypoints[0];
-    const ls = keypoints.find(p => p.name === 'left_shoulder');
-    const rs = keypoints.find(p => p.name === 'right_shoulder');
-
-    return (
-        head?.score > 0.1 &&
-        (ls?.score > 0.1 || rs?.score > 0.1)
-    );
+            window.addEventListener('resize', resize);
+            setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
+        } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
     }
-    const edges = [
-    ['left_shoulder','right_shoulder'],
-    ['left_shoulder','left_hip'],
-    ['right_shoulder','right_hip'],
-    ['left_hip','right_hip']
-];
 
-   function drawSLS(poses, sX, sY, sW, sH) {
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
+    function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; heatCanvas.width = window.innerWidth; heatCanvas.height = window.innerHeight; }
+
+    function renderLoop() {
+        requestAnimationFrame(renderLoop);
+        ctx.filter = 'none'; 
+        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
+        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
+        if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
+        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
         
-    poses.forEach(pose => {
-
-        // ✅ ESTA ES LA LÍNEA QUE FALTABA
-        const k = pose.keypoints;
-
-        if (!humanShapeBoost(k)) return;
-
-        // Cuerpo Térmico
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#FF4500';
-        ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)';
-        ctx.lineWidth = 25;
-
-        ctx.beginPath(); 
-        edges.forEach(([a,b]) => { 
-            const p1 = k.find(p => p.name === a);
-            const p2 = k.find(p => p.name === b);
-
-            if (!p1 || !p2) return;
-            if (p1.score > 0.15 && p2.score > 0.15) { 
-                const c1 = getRenderCoords(p1.x, p1.y, sX, sY, sW, sH);
-                const c2 = getRenderCoords(p2.x, p2.y, sX, sY, sW, sH);
-                ctx.moveTo(c1.x, c1.y);
-                ctx.lineTo(c2.x, c2.y); 
-            } 
-        }); 
-        ctx.stroke();
-    });
-}
-
-
-    function drawFaceMesh(faces, sX, sY, sW, sH) {
-        if(faces.length === 0 && !lastKeypoints) return;
-        
-        faces.forEach(face => {
-            const points = face.keypoints; 
-            
-            // Malla Facial
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
-            ctx.lineWidth = 0.5;
-            
-            // Puntos
-            for(let i=0; i<points.length; i+=3) {
-                 const p = points[i];
-                 const c = getRenderCoords(p.x, p.y, sX, sY, sW, sH);
-                 ctx.fillRect(c.x, c.y, 1, 1);
+        if(isSLSActive) {
+            ctx.filter = 'none'; 
+            heatCtx.globalCompositeOperation = 'destination-out';
+            heatCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            heatCtx.fillRect(0, 0, heatCanvas.width, heatCanvas.height);
+            heatCtx.globalCompositeOperation = 'source-over';
+            if(poses.length > 0) {
+                const scaleX = slsCanvas.width / detCanvas.width;
+                const scaleY = slsCanvas.height / detCanvas.height;
+                poses.forEach(pose => {
+                    pose.keypoints.forEach(k => {
+                        if(k.score > 0.3) {
+                            const x = k.x * scaleX; const y = k.y * scaleY;
+                            const grad = heatCtx.createRadialGradient(x, y, 5, x, y, 40);
+                            grad.addColorStop(0, 'rgba(255, 69, 0, 0.3)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+                            heatCtx.fillStyle = grad; heatCtx.beginPath(); heatCtx.arc(x, y, 40, 0, 2*Math.PI); heatCtx.fill();
+                        }
+                    });
+                });
             }
-            
-            // Caja Objetivo
-            const xs = points.map(p => p.x);
-            const ys = points.map(p => p.y);
-            const minX = Math.min(...xs); const maxX = Math.max(...xs);
-            const minY = Math.min(...ys); const maxY = Math.max(...ys);
-            
-            const tl = getRenderCoords(minX, minY, sX, sY, sW, sH);
-            const br = getRenderCoords(maxX, maxY, sX, sY, sW, sH);
-            const width = br.x - tl.x;
-            const height = br.y - tl.y;
+            ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'screen'; ctx.drawImage(heatCanvas, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
+            drawSLS(poses); drawFaceMesh(faces);
+        }
+    }
 
-            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 2; ctx.shadowBlur = 5;
-            const len = 15;
-            ctx.beginPath();
-            ctx.moveTo(tl.x, tl.y+len); ctx.lineTo(tl.x, tl.y); ctx.lineTo(tl.x+len, tl.y);
-            ctx.moveTo(br.x, br.y-len); ctx.lineTo(br.x, br.y); ctx.lineTo(br.x-len, br.y);
-            ctx.moveTo(tl.x+width, tl.y+len); ctx.lineTo(tl.x+width, tl.y); ctx.lineTo(tl.x+width-len, tl.y);
-            ctx.moveTo(tl.x, tl.y+height-len); ctx.lineTo(tl.x, tl.y+height); ctx.lineTo(tl.x+len, tl.y+height);
-            ctx.stroke();
+    function drawSLS(poses) {
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        const scaleX = slsCanvas.width / detCanvas.width;
+        const scaleY = slsCanvas.height / detCanvas.height;
+        poses.forEach(pose => {
+            const k = pose.keypoints;
+            const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
+            ctx.shadowBlur = 20; ctx.shadowColor = '#FF4500'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 15;
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
+            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 3;
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.15 && p2.score>0.15) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
         });
     }
 
-    let lastKeypoints = null;
-
-async function poseDetectionLoop() {
-    while (true) {
-        try {
-            if (!poseDetector || !video.videoWidth || !video.videoHeight) {
-                await new Promise(r => setTimeout(r, 120));
-                continue;
+    function drawFaceMesh(faces) {
+        if(faces.length === 0) return;
+        const scaleX = slsCanvas.width / video.videoWidth; 
+        const scaleY = slsCanvas.height / video.videoHeight;
+        faces.forEach(face => {
+            const points = face.multiFaceLandmarks ? face.multiFaceLandmarks[0] : face; 
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+            for(let i=0; i<points.length; i+=10) { 
+                 const p = points[i];
+                 ctx.fillRect(p.x * slsCanvas.width, p.y * slsCanvas.height, 2, 2);
             }
+            const xs = points.map(p => p.x * slsCanvas.width); const ys = points.map(p => p.y * slsCanvas.height);
+            const minX = Math.min(...xs)-20; const maxX = Math.max(...xs)+20;
+            const minY = Math.min(...ys)-30; const maxY = Math.max(...ys)+30;
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; ctx.lineWidth = 2; ctx.shadowBlur = 5;
+            ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
+        });
+    }
 
-            poses = await poseDetector.estimatePoses(video, {
-                maxPoses: 1,
-                flipHorizontal: false
-            });
-
-            processSLSFromPose(poses);
-
-            await new Promise(r => setTimeout(r, 50));
-
-        } catch (e) {
-            console.warn("Pose pausa preventiva", e);
-            await new Promise(r => setTimeout(r, 300));
+    async function poseDetectionLoop() {
+        while(true) {
+            if(poseDetector && (isSLSActive || isPareidoliaActive)) {
+                try { 
+                    detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
+                    poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 3, flipHorizontal: false, scoreThreshold: 0.15}); 
+                } catch(e){}
+            } else { poses = []; }
+            await new Promise(r => setTimeout(r, 40));
         }
     }
-}
 
-async function faceDetectionLoop() {
-    while (true) {
-        try {
-            if (!faceDetector || !video.videoWidth) {
-                await new Promise(r => setTimeout(r, 250));
-                continue;
-            }
-
-            /* PROTECCIÓN FPS */
-            if (currentFPS < 45) {
-                faces = [];
-                await new Promise(r => setTimeout(r, 300));
-                continue;
-            }
-
-            faces = await faceDetector.estimateFaces(video, {
-                flipHorizontal: false,
-                predictIrises: false
-            });
-
-            await new Promise(r => setTimeout(r, 160));
-
-        } catch (e) {
-            console.warn("FaceMesh pausa preventiva", e);
-            await new Promise(r => setTimeout(r, 500));
+    async function faceDetectionLoop() {
+        while(true) {
+            if(faceMesh && isSLSActive) {
+                try { await faceMesh.send({image: video}); } catch(e) {}
+            } else { faces = []; }
+            await new Promise(r => setTimeout(r, 100)); 
         }
     }
-}
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
     async function connectToProdock() {
@@ -702,8 +558,8 @@ async function faceDetectionLoop() {
                 }
             });
             const streamToSend = slsCanvas.captureStream(30); 
-            const audioTrack = video.srcObject.getAudioTracks()[0];
-            if(audioTrack) streamToSend.addTrack(audioTrack);
+            if(destNode) streamToSend.addTrack(destNode.stream.getAudioTracks()[0]);
+            else { const audioTrack = video.srcObject.getAudioTracks()[0]; if(audioTrack) streamToSend.addTrack(audioTrack); }
             peer.call(id, streamToSend);
         });
     }
@@ -712,19 +568,14 @@ async function faceDetectionLoop() {
         if(currentFilter === f && f !== 'normal') { setFilter('normal'); return; }
         currentFilter = f;
         isSLSActive = (f === 'sls');
-        
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
-        
-        // CSS Fallback
         document.body.className = '';
         if(f === 'night') document.body.classList.add('filter-night-vision');
         if(f === 'thermal') document.body.classList.add('filter-thermal');
         if(f === 'urbex') document.body.classList.add('filter-urbex');
         if(f === 'sls') document.body.classList.add('filter-pareidolia');
-
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
-        
         if(isPareidoliaActive) togglePareidolia();
     }
 
@@ -743,9 +594,8 @@ async function faceDetectionLoop() {
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         isAIProcessing = true; 
-
-        // NO TOCAR HEADER AQUI
-        
+        const header = document.getElementById('live-header-container');
+        if(header) { header.classList.remove('glitch-restore'); header.classList.add('water-pop-hide'); }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
@@ -765,7 +615,7 @@ async function faceDetectionLoop() {
             const aiHeader = document.getElementById('ai-vision-header'); const aiImg = document.getElementById('ai-mini-img'); const aiText = document.getElementById('ai-mini-text');
             aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiHeader.classList.add('active');
             speakText(text); 
-        } catch(e) { console.log(e); isAIProcessing = false; } 
+        } catch(e) { console.log(e); isAIProcessing = false; if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); } } 
     }
 
     function togglePareidolia(btnElement) { 
@@ -781,8 +631,9 @@ async function faceDetectionLoop() {
             document.body.classList.remove('filter-pareidolia'); 
             speakText("VISIÓN DESACTIVADA"); clearInterval(pareidoliaInterval); 
             isAIProcessing = false; 
-            const aiHeader = document.getElementById('ai-vision-header');
-            aiHeader.classList.remove('active');
+            const header = document.getElementById('live-header-container'); const aiHeader = document.getElementById('ai-vision-header');
+            if(aiHeader) aiHeader.classList.remove('active'); 
+            if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); }
         } 
         showMenus(); 
     }
