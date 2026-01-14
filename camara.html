@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v172 (DIAGNOSTIC)</title> 
+    <title>CAMARA OBR v174 (HYBRID CACHE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -16,13 +16,13 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- LIBRERÍAS (INTENTO LOCAL, FALLBACK CDN) -->
+    <!-- LIBRERÍAS LOCALES (carpeta /js/) -->
     <script src="js/tf.min.js"></script>
     <script src="js/pose-detection.min.js"></script>
     <script src="js/face_mesh.js"></script>
     <script src="js/peerjs.min.js"></script>
 
-    <!-- FALLBACK CDN AUTOMÁTICO (Si no están los archivos js locales) -->
+    <!-- FALLBACK CDN (Solo seguridad por si fallan los js locales) -->
     <script>
         if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"><\/script>');
@@ -34,50 +34,113 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
+        /* BLOQUEO TOTAL DE SELECCIÓN */
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
-        :root { --hud-primary: #ff3333; }
-        body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
-        @media screen and (orientation: portrait) { 
-            body { transform: rotate(90deg); transform-origin: bottom left; position: absolute; top: -100vw; left: 0; height: 100vw; width: 100vh; } 
+        :root { --hud-primary: #ff3333; }
+
+        body { 
+            background: #000; overflow: hidden; 
+            font-family: 'Orbitron', sans-serif; 
+            width: 100vw; height: 100vh;
+            margin: 0; padding: 0;
+        }
+
+        /* ANTI-GIRO */
+        @media screen and (orientation: portrait) {
+            body {
+                transform: rotate(90deg);
+                transform-origin: bottom left;
+                position: absolute;
+                top: -100vw; left: 0;
+                height: 100vw; width: 100vh;
+            }
         }
         
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
-        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+        
+        #zoom-container { 
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            transform-origin: center center; 
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+            will-change: transform;
+        }
+
+        /* VIDEO Y CANVAS */
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
+        
+        /* HEATMAP BUFFER (Invisible) */
         #heatmap-buffer { display: none; }
 
-        /* FILTROS */
-        .filter-night-vision #sls-canvas { filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; }
-        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); z-index: 5; mix-blend-mode: hard-light; }
+        /* --- FILTROS VISUALES --- */
+        .filter-night-vision #sls-canvas { 
+            filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; 
+        }
+        .filter-night-vision #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; 
+            background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); 
+            background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); 
+            z-index: 5; mix-blend-mode: hard-light; 
+        }
+        
         .filter-thermal #sls-canvas { filter: invert(100%) contrast(1.2); }
         .filter-thermal #main-view-area::after { display: none; }
+        
         .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
-        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); mix-blend-mode: multiply; }
+        .filter-urbex #main-view-area::after { 
+            content: ""; position: absolute; inset: 0; pointer-events: none; 
+            z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); 
+            mix-blend-mode: multiply; 
+        }
+        
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
-        /* UI */
+        /* UI LAYERS */
         #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
         .interactive { pointer-events: auto; }
+        
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: border-width 0.2s; z-index: 50; pointer-events: none; }
         #tally-border.program { border: 12px solid red; box-shadow: inset 0 0 40px red; }
         #tally-border.preview { border: 12px solid #00ff00; }
-        
-        #ai-vision-header { position: absolute; top: 80px; left: 20px; display: flex; flex-direction: column; align-items: flex-start; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 60; width: 220px; }
-        #ai-vision-header.active { opacity: 1; }
-        #ai-mini-img { width: 100%; height: auto; border: 2px solid #ff3333; box-shadow: 0 0 25px rgba(255, 0, 0, 0.4); filter: invert(1) hue-rotate(180deg) contrast(1.5); margin-bottom: 0; background: black; display: block; }
-        #ai-mini-text { width: 100%; background: rgba(10, 0, 0, 0.95); border: 1px solid #ff3333; border-top: none; border-left: 4px solid #ff3333; color: #ffcccc; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; padding: 8px; text-align: left; text-transform: uppercase; box-shadow: 0 5px 15px rgba(0,0,0,0.8); text-shadow: 0 0 5px red; line-height: 1.2; }
 
+        /* AI VISION UI */
+        #ai-vision-header {
+            position: absolute; top: 80px; left: 20px; 
+            display: flex; flex-direction: column; align-items: flex-start;
+            opacity: 0; pointer-events: none; transition: opacity 0.5s;
+            z-index: 60; width: 220px;
+        }
+        #ai-vision-header.active { opacity: 1; }
+        
+        #ai-mini-img {
+            width: 100%; height: auto;
+            border: 2px solid #ff3333;
+            box-shadow: 0 0 25px rgba(255, 0, 0, 0.4);
+            filter: invert(1) hue-rotate(180deg) contrast(1.5);
+            margin-bottom: 0; background: black; display: block;
+        }
+        
+        #ai-mini-text {
+            width: 100%; background: rgba(10, 0, 0, 0.95);
+            border: 1px solid #ff3333; border-top: none; border-left: 4px solid #ff3333;
+            color: #ffcccc; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem;
+            padding: 8px; text-align: left; text-transform: uppercase;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8); text-shadow: 0 0 5px red; line-height: 1.2;
+        }
+
+        /* MENUS */
         .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; pointer-events: auto; transition: opacity 0.2s; opacity: 0; pointer-events: none; }
         .menu-container.visible { opacity: 1; pointer-events: auto; }
         .menu-container.left-side { left: 20px; }
         .menu-container.right-side { right: 20px; }
+        
         .menu-btn { width: 50px; height: 50px; border: 2px solid #ff3333; border-radius: 50%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; color: #ff3333; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: all 0.2s; }
         .menu-btn:active { transform: scale(0.9); }
         .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
         .menu-label { font-size: 0.55rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
 
+        /* LOADING */
         #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #220000 0%, #000000 100%); }
         .load-btn { background: rgba(20,0,0,0.6); border: 2px solid #ff3333; color: #ff3333; padding: 18px 40px; font-size: 1.1rem; margin-top: 30px; cursor: pointer; font-weight: bold; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: 0.2s; }
         
@@ -85,16 +148,33 @@
         #progress-bar { height: 100%; width: 0%; background: #00ff41; transition: width 0.3s ease-out; box-shadow: 0 0 10px #00ff41; }
         #progress-text { font-family: 'Share Tech Mono'; color: #00ff41; font-size: 0.65rem; margin-top: 5px; min-height: 1.2em; text-align: center; white-space: pre-wrap; }
 
+        /* MODALS */
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
+        
+        /* TOUCH SURFACE */
         #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
+        #zoom-target-indicator { 
+            position: absolute; width: 60px; height: 60px; 
+            border: 2px solid #00ff00; border-radius: 50%; 
+            transform: translate(-50%, -50%) scale(0.5); opacity: 0; 
+            pointer-events: none; z-index: 80; 
+            box-shadow: 0 0 15px #00ff00;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+        }
+        #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
-        #ai-feedback-overlay { display: none; }
+
+        /* RECUADROS DE ESCANEO */
         .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
-        @keyframes scanBlinkBlur { 0% { opacity: 0; transform: scale(0.8); filter: blur(0px); } 30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; } 80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; } 100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; } }
-        #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; box-shadow: 0 0 15px #00ff00; transition: transform 0.3s, opacity 0.3s; }
-        #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        @keyframes scanBlinkBlur {
+            0% { opacity: 0; transform: scale(0.8); filter: blur(0px); }
+            30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; }
+            80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
+            100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
+        }
     </style>
 </head>
 <body>
@@ -142,7 +222,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v172</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v174</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -163,12 +243,6 @@
             <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
             <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
             <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
-            
-            <button onclick="downloadOfflineModel()" class="w-full border border-blue-600 text-blue-400 py-3 rounded hover:bg-blue-900/20 font-bold flex items-center justify-center gap-2 mt-2">
-                <i class="fas fa-download"></i> DESCARGAR MOVENET (PC)
-            </button>
-            <p class="text-[9px] text-gray-500 mt-1 mb-4 text-center">Úsalo en PC para descargar archivos y subirlos a GitHub</p>
-
             <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
             <a href="https://aistudio.google.com/api-keys" target="_blank" class="block w-full text-center text-[10px] text-blue-400 mt-4 underline cursor-pointer pointer-events-auto">CREAR API KEY</a>
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
@@ -229,52 +303,42 @@
         } catch(e) { console.error("Audio mix failed", e); }
     }
 
-    // --- CARGA INTELIGENTE DE MODELOS (DIAGNOSTIC LOADER) ---
-    async function checkFileExists(url) {
-        try {
-            const r = await fetch(url, { method: 'HEAD' });
-            return r.ok;
-        } catch(e) { return false; }
-    }
+    // --- CARGA INTELIGENTE DE MOVENET (AUTO-CACHE) ---
+    async function loadMoveNetWithCache() {
+        const MODEL_PATH = 'indexeddb://obr-movenet-lightning';
+        const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/savedmodel/movenet/multipose/lightning/1/model.json'; 
 
-    async function loadSmartModels() {
-        // 1. DIAGNOSTICO MOVENET
-        let useLocalMovenet = false;
         try {
-            updateProgress(40, "BUSCANDO MOVENET LOCAL...");
-            if (await checkFileExists('./models/movenet/model.json')) {
-                useLocalMovenet = true;
-                updateProgress(45, "✅ MOVENET LOCAL DETECTADO");
-            } else {
-                updateProgress(45, "⚠️ MOVENET NO ENCONTRADO -> USANDO NUBE");
+            console.log("Busco modelo en caché...");
+            // Intentar cargar de IDB
+            const model = await tf.loadGraphModel(MODEL_PATH);
+            console.log("Modelo encontrado en caché");
+            
+            return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+                modelUrl: MODEL_PATH
+            });
+        } catch (cacheError) {
+            console.log("No está en caché, descargando...");
+            updateProgress(55, "DESCARGANDO Y GUARDANDO IA...");
+            
+            try {
+                // Descargar y guardar en IDB (fetch directo al JSON para evitar 404 de TFHub wrapper)
+                const model = await tf.loadGraphModel(MODEL_URL);
+                await model.save(MODEL_PATH);
+                console.log("Modelo guardado en caché");
+                
+                return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+                    modelUrl: MODEL_PATH
+                });
+            } catch (netError) {
+                console.warn("Fallo caché, usando online directo", netError);
+                return await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING
+                });
             }
-        } catch(e) {}
-
-        // CARGAR MOVENET
-        const moveNetConfig = { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING };
-        if(useLocalMovenet) moveNetConfig.modelUrl = './models/movenet/model.json';
-        
-        poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, moveNetConfig);
-
-        // 2. DIAGNOSTICO FACEMESH
-        let useLocalFace = false;
-        // Solo verificamos si la carpeta existe o si hay un archivo clave, 
-        // pero MediaPipe maneja sus propios assets internamente via locateFile.
-        // Haremos que locateFile pruebe local primero.
-        
-        updateProgress(65, "CARGANDO FACEMESH...");
-        faceMesh = new FaceMesh({locateFile: (file) => {
-            // Estrategia híbrida: Intenta ruta local
-            // Si el archivo no existe, el navegador tirará 404 y MediaPipe fallará.
-            // Para robustez máxima sin internet, se necesita local.
-            // Para este demo, forzamos CDN si no se detectó entorno offline.
-            // Asumiremos CDN para garantizar arranque si no hay archivos.
-            // SI QUIERES LOCAL PURO: return `./face_mesh/${file}`;
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-        }});
-        
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
+        }
     }
 
     // --- GARBAGE COLLECTOR ---
@@ -355,27 +419,27 @@
             initAudioMix(stream);
             updateProgress(30, "CÁMARA LISTA");
 
-            // CARGA IA (Smart Loader)
-            updateProgress(35, "CARGANDO MOTOR IA...");
+            updateProgress(35, "CARGANDO IA...");
             await tf.setBackend('webgl');
             await tf.ready();
 
-            await loadSmartModels();
+            // 1. MOVENET (AUTO-CACHE)
+            poseDetector = await loadMoveNetWithCache();
 
-            // WARMUP PROTEGIDO (Race condition fix)
-            updateProgress(85, "CALIBRANDO...");
+            // 2. FACEMESH (LOCAL ONLY)
+            updateProgress(70, "CARGANDO FACEMESH...");
+            faceMesh = new FaceMesh({locateFile: (file) => `face_mesh/${file}`}); 
+            faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
+
+            updateProgress(90, "CALIBRANDO...");
             const dummy = document.createElement('canvas'); dummy.width=192; dummy.height=192;
             
             const warmup = Promise.all([
                 poseDetector ? poseDetector.estimatePoses(dummy) : Promise.resolve(),
-                // FaceMesh warmup skipped safely
             ]);
 
-            // Timeout de 5s para no trabarse si la IA falla
-            await Promise.race([
-                warmup,
-                new Promise(r => setTimeout(r, 5000))
-            ]);
+            await Promise.race([ warmup, new Promise(r => setTimeout(r, 4000)) ]);
 
             video.onloadedmetadata = () => { 
                 video.play();
@@ -536,7 +600,6 @@
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         isAIProcessing = true; 
-        spawnScanRects();
         const header = document.getElementById('live-header-container');
         if(header) { header.classList.remove('glitch-restore'); header.classList.add('water-pop-hide'); }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
@@ -558,7 +621,7 @@
             const aiHeader = document.getElementById('ai-vision-header'); const aiImg = document.getElementById('ai-mini-img'); const aiText = document.getElementById('ai-mini-text');
             aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiHeader.classList.add('active');
             speakText(text); 
-        } catch(e) { console.log(e); isAIProcessing = false; if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); } } 
+        } catch(e) { console.log(e); isAIProcessing = false; } 
     }
 
     function togglePareidolia(btnElement) { 
@@ -606,47 +669,6 @@
     }
 
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
-    
-    // --- DOWNLOADER OFFLINE ---
-    async function downloadOfflineModel() {
-        const status = document.getElementById('api-status-msg');
-        status.innerText = "⏳ INICIANDO DESCARGA...";
-        try {
-            const BASE_STORAGE_URL = "https://storage.googleapis.com/tfjs-models/savedmodel/movenet/singlepose/lightning/4/";
-            const JSON_URL = BASE_STORAGE_URL + "model.json";
-            
-            status.innerText = "⏳ DESCARGANDO JSON...";
-            const jsonResp = await fetch(JSON_URL);
-            if(!jsonResp.ok) throw new Error(`Error ${jsonResp.status} al descargar model.json`);
-            const modelJson = await jsonResp.json();
-            saveFile(new Blob([JSON.stringify(modelJson)], {type: "application/json"}), "model.json");
-            
-            if (modelJson.weightsManifest) {
-                status.innerText = "⏳ DESCARGANDO BINARIOS...";
-                for (const manifest of modelJson.weightsManifest) {
-                    for (const path of manifest.paths) {
-                        const binUrl = BASE_STORAGE_URL + path;
-                        const binResp = await fetch(binUrl);
-                        if(!binResp.ok) throw new Error(`Fallo binario ${path}`);
-                        saveFile(await binResp.blob(), path);
-                    }
-                }
-            }
-            status.innerText = "✅ DESCARGA COMPLETA"; status.style.color = "#00ff41";
-            alert("Archivos descargados. Guárdalos en 'models/movenet/' en GitHub.");
-        } catch (e) {
-            status.innerText = "❌ ERROR: " + e.message; status.style.color = "red";
-        }
-    }
-    
-    function saveFile(blob, filename) {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
 </script>
 </body>
 </html>
