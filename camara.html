@@ -244,6 +244,13 @@
     let faceDetector = null;
     let poses = [];
     let faces = [];
+    // ===============================
+// HEATMAP DE ACTIVIDAD (GLOBAL)
+// ===============================
+const HEATMAP_RESOLUTION = 60;
+let heatmap = [];
+let heatmapW = 0;
+let heatmapH = 0;
     let zoomLevel = 1; 
     let zoomStage = 0; 
     let peer, conn;
@@ -368,7 +375,60 @@
         } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
     }
 
-    function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; }
+    function resize() { 
+    slsCanvas.width = window.innerWidth; 
+    slsCanvas.height = window.innerHeight; 
+    initHeatmap(slsCanvas.width, slsCanvas.height);
+}
+    function initHeatmap(width, height) {
+    heatmapW = Math.floor(width / HEATMAP_RESOLUTION);
+    heatmapH = Math.floor(height / HEATMAP_RESOLUTION);
+    heatmap = new Float32Array(heatmapW * heatmapH);
+}
+    function accumulateHeatmap(keypoints, sX, sY, sW, sH) {
+    if (!keypoints) return;
+
+    for (const kp of keypoints) {
+        if (kp.score < 0.1) continue;
+
+        const rx = ((kp.x - sX) / sW) * slsCanvas.width;
+        const ry = ((kp.y - sY) / sH) * slsCanvas.height;
+
+        const x = Math.floor(rx / HEATMAP_RESOLUTION);
+        const y = Math.floor(ry / HEATMAP_RESOLUTION);
+
+        if (x < 0 || y < 0 || x >= heatmapW || y >= heatmapH) continue;
+
+        const idx = y * heatmapW + x;
+        heatmap[idx] = Math.min(heatmap[idx] + kp.score * 3, 100);
+    }
+}
+function decayHeatmap() {
+    for (let i = 0; i < heatmap.length; i++) {
+        heatmap[i] *= 0.985;
+    }
+}
+function drawHeatmap(ctx) {
+    for (let y = 0; y < heatmapH; y++) {
+        for (let x = 0; x < heatmapW; x++) {
+            const v = heatmap[y * heatmapW + x];
+            if (v < 1) continue;
+
+            let r = 0, g = 255;
+            if (v > 30) r = 255;
+            if (v > 60) g = 0;
+
+            ctx.fillStyle = `rgba(${r},${g},0,${Math.min(v / 80, 0.6)})`;
+            ctx.fillRect(
+                x * HEATMAP_RESOLUTION,
+                y * HEATMAP_RESOLUTION,
+                HEATMAP_RESOLUTION,
+                HEATMAP_RESOLUTION
+            );
+        }
+    }
+}
+
 
     // --- RENDER LOOP ---
     function renderLoop() {
@@ -406,10 +466,19 @@
         ctx.drawImage(video, sX, sY, sW, sH, 0, 0, slsCanvas.width, slsCanvas.height);
         
         if(isSLSActive) {
-            ctx.filter = 'none'; 
-            drawSLS(poses, sX, sY, sW, sH);
-            drawFaceMesh(faces, sX, sY, sW, sH);
-        }
+    ctx.filter = 'none';
+
+    // 🔥 HEATMAP
+    if (poses.length > 0 && poses[0].keypoints) {
+        accumulateHeatmap(poses[0].keypoints, sX, sY, sW, sH);
+    }
+    decayHeatmap();
+    drawHeatmap(ctx);
+
+    // 🧍 SLS + 🧠 FACE
+    drawSLS(poses, sX, sY, sW, sH);
+    drawFaceMesh(faces, sX, sY, sW, sH);
+}
 
         requestAnimationFrame(renderLoop);
     }
