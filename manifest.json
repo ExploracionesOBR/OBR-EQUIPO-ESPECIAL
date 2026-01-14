@@ -1,0 +1,22 @@
+{
+  "name": "OBR CAM",
+  "short_name": "OBR",
+  "description": "Sistema avanzado de visión OBR",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "obr-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "obr-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
