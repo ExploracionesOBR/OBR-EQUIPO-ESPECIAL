@@ -14,18 +14,20 @@
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- CORE AI ENGINE -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script>
-/* ===== TFJS PERFORMANCE BOOST ===== */
+   <!-- TENSORFLOW CORE (CONFIGURACIÓN ANTES DE MODELOS) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script>
+/* === TFJS PRODUCCIÓN === */
 tf.env().set('WEBGL_PACK', true);
 tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
 tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', 0);
 tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
 </script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+
+<!-- MODELOS AI -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+
     
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -346,15 +348,11 @@ async function initApp() {
     btn.disabled = true;
 
     try {
-        /* ===== TFJS ===== */
-        await tf.setBackend('webgl');
-        await tf.ready();
-
-        /* ===== CÁMARA ===== */
+        /* === CAMARA === */
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
             video: {
-                facingMode: { ideal: "environment" },
+                facingMode: 'environment',
                 width: { ideal: 4096 },
                 height: { ideal: 2160 },
                 frameRate: { ideal: 60 },
@@ -363,18 +361,21 @@ async function initApp() {
         }).catch(() =>
             navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: { facingMode: "environment" }
+                video: { facingMode: 'environment' }
             })
         );
 
+        /* ASIGNACIÓN CORRECTA */
+        videoStream = stream;
         video.srcObject = stream;
+
         await video.play();
 
-        /* ===== CANVAS ===== */
-        resize();
-        window.addEventListener('resize', resize);
+        /* === BACKEND TF === */
+        await tf.setBackend('webgl');
+        await tf.ready();
 
-        /* ===== MOVENET ===== */
+        /* === POSE DETECTOR === */
         poseDetector = await poseDetection.createDetector(
             poseDetection.SupportedModels.MoveNet,
             {
@@ -384,36 +385,28 @@ async function initApp() {
             }
         );
 
-        /* ===== FACEMESH ===== */
+        /* === FACE DETECTOR === */
         faceDetector = await faceLandmarksDetection.createDetector(
             faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
             {
                 runtime: 'tfjs',
-                refineLandmarks: false,
-                maxFaces: 1
+                refineLandmarks: true,
+                maxFaces: 2
             }
         );
 
-        /* ===== FLAGS ===== */
-        poses = [];
-        faces = [];
-        isSLSActive = false;
-
-        /* ===== LOOPS ===== */
-        requestAnimationFrame(renderLoop);
+        /* === ARRANQUE DE LOOPS === */
+        renderLoop();
         poseDetectionLoop();
         faceDetectionLoop();
 
-        document.getElementById('loading').style.display = 'none';
+        document.getElementById('loading').style.display = "none";
 
-    } catch (e) {
-        console.error(e);
-        alert("ERROR AL INICIAR:\n" + e.message);
-        btn.innerText = "REINTENTAR";
-        btn.disabled = false;
+    } catch (err) {
+        alert("ERROR INICIANDO SISTEMA\n" + err.message);
+        console.error(err);
     }
 }
-
     function resize() { 
     slsCanvas.width = window.innerWidth; 
     slsCanvas.height = window.innerHeight; 
@@ -635,36 +628,58 @@ function renderLoop() {
     let lastKeypoints = null;
 
 async function poseDetectionLoop() {
-    while(true) {
-        if (poseDetector && isSLSActive) {
-            try {
-                const result = await poseDetector.estimatePoses(video);
+    while (true) {
+        try {
+            if (!poseDetector || !video.videoWidth || !video.videoHeight) {
+                await new Promise(r => setTimeout(r, 120));
+                continue;
+            }
 
-                if (result.length > 0) {
-                    const kp = adaptiveKeypoints(lastKeypoints, result[0].keypoints);
-                    lastKeypoints = kp;
-                    poses = [{ keypoints: kp }];
-                }
-            } catch(e) {}
-        } else {
-            poses = [];
-            lastKeypoints = null;
+            poses = await poseDetector.estimatePoses(video, {
+                maxPoses: 1,
+                flipHorizontal: false
+            });
+
+            processSLSFromPose(poses);
+
+            await new Promise(r => setTimeout(r, 50));
+
+        } catch (e) {
+            console.warn("Pose pausa preventiva", e);
+            await new Promise(r => setTimeout(r, 300));
         }
-        await new Promise(r => setTimeout(r, 50)); // 20 FPS IA
     }
 }
+
 async function faceDetectionLoop() {
-    while(true) {
-        if(faceDetector && isSLSActive) {
-            try {
-                faces = await faceDetector.estimateFaces(video);
-            } catch(e) { faces = []; }
-        } else {
-            faces = [];
+    while (true) {
+        try {
+            if (!faceDetector || !video.videoWidth) {
+                await new Promise(r => setTimeout(r, 250));
+                continue;
+            }
+
+            /* PROTECCIÓN FPS */
+            if (currentFPS < 45) {
+                faces = [];
+                await new Promise(r => setTimeout(r, 300));
+                continue;
+            }
+
+            faces = await faceDetector.estimateFaces(video, {
+                flipHorizontal: false,
+                predictIrises: false
+            });
+
+            await new Promise(r => setTimeout(r, 160));
+
+        } catch (e) {
+            console.warn("FaceMesh pausa preventiva", e);
+            await new Promise(r => setTimeout(r, 500));
         }
-        await new Promise(r => setTimeout(r, 150)); // ~6 FPS
     }
 }
+
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
     async function connectToProdock() {
         const id = document.getElementById('dock-id').value.trim();
