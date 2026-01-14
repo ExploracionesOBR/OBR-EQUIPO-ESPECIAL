@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,15 +13,12 @@
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
-    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM","short_name":"OBR","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- CORE AI ENGINE -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script>
 /* ===== TFJS PERFORMANCE BOOST ===== */
-tf.setBackend('webgl');
 tf.env().set('WEBGL_PACK', true);
 tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
 tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', 0);
@@ -342,46 +340,79 @@ let heatmapH = 0;
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
     window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
 
-    async function initApp() {
-        const btn = document.querySelector('.load-btn');
-        btn.innerText = "INICIANDO..."; btn.disabled = true;
-        try {
-            const camPromise = navigator.mediaDevices.getUserMedia({ 
-                audio: true, 
-                video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
-            }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
-            
-            const posePromise = tf.setBackend('webgl').then(() => 
-    poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-            enableSmoothing: false,
-            minPoseScore: 0.05
-        }
-    )
-);
+async function initApp() {
+    const btn = document.querySelector('.load-btn');
+    btn.innerText = "INICIANDO...";
+    btn.disabled = true;
 
-            const facePromise = faceLandmarksDetection.createDetector(faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh, { runtime: 'tfjs', maxFaces: 1 });
-            
-            const [stream, poseDet, faceDet] = await Promise.all([camPromise, posePromise, facePromise]);
-            videoStream = stream; video.srcObject = stream; 
-            poseDetector = poseDet; faceDetector = faceDet;
-            
-            const dummyVideo = document.createElement('video');
-            await poseDetector.estimatePoses(dummyVideo).catch(()=>{}); 
+    try {
+        /* ===== TFJS ===== */
+        await tf.setBackend('webgl');
+        await tf.ready();
 
-            video.onloadedmetadata = () => { 
-                video.play();
-                document.getElementById('loading').style.display = 'none';
-                resize(); renderLoop(); 
-                poseDetectionLoop(); 
-                faceDetectionLoop(); 
-            };
-            window.addEventListener('resize', resize);
-            setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
-        } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
+        /* ===== CÁMARA ===== */
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 4096 },
+                height: { ideal: 2160 },
+                frameRate: { ideal: 60 },
+                advanced: [{ focusMode: "continuous" }]
+            }
+        }).catch(() =>
+            navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: { facingMode: "environment" }
+            })
+        );
+
+        video.srcObject = stream;
+        await video.play();
+
+        /* ===== CANVAS ===== */
+        resize();
+        window.addEventListener('resize', resize);
+
+        /* ===== MOVENET ===== */
+        poseDetector = await poseDetection.createDetector(
+            poseDetection.SupportedModels.MoveNet,
+            {
+                modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+                enableSmoothing: false,
+                minPoseScore: 0.05
+            }
+        );
+
+        /* ===== FACEMESH ===== */
+        faceDetector = await faceLandmarksDetection.createDetector(
+            faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+            {
+                runtime: 'tfjs',
+                refineLandmarks: false,
+                maxFaces: 1
+            }
+        );
+
+        /* ===== FLAGS ===== */
+        poses = [];
+        faces = [];
+        isSLSActive = false;
+
+        /* ===== LOOPS ===== */
+        requestAnimationFrame(renderLoop);
+        poseDetectionLoop();
+        faceDetectionLoop();
+
+        document.getElementById('loading').style.display = 'none';
+
+    } catch (e) {
+        console.error(e);
+        alert("ERROR AL INICIAR:\n" + e.message);
+        btn.innerText = "REINTENTAR";
+        btn.disabled = false;
     }
+}
 
     function resize() { 
     slsCanvas.width = window.innerWidth; 
@@ -442,52 +473,18 @@ function renderLoop() {
     const now = performance.now();
     frameCount++;
 
-    // ===============================
-    // MEDICIÓN DE FPS (1 vez / segundo)
-    // ===============================
     if (now - lastTime >= 1000) {
         currentFPS = frameCount;
-
-        const t = video.srcObject
-            ? video.srcObject.getVideoTracks()[0].getSettings()
-            : null;
-
-        document.getElementById('perf-stats').innerText =
-            t ? `${t.width}x${t.height} @ ${currentFPS} FPS`
-              : `${currentFPS} FPS`;
-
+        document.getElementById('perf-stats').innerText = `${currentFPS} FPS`;
         frameCount = 0;
         lastTime = now;
     }
 
-    // ===============================
-    // AUTO-THROTTLE IA (PROTEGE 60 FPS)
-    // ===============================
-    if (currentFPS < 40 && isSLSActive) {
-        faces = []; // baja temporalmente FaceMesh
-    }
-
-    // ===============================
-    // RENDER NORMAL
-    // ===============================
     ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
+    ctx.filter = 'none';
 
     if (video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
-    }
-
-    if (isSLSActive) {
-        drawSLS(poses, sX, sY, sW, sH);
-        drawFaceMesh(faces, sX, sY, sW, sH);
-    }
-
-    requestAnimationFrame(renderLoop);
-}
-        ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
-        
-        ctx.filter = 'none'; // SIEMPRE limpio
-
-        // Calcular el recorte para "cover"
+        // cover calc
         const vRatio = video.videoWidth / video.videoHeight;
         const cRatio = slsCanvas.width / slsCanvas.height;
         let sW, sH, sX, sY;
@@ -505,26 +502,19 @@ function renderLoop() {
         }
 
         ctx.drawImage(video, sX, sY, sW, sH, 0, 0, slsCanvas.width, slsCanvas.height);
-        
-        if(isSLSActive) {
-    ctx.filter = 'none';
 
-    // 🔥 HEATMAP
-    if (poses.length > 0 && poses[0].keypoints) {
-        accumulateHeatmap(poses[0].keypoints, sX, sY, sW, sH);
+        if (isSLSActive) {
+            if (poses.length > 0) accumulateHeatmap(poses[0].keypoints, sX, sY, sW, sH);
+            decayHeatmap();
+            drawHeatmap(ctx);
+            drawSLS(poses, sX, sY, sW, sH);
+            drawFaceMesh(faces, sX, sY, sW, sH);
+        }
     }
-    if (!window.lastHeatmapDraw || performance.now() - window.lastHeatmapDraw > 100) {
-    decayHeatmap();
-    drawHeatmap(ctx);
-    window.lastHeatmapDraw = performance.now();
-}
-    // 🧍 SLS + 🧠 FACE
-    drawSLS(poses, sX, sY, sW, sH);
-    drawFaceMesh(faces, sX, sY, sW, sH);
+
+    requestAnimationFrame(renderLoop);
 }
 
-        requestAnimationFrame(renderLoop);
-    }
     
     function getRenderCoords(xNorm, yNorm, sX, sY, sW, sH) {
         // xNorm/yNorm son pixeles en video original (no normalizados por MoveNet)
