@@ -8,21 +8,24 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v157 (4K FIX)</title> 
+    <title>CAMARA OBR v160 (FIXED LOOP)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM","short_name":"OBR","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- CORE AI ENGINE -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+    
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* BLOQUEO TOTAL DE SELECCIÓN */
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
         
         :root { --hud-primary: #ff3333; }
@@ -34,7 +37,6 @@
             margin: 0; padding: 0;
         }
 
-        /* ANTI-GIRO */
         @media screen and (orientation: portrait) {
             body {
                 transform: rotate(90deg);
@@ -45,10 +47,8 @@
             }
         }
         
-        /* CONTENEDOR PRINCIPAL */
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
         
-        /* ZOOM */
         #zoom-container { 
             position: absolute; inset: 0; width: 100%; height: 100%;
             transform-origin: center center; 
@@ -56,32 +56,25 @@
             will-change: transform;
         }
 
-        /* VIDEO Y CANVAS: AHORA USAN CSS PARA AJUSTARSE A LA PANTALLA, 
-           PERO SU RESOLUCIÓN INTERNA SERÁ NATIVA (4K) */
-        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
-        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
-        
-        /* --- FILTROS VISUALES --- */
-        /* Aplicados al Canvas que se muestra en pantalla */
-        .filter-night-vision #sls-canvas { 
-            filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; 
-        }
-        .filter-night-vision #main-view-area::after { 
-            content: ""; position: absolute; inset: 0; pointer-events: none; 
-            background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); 
-            background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); 
-            z-index: 5; mix-blend-mode: hard-light; 
+        #shared-video-element { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 0; 
         }
         
-        .filter-thermal #sls-canvas { filter: invert(100%) contrast(1.2); }
+        #sls-canvas { 
+            position: absolute; inset: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 2; pointer-events: none; 
+        }
+        
+        /* FILTROS CSS */
+        .filter-night-vision #shared-video-element { filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; }
+        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(0, 255, 50, 0.05) 40%, rgba(0,0,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,255,0,0.02), rgba(0,255,0,0.02) 1px, transparent 1px, transparent 3px); z-index: 5; mix-blend-mode: hard-light; }
+        
+        .filter-thermal #shared-video-element { filter: invert(100%) contrast(1.2); }
         .filter-thermal #main-view-area::after { display: none; }
         
-        .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
-        .filter-urbex #main-view-area::after { 
-            content: ""; position: absolute; inset: 0; pointer-events: none; 
-            z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); 
-            mix-blend-mode: multiply; 
-        }
+        .filter-urbex #shared-video-element { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
+        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); mix-blend-mode: multiply; }
         
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
@@ -103,8 +96,7 @@
         #ai-vision-header.active { opacity: 1; }
         
         #ai-mini-img {
-            width: 100%; height: auto;
-            border: 2px solid #ff3333;
+            width: 100%; height: auto; border: 2px solid #ff3333;
             box-shadow: 0 0 25px rgba(255, 0, 0, 0.4);
             filter: invert(1) hue-rotate(180deg) contrast(1.5);
             margin-bottom: 0; background: black; display: block;
@@ -118,19 +110,13 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.8); text-shadow: 0 0 5px red; line-height: 1.2;
         }
 
-        /* MENUS - TAMAÑO REDUCIDO */
+        /* MENUS */
         .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; pointer-events: auto; transition: opacity 0.2s; opacity: 0; pointer-events: none; }
         .menu-container.visible { opacity: 1; pointer-events: auto; }
-        .menu-container.left-side { left: 15px; }
-        .menu-container.right-side { right: 15px; }
+        .menu-container.left-side { left: 20px; }
+        .menu-container.right-side { right: 20px; }
         
-        /* BOTONES 10% MENOS: 55px -> 50px */
-        .menu-btn { 
-            width: 50px; height: 50px; border: 2px solid #ff3333; border-radius: 50%; 
-            background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; 
-            color: #ff3333; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); 
-            box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: all 0.2s; 
-        }
+        .menu-btn { width: 50px; height: 50px; border: 2px solid #ff3333; border-radius: 50%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; color: #ff3333; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: all 0.2s; }
         .menu-btn:active { transform: scale(0.9); }
         .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
         .menu-label { font-size: 0.55rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
@@ -157,17 +143,29 @@
         
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
+
+        /* RECUADROS DE ESCANEO */
+        .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
+        @keyframes scanBlinkBlur {
+            0% { opacity: 0; transform: scale(0.8); filter: blur(0px); }
+            30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; }
+            80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
+            100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
+        }
     </style>
 </head>
 <body>
 
     <div id="main-view-area">
         <div id="zoom-container">
+            <!-- VIDEO SOURCE -->
             <video id="shared-video-element" autoplay playsinline muted></video>
+            <!-- CANVAS VISIBLE -->
             <canvas id="sls-canvas"></canvas>
         </div>
     </div>
 
+    <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
     <div id="touch-surface"></div>
     <div id="zoom-target-indicator"></div>
 
@@ -182,14 +180,14 @@
 
         <!-- MENUS -->
         <div id="menu-left" class="menu-container left-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
 
         <div id="menu-right" class="menu-container right-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
@@ -207,7 +205,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v157 (4K)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v160</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
         <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
@@ -242,8 +240,10 @@
     let isSLSActive = false;
     let isPareidoliaActive = false;
     let isAIProcessing = false;
-    let detector = null;
+    let poseDetector = null; // Renamed to poseDetector
+    let faceDetector = null;
     let poses = [];
+    let faces = [];
     let zoomLevel = 1; 
     let zoomStage = 0; 
     let peer, conn;
@@ -259,7 +259,7 @@
     const zoomLayer = document.getElementById('zoom-container');
     const touchSurface = document.getElementById('touch-surface');
 
-    // CANVAS DE DETECCIÓN OPTIMIZADO (192px)
+    // CANVAS DE DETECCIÓN OPTIMIZADO (192px PARA 60FPS)
     const detCanvas = document.createElement('canvas');
     detCanvas.width = 192; detCanvas.height = 108; 
     const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
@@ -316,13 +316,13 @@
 
     function resetZoom(btn) {
         if(btn) { btn.classList.add('active-state'); setTimeout(()=>btn.classList.remove('active-state'), 200); }
-        zoomLevel = 1;
+        zoomStage = 0; zoomLevel = 1;
         zoomLayer.style.transform = `scale(1)`;
-        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 500);
+        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
         hideMenus();
     }
 
-    // --- INIT ---
+    // --- PWA & INIT ---
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
     window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
@@ -331,39 +331,44 @@
         const btn = document.querySelector('.load-btn');
         btn.innerText = "INICIANDO..."; btn.disabled = true;
         try {
-            // SOLICITUD 4K AGRESIVA
             const camPromise = navigator.mediaDevices.getUserMedia({ 
                 audio: true, 
-                video: { 
-                    facingMode: 'environment', 
-                    width: { ideal: 4096 }, height: { ideal: 2160 }, 
-                    frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] 
-                } 
+                video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
             }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
             
-            const aiPromise = tf.setBackend('webgl').then(() => poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }));
+            const posePromise = tf.setBackend('webgl').then(() => 
+    poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+            enableSmoothing: false,
+            minPoseScore: 0.05
+        }
+    )
+);
+
+            const facePromise = faceLandmarksDetection.createDetector(faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh, { runtime: 'tfjs', maxFaces: 1 });
             
-            const [stream, det] = await Promise.all([camPromise, aiPromise]);
-            videoStream = stream; video.srcObject = stream; detector = det;
+            const [stream, poseDet, faceDet] = await Promise.all([camPromise, posePromise, facePromise]);
+            videoStream = stream; video.srcObject = stream; 
+            poseDetector = poseDet; faceDetector = faceDet;
             
             const dummyVideo = document.createElement('video');
-            await detector.estimatePoses(dummyVideo).catch(()=>{}); 
+            await poseDetector.estimatePoses(dummyVideo).catch(()=>{}); 
 
             video.onloadedmetadata = () => { 
                 video.play();
                 document.getElementById('loading').style.display = 'none';
-                resize(); renderLoop(); detectionLoop();
+                resize(); renderLoop(); 
+                poseDetectionLoop(); 
+                faceDetectionLoop(); 
             };
             window.addEventListener('resize', resize);
             setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
         } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
     }
 
-    function resize() { 
-        // CANVAS MATCHES VIDEO RESOLUTION (MAX QUALITY)
-        slsCanvas.width = video.videoWidth; 
-        slsCanvas.height = video.videoHeight; 
-    }
+    function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; }
 
     // --- RENDER LOOP ---
     function renderLoop() {
@@ -374,66 +379,182 @@
             frameCount = 0; lastTime = now;
         }
 
-        // APLICAR FILTROS (CANVAS CONTEXT)
+        ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
+        
         ctx.filter = 'none'; 
         if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
         if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
         if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
 
-        // Dibujar a resolución nativa
-        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
+        // Calcular el recorte para "cover"
+        const vRatio = video.videoWidth / video.videoHeight;
+        const cRatio = slsCanvas.width / slsCanvas.height;
+        let sW, sH, sX, sY;
+
+        if (cRatio > vRatio) {
+            sW = video.videoWidth;
+            sH = video.videoWidth / cRatio;
+            sX = 0;
+            sY = (video.videoHeight - sH) / 2;
+        } else {
+            sW = video.videoHeight * cRatio;
+            sH = video.videoHeight;
+            sX = (video.videoWidth - sW) / 2;
+            sY = 0;
+        }
+
+        ctx.drawImage(video, sX, sY, sW, sH, 0, 0, slsCanvas.width, slsCanvas.height);
         
-        if(isSLSActive && poses.length > 0) {
+        if(isSLSActive) {
             ctx.filter = 'none'; 
-            drawSLS(poses);
+            drawSLS(poses, sX, sY, sW, sH);
+            drawFaceMesh(faces, sX, sY, sW, sH);
         }
 
         requestAnimationFrame(renderLoop);
     }
+    
+    function getRenderCoords(xNorm, yNorm, sX, sY, sW, sH) {
+        // xNorm/yNorm son pixeles en video original (no normalizados por MoveNet)
+        const canvasX = ((xNorm - sX) / sW) * slsCanvas.width;
+        const canvasY = ((yNorm - sY) / sH) * slsCanvas.height;
+        return { x: canvasX, y: canvasY };
+    }
+    function adaptiveKeypoints(prev, curr) {
+    if (!prev) return curr;
 
-    function drawSLS(poses) {
+    return curr.map((kp, i) => {
+        if (kp.score < 0.15 && prev[i]?.score > 0.3) {
+            return {
+                x: prev[i].x,
+                y: prev[i].y,
+                score: prev[i].score * 0.95
+            };
+        }
+        return {
+            x: kp.x,
+            y: kp.y,
+            score: Math.max(kp.score, 0.1)
+        };
+    });
+}
+    function humanShapeBoost(keypoints) {
+    const head = keypoints[0];
+    const ls = keypoints.find(p => p.name === 'left_shoulder');
+    const rs = keypoints.find(p => p.name === 'right_shoulder');
+
+    return (
+        head?.score > 0.1 &&
+        (ls?.score > 0.1 || rs?.score > 0.1)
+    );
+}
+    function drawSLS(poses, sX, sY, sW, sH) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        // Escalar de canvas pequeño (192) a canvas real (4K/1080p)
-        const scaleX = slsCanvas.width / detCanvas.width;
-        const scaleY = slsCanvas.height / detCanvas.height;
-
+        
         poses.forEach(pose => {
-            const k = pose.keypoints;
-            const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
-            
-            // CARA
-            const nose = k.find(p => p.name === 'nose');
-            const lEye = k.find(p => p.name === 'left_eye');
-            const rEye = k.find(p => p.name === 'right_eye');
-            if(nose && lEye && rEye && nose.score > 0.1) {
-                 const xs = [nose,lEye,rEye].map(p=>p.x * scaleX);
-                 const ys = [nose,lEye,rEye].map(p=>p.y * scaleY);
-                 const minX=Math.min(...xs)-30; const maxX=Math.max(...xs)+30;
-                 const minY=Math.min(...ys)-40; const maxY=Math.max(...ys)+40;
-                 ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; ctx.lineWidth = 4;
-                 ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
-                 ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)'; ctx.lineWidth = 2;
-                 ctx.beginPath(); ctx.moveTo(rEye.x * scaleX, rEye.y * scaleY); ctx.lineTo(nose.x * scaleX, nose.y * scaleY); ctx.lineTo(lEye.x * scaleX, lEye.y * scaleY); ctx.closePath(); ctx.fill(); ctx.stroke();
-            }
+    if (!humanShapeBoost(pose.keypoints)) return;
 
-            // CUERPO
-            ctx.shadowBlur = 40; ctx.shadowColor = 'rgba(255, 69, 0, 0.8)'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 40; 
-            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
-            
-            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 6;
-            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
+            // Cuerpo Térmico
+            ctx.shadowBlur = 20; ctx.shadowColor = '#FF4500'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 25;
+            ctx.beginPath(); 
+            edges.forEach(([a,b]) => { 
+                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
+                if(p1.score>0.15 && p2.score>0.15) { 
+                    const c1 = getRenderCoords(p1.x, p1.y, sX, sY, sW, sH);
+                    const c2 = getRenderCoords(p2.x, p2.y, sX, sY, sW, sH);
+                    ctx.moveTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); 
+                } 
+            }); 
+            ctx.stroke();
+
+            // Puntos de Unión
+            ctx.fillStyle = '#FF0000'; ctx.shadowBlur = 10;
+            k.forEach(p => {
+                if(p.score > 0.15 && !p.name.includes('eye')) {
+                    const c = getRenderCoords(p.x, p.y, sX, sY, sW, sH);
+                    ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 2*Math.PI); ctx.fill();
+                }
+            });
         });
     }
 
-    async function detectionLoop() {
+    function drawFaceMesh(faces, sX, sY, sW, sH) {
+        if(faces.length === 0 && !lastKeypoints) return;
+        
+        faces.forEach(face => {
+            const points = face.keypoints; 
+            
+            // Malla Facial
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            
+            // Puntos
+            for(let i=0; i<points.length; i+=3) {
+                 const p = points[i];
+                 const c = getRenderCoords(p.x, p.y, sX, sY, sW, sH);
+                 ctx.fillRect(c.x, c.y, 1, 1);
+            }
+            
+            // Caja Objetivo
+            const xs = points.map(p => p.x);
+            const ys = points.map(p => p.y);
+            const minX = Math.min(...xs); const maxX = Math.max(...xs);
+            const minY = Math.min(...ys); const maxY = Math.max(...ys);
+            
+            const tl = getRenderCoords(minX, minY, sX, sY, sW, sH);
+            const br = getRenderCoords(maxX, maxY, sX, sY, sW, sH);
+            const width = br.x - tl.x;
+            const height = br.y - tl.y;
+
+            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 2; ctx.shadowBlur = 5;
+            const len = 15;
+            ctx.beginPath();
+            ctx.moveTo(tl.x, tl.y+len); ctx.lineTo(tl.x, tl.y); ctx.lineTo(tl.x+len, tl.y);
+            ctx.moveTo(br.x, br.y-len); ctx.lineTo(br.x, br.y); ctx.lineTo(br.x-len, br.y);
+            ctx.moveTo(tl.x+width, tl.y+len); ctx.lineTo(tl.x+width, tl.y); ctx.lineTo(tl.x+width-len, tl.y);
+            ctx.moveTo(tl.x, tl.y+height-len); ctx.lineTo(tl.x, tl.y+height); ctx.lineTo(tl.x+len, tl.y+height);
+            ctx.stroke();
+        });
+    }
+
+    let lastKeypoints = null;
+
+async function poseDetectionLoop() {
+    while(true) {
+        if (poseDetector && (isSLSActive || isPareidoliaActive)) {
+            try {
+                const result = await poseDetector.estimatePoses(video, {
+                    flipHorizontal: false
+                });
+
+                if (result.length > 0) {
+                    const kp = adaptiveKeypoints(
+                        lastKeypoints,
+                        result[0].keypoints
+                    );
+
+                    lastKeypoints = kp;
+                    poses = [{ keypoints: kp }];
+                }
+            } catch(e) {}
+        } else {
+            poses = [];
+            lastKeypoints = null;
+        }
+        await new Promise(r => setTimeout(r, 33)); // ~30 FPS IA
+    }
+}
+
+
+    async function faceDetectionLoop() {
         while(true) {
-            if(detector && (isSLSActive || isPareidoliaActive)) {
-                try { 
-                    detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.10}); 
-                } catch(e){}
-            } else { poses = []; }
-            await new Promise(r => setTimeout(r, 40));
+            if(faceDetector && isSLSActive) {
+                try {
+                    faces = await faceDetector.estimateFaces(video);
+                } catch(e) { faces = []; }
+            } else { faces = []; }
+            await new Promise(r => setTimeout(r, 100)); // 10 FPS
         }
     }
 
@@ -455,7 +576,7 @@
                 if(d.type === 'cmd') {
                     if(d.action === 'filter') setFilter(d.value); 
                     if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
-                    if(d.action === 'reset') resetZoom(null); 
+                    if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
                 }
             });
             const streamToSend = slsCanvas.captureStream(30); 
@@ -481,6 +602,7 @@
         if(f === 'sls') document.body.classList.add('filter-pareidolia');
 
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
+        
         if(isPareidoliaActive) togglePareidolia();
     }
 
@@ -500,6 +622,8 @@
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         isAIProcessing = true; 
 
+        // NO TOCAR HEADER AQUI
+        
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
