@@ -18,6 +18,14 @@
     
     <!-- CORE AI ENGINE -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script>
+/* ===== TFJS PERFORMANCE BOOST ===== */
+tf.setBackend('webgl');
+tf.env().set('WEBGL_PACK', true);
+tf.env().set('WEBGL_FORCE_F16_TEXTURES', true);
+tf.env().set('WEBGL_DELETE_TEXTURE_THRESHOLD', 0);
+tf.env().set('WEBGL_FLUSH_THRESHOLD', 1);
+</script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
     
@@ -428,23 +436,56 @@ function drawHeatmap(ctx) {
         }
     }
 }
+let currentFPS = 60;
 
+function renderLoop() {
+    const now = performance.now();
+    frameCount++;
 
-    // --- RENDER LOOP ---
-    function renderLoop() {
-        const now = performance.now(); frameCount++;
-        if (now - lastTime >= 1000) {
-            const t = video.srcObject ? video.srcObject.getVideoTracks()[0].getSettings() : null;
-            document.getElementById('perf-stats').innerText = t ? `${t.width}x${t.height} @ ${frameCount}FPS` : `${frameCount}FPS`;
-            frameCount = 0; lastTime = now;
-        }
+    // ===============================
+    // MEDICIÓN DE FPS (1 vez / segundo)
+    // ===============================
+    if (now - lastTime >= 1000) {
+        currentFPS = frameCount;
 
+        const t = video.srcObject
+            ? video.srcObject.getVideoTracks()[0].getSettings()
+            : null;
+
+        document.getElementById('perf-stats').innerText =
+            t ? `${t.width}x${t.height} @ ${currentFPS} FPS`
+              : `${currentFPS} FPS`;
+
+        frameCount = 0;
+        lastTime = now;
+    }
+
+    // ===============================
+    // AUTO-THROTTLE IA (PROTEGE 60 FPS)
+    // ===============================
+    if (currentFPS < 40 && isSLSActive) {
+        faces = []; // baja temporalmente FaceMesh
+    }
+
+    // ===============================
+    // RENDER NORMAL
+    // ===============================
+    ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
+
+    if (video.readyState >= 2) {
+        ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
+    }
+
+    if (isSLSActive) {
+        drawSLS(poses, sX, sY, sW, sH);
+        drawFaceMesh(faces, sX, sY, sW, sH);
+    }
+
+    requestAnimationFrame(renderLoop);
+}
         ctx.clearRect(0, 0, slsCanvas.width, slsCanvas.height);
         
-        ctx.filter = 'none'; 
-        if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
-        if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
-        if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
+        ctx.filter = 'none'; // SIEMPRE limpio
 
         // Calcular el recorte para "cover"
         const vRatio = video.videoWidth / video.videoHeight;
@@ -472,9 +513,11 @@ function drawHeatmap(ctx) {
     if (poses.length > 0 && poses[0].keypoints) {
         accumulateHeatmap(poses[0].keypoints, sX, sY, sW, sH);
     }
+    if (!window.lastHeatmapDraw || performance.now() - window.lastHeatmapDraw > 100) {
     decayHeatmap();
     drawHeatmap(ctx);
-
+    window.lastHeatmapDraw = performance.now();
+}
     // 🧍 SLS + 🧠 FACE
     drawSLS(poses, sX, sY, sW, sH);
     drawFaceMesh(faces, sX, sY, sW, sH);
@@ -516,36 +559,48 @@ function drawHeatmap(ctx) {
         head?.score > 0.1 &&
         (ls?.score > 0.1 || rs?.score > 0.1)
     );
-}
-    function drawSLS(poses, sX, sY, sW, sH) {
-        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        
-        poses.forEach(pose => {
-    if (!humanShapeBoost(pose.keypoints)) return;
-
-            // Cuerpo Térmico
-            ctx.shadowBlur = 20; ctx.shadowColor = '#FF4500'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 25;
-            ctx.beginPath(); 
-            edges.forEach(([a,b]) => { 
-                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
-                if(p1.score>0.15 && p2.score>0.15) { 
-                    const c1 = getRenderCoords(p1.x, p1.y, sX, sY, sW, sH);
-                    const c2 = getRenderCoords(p2.x, p2.y, sX, sY, sW, sH);
-                    ctx.moveTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); 
-                } 
-            }); 
-            ctx.stroke();
-
-            // Puntos de Unión
-            ctx.fillStyle = '#FF0000'; ctx.shadowBlur = 10;
-            k.forEach(p => {
-                if(p.score > 0.15 && !p.name.includes('eye')) {
-                    const c = getRenderCoords(p.x, p.y, sX, sY, sW, sH);
-                    ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 2*Math.PI); ctx.fill();
-                }
-            });
-        });
     }
+    const edges = [
+    ['left_shoulder','right_shoulder'],
+    ['left_shoulder','left_hip'],
+    ['right_shoulder','right_hip'],
+    ['left_hip','right_hip']
+];
+
+   function drawSLS(poses, sX, sY, sW, sH) {
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+        
+    poses.forEach(pose => {
+
+        // ✅ ESTA ES LA LÍNEA QUE FALTABA
+        const k = pose.keypoints;
+
+        if (!humanShapeBoost(k)) return;
+
+        // Cuerpo Térmico
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#FF4500';
+        ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)';
+        ctx.lineWidth = 25;
+
+        ctx.beginPath(); 
+        edges.forEach(([a,b]) => { 
+            const p1 = k.find(p => p.name === a);
+            const p2 = k.find(p => p.name === b);
+
+            if (!p1 || !p2) return;
+            if (p1.score > 0.15 && p2.score > 0.15) { 
+                const c1 = getRenderCoords(p1.x, p1.y, sX, sY, sW, sH);
+                const c2 = getRenderCoords(p2.x, p2.y, sX, sY, sW, sH);
+                ctx.moveTo(c1.x, c1.y);
+                ctx.lineTo(c2.x, c2.y); 
+            } 
+        }); 
+        ctx.stroke();
+    });
+}
+
 
     function drawFaceMesh(faces, sX, sY, sW, sH) {
         if(faces.length === 0 && !lastKeypoints) return;
@@ -591,18 +646,12 @@ function drawHeatmap(ctx) {
 
 async function poseDetectionLoop() {
     while(true) {
-        if (poseDetector && (isSLSActive || isPareidoliaActive)) {
+        if (poseDetector && isSLSActive) {
             try {
-                const result = await poseDetector.estimatePoses(video, {
-                    flipHorizontal: false
-                });
+                const result = await poseDetector.estimatePoses(video);
 
                 if (result.length > 0) {
-                    const kp = adaptiveKeypoints(
-                        lastKeypoints,
-                        result[0].keypoints
-                    );
-
+                    const kp = adaptiveKeypoints(lastKeypoints, result[0].keypoints);
                     lastKeypoints = kp;
                     poses = [{ keypoints: kp }];
                 }
@@ -611,22 +660,21 @@ async function poseDetectionLoop() {
             poses = [];
             lastKeypoints = null;
         }
-        await new Promise(r => setTimeout(r, 33)); // ~30 FPS IA
+        await new Promise(r => setTimeout(r, 50)); // 20 FPS IA
     }
 }
-
-
-    async function faceDetectionLoop() {
-        while(true) {
-            if(faceDetector && isSLSActive) {
-                try {
-                    faces = await faceDetector.estimateFaces(video);
-                } catch(e) { faces = []; }
-            } else { faces = []; }
-            await new Promise(r => setTimeout(r, 100)); // 10 FPS
+async function faceDetectionLoop() {
+    while(true) {
+        if(faceDetector && isSLSActive) {
+            try {
+                faces = await faceDetector.estimateFaces(video);
+            } catch(e) { faces = []; }
+        } else {
+            faces = [];
         }
+        await new Promise(r => setTimeout(r, 150)); // ~6 FPS
     }
-
+}
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
     async function connectToProdock() {
         const id = document.getElementById('dock-id').value.trim();
