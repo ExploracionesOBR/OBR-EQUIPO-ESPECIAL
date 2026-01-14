@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v155 (SLS TACTICAL)</title> 
+    <title>CAMARA OBR v156 (SLS BIOMETRIC)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -169,7 +169,9 @@
 
     <div id="main-view-area">
         <div id="zoom-container">
+            <!-- VIDEO SOURCE -->
             <video id="shared-video-element" autoplay playsinline muted></video>
+            <!-- CANVAS VISIBLE -->
             <canvas id="sls-canvas"></canvas>
         </div>
     </div>
@@ -181,7 +183,7 @@
     <div id="ui-layer">
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
-        
+
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
         <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
 
@@ -198,7 +200,7 @@
         <div id="menu-right" class="menu-container right-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom()"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
         <!-- IA VISION UI -->
@@ -214,7 +216,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v155</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v156</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
         <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
@@ -259,7 +261,6 @@
     let videoStream;
     let fps = 0, frameCount = 0, lastTime = performance.now();
     let pareidoliaInterval = null;
-    let audioCtx, micSource, destNode; 
 
     const video = document.getElementById('shared-video-element');
     const slsCanvas = document.getElementById('sls-canvas');
@@ -272,75 +273,52 @@
     detCanvas.width = 192; detCanvas.height = 108; 
     const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
 
-    // --- AUDIO MIXING ---
-    function initAudioMix(stream) {
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            micSource = audioCtx.createMediaStreamSource(stream);
-            destNode = audioCtx.createMediaStreamDestination();
-            micSource.connect(destNode);
-        } catch(e) { console.error("Audio mix failed", e); }
-    }
-
-    // --- INTERACCIÓN TOUCH (ZOOM + MENU ACTIVATION) ---
+    // --- ZOOM ---
     document.getElementById('touch-surface').addEventListener('click', (e) => {
         const w = window.innerWidth;
         const h = window.innerHeight;
         const touchX = e.clientX;
         const touchY = e.clientY;
-        const edgeThreshold = 100; // Zona sensible para menús
+        const edgeThreshold = 100;
 
-        // 1. ZONA BORDES: MOSTRAR MENUS
+        // Detectar si tocó los bordes para mostrar menú
         if (touchX < edgeThreshold || touchX > w - edgeThreshold) { 
             showMenus(); 
             return; 
         }
-
-        // 2. ZONA CENTRAL: ZOOM PROGRESIVO
-        zoomStage = (zoomStage + 1) % 3;
-        if (zoomStage === 0) {
-            resetZoom();
-        } else {
-            const scale = zoomStage === 1 ? 3 : 5;
-            const originX = (touchX / w) * 100;
-            const originY = (touchY / h) * 100;
-            zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
-            zoomLayer.style.transform = `scale(${scale})`;
-            zoomLevel = scale;
-        }
+        
+        // Si no tocó bordes, no hace NADA con 1 click (Solicitado)
     });
 
     function showMenus() {
         const left = document.getElementById('menu-left');
         const right = document.getElementById('menu-right');
-        left.classList.add('visible'); 
-        right.classList.add('visible');
-        
+        left.classList.add('visible'); right.classList.add('visible');
         clearTimeout(menuTimer);
-        menuTimer = setTimeout(() => { 
-            left.classList.remove('visible'); 
-            right.classList.remove('visible'); 
-        }, 4000);
+        menuTimer = setTimeout(() => { left.classList.remove('visible'); right.classList.remove('visible'); }, 4000);
     }
 
-    function resetZoom() {
+    function resetZoom(btn) {
+        if(btn) { btn.classList.add('active-state'); setTimeout(()=>btn.classList.remove('active-state'), 200); }
         zoomStage = 0; zoomLevel = 1;
         zoomLayer.style.transform = `scale(1)`;
         setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
+        hideMenus();
     }
 
     // --- PWA & INIT ---
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
-    window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
+    window.onload = () => {
+        if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
+    };
 
     async function initApp() {
         const btn = document.querySelector('.load-btn');
         btn.innerText = "INICIANDO..."; btn.disabled = true;
         try {
             const camPromise = navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
+                audio: true, 
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
             }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
             
@@ -349,8 +327,6 @@
             const [stream, det] = await Promise.all([camPromise, aiPromise]);
             videoStream = stream; video.srcObject = stream; detector = det;
             
-            initAudioMix(stream); 
-
             const dummyVideo = document.createElement('video');
             await detector.estimatePoses(dummyVideo).catch(()=>{}); 
 
@@ -375,18 +351,20 @@
             frameCount = 0; lastTime = now;
         }
 
-        // --- FILTROS PARA EL STREAM (CANVAS) ---
-        // Esto afecta lo que se envía al Prodock
+        // 1. APLICAR FILTROS VISUALES (Al canvas para stream + Al body para local)
+        // El CSS se encarga de la vista local gracias a las clases en el body.
+        // Aquí dibujamos en el canvas para el stream (sin los efectos de superposición complejos del CSS)
         ctx.filter = 'none'; 
         if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
         if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
         if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
 
+        // 2. DIBUJAR VIDEO EN CANVAS
         ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
         
-        // --- SLS DRAWING ---
+        // 3. DIBUJAR SLS (Sin filtros)
         if(isSLSActive && poses.length > 0) {
-            ctx.filter = 'none'; // Resetea filtro para dibujar SLS en color real
+            ctx.filter = 'none'; 
             drawSLS(poses);
         }
 
@@ -396,38 +374,46 @@
     // --- SLS AVANZADO (MASCARA + CUERPO) ---
     function drawSLS(poses) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        // Escalar coordenadas del canvas pequeño (192) al real
         const scaleX = slsCanvas.width / detCanvas.width;
         const scaleY = slsCanvas.height / detCanvas.height;
+        const pulse = (Math.sin(Date.now() / 200) + 1) / 2; // 0 a 1
+        const radius = 3 + (pulse * 3); // 3 a 6px
 
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
             
-            // 1. CARA (MASCARA)
+            // 1. CARA (MASCARA BIOMETRICA)
             const nose = k.find(p => p.name === 'nose');
             const lEye = k.find(p => p.name === 'left_eye');
             const rEye = k.find(p => p.name === 'right_eye');
-            
+            const lEar = k.find(p => p.name === 'left_ear');
+            const rEar = k.find(p => p.name === 'right_ear');
+
             if(nose && lEye && rEye && nose.score > 0.1) {
                  const xs = [nose,lEye,rEye].map(p=>p.x * scaleX);
                  const ys = [nose,lEye,rEye].map(p=>p.y * scaleY);
                  const minX=Math.min(...xs)-30; const maxX=Math.max(...xs)+30;
                  const minY=Math.min(...ys)-40; const maxY=Math.max(...ys)+40;
                  
-                 // Recuadro Rojo
+                 // Recuadro Rojo Objetivo
                  ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
                  ctx.lineWidth = 2;
                  ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
                  
-                 // Máscara Poligonal
-                 ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; // Cian transparente
+                 // Malla Poligonal
+                 ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; 
+                 ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+                 ctx.lineWidth = 1;
                  ctx.beginPath();
-                 ctx.moveTo(rEye.x * scaleX, rEye.y * scaleY);
+                 if(rEar) ctx.lineTo(rEar.x * scaleX, rEar.y * scaleY);
+                 ctx.lineTo(rEye.x * scaleX, rEye.y * scaleY);
                  ctx.lineTo(nose.x * scaleX, nose.y * scaleY);
                  ctx.lineTo(lEye.x * scaleX, lEye.y * scaleY);
+                 if(lEar) ctx.lineTo(lEar.x * scaleX, lEar.y * scaleY);
                  ctx.closePath();
                  ctx.fill();
+                 ctx.stroke();
             }
 
             // 2. CUERPO (TERMICO VOLUMETRICO)
@@ -435,9 +421,16 @@
             ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 25; 
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
             
-            // 3. ESQUELETO (VERDE)
-            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 2;
-            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
+            // 3. PUNTOS ROJOS PULSANTES (JOINTS)
+            ctx.shadowBlur = 10; ctx.shadowColor = '#ff0000';
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.7 + (pulse * 0.3)})`;
+            k.forEach(kp => {
+                if (kp.score > 0.1) {
+                    ctx.beginPath();
+                    ctx.arc(kp.x * scaleX, kp.y * scaleY, radius, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            });
         });
     }
 
@@ -447,7 +440,7 @@
             if(detector && (isSLSActive || isPareidoliaActive)) {
                 try { 
                     detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.5}); // Sensibilidad extrema
+                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.8}); 
                 } catch(e){}
             } else { poses = []; }
             await new Promise(r => setTimeout(r, 40));
@@ -472,17 +465,16 @@
                 if(d.type === 'cmd') {
                     if(d.action === 'filter') setFilter(d.value); 
                     if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
-                    if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
+                    if(d.action === 'reset') resetZoom(null); 
                 }
             });
             const streamToSend = slsCanvas.captureStream(30); 
-            if(destNode) streamToSend.addTrack(destNode.stream.getAudioTracks()[0]);
-            else { const audioTrack = video.srcObject.getAudioTracks()[0]; if(audioTrack) streamToSend.addTrack(audioTrack); }
+            const audioTrack = video.srcObject.getAudioTracks()[0];
+            if(audioTrack) streamToSend.addTrack(audioTrack);
             peer.call(id, streamToSend);
         });
     }
 
-    // --- ACCIONES CON CLASES CSS RESTAURADAS ---
     function setFilter(f, btn) {
         if(currentFilter === f && f !== 'normal') { setFilter('normal'); return; }
         currentFilter = f;
@@ -499,6 +491,7 @@
         if(f === 'sls') document.body.classList.add('filter-pareidolia');
 
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
+        
         if(isPareidoliaActive) togglePareidolia();
     }
 
