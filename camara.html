@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v156 (SLS BIOMETRIC)</title> 
+    <title>CAMARA OBR v157 (4K FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* BLOQUEO DE SELECCION */
+        /* BLOQUEO TOTAL DE SELECCIÓN */
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
         
         :root { --hud-primary: #ff3333; }
@@ -45,22 +45,25 @@
             }
         }
         
-        /* ESTRUCTURA VISUAL */
+        /* CONTENEDOR PRINCIPAL */
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
         
+        /* ZOOM */
         #zoom-container { 
             position: absolute; inset: 0; width: 100%; height: 100%;
             transform-origin: center center; 
-            transition: transform 0.5s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
             will-change: transform;
         }
 
-        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+        /* VIDEO Y CANVAS: AHORA USAN CSS PARA AJUSTARSE A LA PANTALLA, 
+           PERO SU RESOLUCIÓN INTERNA SERÁ NATIVA (4K) */
+        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
         
-        /* --- FILTROS RESTAURADOS (CSS EXACTO BASE) --- */
-        /* Night Vision: Scanlines + Vignette Verde */
-        .filter-night-vision #shared-video-element { 
+        /* --- FILTROS VISUALES --- */
+        /* Aplicados al Canvas que se muestra en pantalla */
+        .filter-night-vision #sls-canvas { 
             filter: grayscale(100%) contrast(1.4) brightness(1.3) sepia(100%) hue-rotate(90deg) saturate(200%) !important; 
         }
         .filter-night-vision #main-view-area::after { 
@@ -70,19 +73,16 @@
             z-index: 5; mix-blend-mode: hard-light; 
         }
         
-        /* Thermal: Invertido Alto Contraste */
-        .filter-thermal #shared-video-element { filter: invert(100%) contrast(1.2); }
+        .filter-thermal #sls-canvas { filter: invert(100%) contrast(1.2); }
         .filter-thermal #main-view-area::after { display: none; }
         
-        /* Urbex: Sepia Sucio + Vignette Oscura */
-        .filter-urbex #shared-video-element { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
+        .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
         .filter-urbex #main-view-area::after { 
             content: ""; position: absolute; inset: 0; pointer-events: none; 
             z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); 
             mix-blend-mode: multiply; 
         }
         
-        /* Pareidolia Border */
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
         /* UI LAYERS */
@@ -95,7 +95,7 @@
 
         /* AI VISION UI */
         #ai-vision-header {
-            position: absolute; top: 20px; left: 20px; 
+            position: absolute; top: 80px; left: 20px; 
             display: flex; flex-direction: column; align-items: flex-start;
             opacity: 0; pointer-events: none; transition: opacity 0.5s;
             z-index: 60; width: 220px;
@@ -118,28 +118,22 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.8); text-shadow: 0 0 5px red; line-height: 1.2;
         }
 
-        /* MENUS (Z-INDEX FIX) */
-        .menu-container { 
-            position: absolute; top: 50%; transform: translateY(-50%); 
-            display: flex; flex-direction: column; gap: 15px; 
-            z-index: 100; /* Encima de todo */
-            pointer-events: none; /* Por defecto no bloquea */
-            transition: opacity 0.2s; opacity: 0; 
-        }
-        .menu-container.visible { opacity: 1; pointer-events: auto; } /* Activo al ser visible */
+        /* MENUS - TAMAÑO REDUCIDO */
+        .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; pointer-events: auto; transition: opacity 0.2s; opacity: 0; pointer-events: none; }
+        .menu-container.visible { opacity: 1; pointer-events: auto; }
+        .menu-container.left-side { left: 15px; }
+        .menu-container.right-side { right: 15px; }
         
-        .menu-container.left-side { left: 20px; }
-        .menu-container.right-side { right: 20px; }
-        
+        /* BOTONES 10% MENOS: 55px -> 50px */
         .menu-btn { 
-            width: 55px; height: 55px; border: 2px solid #ff3333; border-radius: 50%; 
+            width: 50px; height: 50px; border: 2px solid #ff3333; border-radius: 50%; 
             background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; 
-            color: #ff3333; font-size: 1.4rem; cursor: pointer; backdrop-filter: blur(4px); 
-            box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: all 0.2s; pointer-events: auto;
+            color: #ff3333; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); 
+            box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: all 0.2s; 
         }
         .menu-btn:active { transform: scale(0.9); }
-        .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 25px white; }
-        .menu-label { font-size: 0.6rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
+        .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
+        .menu-label { font-size: 0.55rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
 
         /* LOADING */
         #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #220000 0%, #000000 100%); }
@@ -149,56 +143,53 @@
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
         .modal-bg.active { display: flex; }
         
-        /* TOUCH SURFACE (Invisible click catcher) */
+        /* TOUCH SURFACE */
         #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
+        #zoom-target-indicator { 
+            position: absolute; width: 60px; height: 60px; 
+            border: 2px solid #00ff00; border-radius: 50%; 
+            transform: translate(-50%, -50%) scale(0.5); opacity: 0; 
+            pointer-events: none; z-index: 80; 
+            box-shadow: 0 0 15px #00ff00;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+        }
+        #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: #00ff00; font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px #00ff00; background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
-
-        /* RECUADROS DE ESCANEO */
-        .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
-        @keyframes scanBlinkBlur {
-            0% { opacity: 0; transform: scale(0.8); filter: blur(0px); }
-            30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; }
-            80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; }
-            100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; }
-        }
     </style>
 </head>
 <body>
 
     <div id="main-view-area">
         <div id="zoom-container">
-            <!-- VIDEO SOURCE -->
             <video id="shared-video-element" autoplay playsinline muted></video>
-            <!-- CANVAS VISIBLE -->
             <canvas id="sls-canvas"></canvas>
         </div>
     </div>
 
-    <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
-    <!-- TOUCH SURFACE (Detrás de UI para capturar clicks de fondo) -->
     <div id="touch-surface"></div>
+    <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
-
+        
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
         <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
 
         <div id="perf-stats">INIT...</div>
 
-        <!-- MENUS (Con event.stopPropagation para no activar zoom) -->
+        <!-- MENUS -->
         <div id="menu-left" class="menu-container left-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" ondblclick="setFilter('normal', null)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">TERM</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
 
         <div id="menu-right" class="menu-container right-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" ondblclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
@@ -216,7 +207,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v156</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v157 (4K)</p>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
         <button id="pwa-btn" class="text-xs text-green-500 mt-6 border border-green-900 px-4 py-2 hidden interactive hover:bg-green-900/20" onclick="installPWA()">INSTALAR APP</button>
     </div>
@@ -268,27 +259,52 @@
     const zoomLayer = document.getElementById('zoom-container');
     const touchSurface = document.getElementById('touch-surface');
 
-    // CANVAS DE DETECCIÓN OPTIMIZADO (192px PARA 60FPS)
+    // CANVAS DE DETECCIÓN OPTIMIZADO (192px)
     const detCanvas = document.createElement('canvas');
     detCanvas.width = 192; detCanvas.height = 108; 
     const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
 
-    // --- ZOOM ---
-    document.getElementById('touch-surface').addEventListener('click', (e) => {
+    // --- ZOOM PROGRESIVO ---
+    let pressTimer = null;
+    const LONG_PRESS_MS = 600;
+
+    touchSurface.addEventListener('pointerdown', (e) => {
         const w = window.innerWidth;
         const h = window.innerHeight;
         const touchX = e.clientX;
         const touchY = e.clientY;
         const edgeThreshold = 100;
 
-        // Detectar si tocó los bordes para mostrar menú
-        if (touchX < edgeThreshold || touchX > w - edgeThreshold) { 
-            showMenus(); 
-            return; 
-        }
-        
-        // Si no tocó bordes, no hace NADA con 1 click (Solicitado)
+        if (touchX < edgeThreshold || touchX > w - edgeThreshold) { showMenus(); return; }
+
+        pressTimer = setTimeout(() => { handleZoomPress(touchX, touchY); }, LONG_PRESS_MS);
     });
+
+    touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer));
+    touchSurface.addEventListener('pointerleave', () => clearTimeout(pressTimer));
+    touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
+
+    function handleZoomPress(x, y) {
+        if(navigator.vibrate) navigator.vibrate(50);
+        
+        let nextZoom = 1;
+        if(zoomLevel === 1) nextZoom = 3;
+        else if(zoomLevel === 3) nextZoom = 5;
+        if(zoomLevel === 5) return;
+
+        const ind = document.getElementById('zoom-target-indicator');
+        ind.style.left = x + 'px';
+        ind.style.top = y + 'px';
+        ind.classList.add('active');
+        setTimeout(() => ind.classList.remove('active'), 500);
+
+        const originX = (x / window.innerWidth) * 100;
+        const originY = (y / window.innerHeight) * 100;
+
+        zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
+        zoomLayer.style.transform = `scale(${nextZoom})`;
+        zoomLevel = nextZoom;
+    }
 
     function showMenus() {
         const left = document.getElementById('menu-left');
@@ -300,26 +316,29 @@
 
     function resetZoom(btn) {
         if(btn) { btn.classList.add('active-state'); setTimeout(()=>btn.classList.remove('active-state'), 200); }
-        zoomStage = 0; zoomLevel = 1;
+        zoomLevel = 1;
         zoomLayer.style.transform = `scale(1)`;
-        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
+        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 500);
         hideMenus();
     }
 
-    // --- PWA & INIT ---
+    // --- INIT ---
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
-    window.onload = () => {
-        if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
-    };
+    window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
 
     async function initApp() {
         const btn = document.querySelector('.load-btn');
         btn.innerText = "INICIANDO..."; btn.disabled = true;
         try {
+            // SOLICITUD 4K AGRESIVA
             const camPromise = navigator.mediaDevices.getUserMedia({ 
                 audio: true, 
-                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 4096 }, height: { ideal: 2160 }, 
+                    frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] 
+                } 
             }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
             
             const aiPromise = tf.setBackend('webgl').then(() => poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }));
@@ -340,7 +359,11 @@
         } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
     }
 
-    function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; }
+    function resize() { 
+        // CANVAS MATCHES VIDEO RESOLUTION (MAX QUALITY)
+        slsCanvas.width = video.videoWidth; 
+        slsCanvas.height = video.videoHeight; 
+    }
 
     // --- RENDER LOOP ---
     function renderLoop() {
@@ -351,18 +374,15 @@
             frameCount = 0; lastTime = now;
         }
 
-        // 1. APLICAR FILTROS VISUALES (Al canvas para stream + Al body para local)
-        // El CSS se encarga de la vista local gracias a las clases en el body.
-        // Aquí dibujamos en el canvas para el stream (sin los efectos de superposición complejos del CSS)
+        // APLICAR FILTROS (CANVAS CONTEXT)
         ctx.filter = 'none'; 
         if(currentFilter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.4) brightness(1.3) saturate(2.0)';
         if(currentFilter === 'thermal') ctx.filter = 'invert(1) hue-rotate(180deg) contrast(1.2) saturate(1.2)';
         if(currentFilter === 'urbex') ctx.filter = 'sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5)';
 
-        // 2. DIBUJAR VIDEO EN CANVAS
+        // Dibujar a resolución nativa
         ctx.drawImage(video, 0, 0, slsCanvas.width, slsCanvas.height);
         
-        // 3. DIBUJAR SLS (Sin filtros)
         if(isSLSActive && poses.length > 0) {
             ctx.filter = 'none'; 
             drawSLS(poses);
@@ -371,76 +391,46 @@
         requestAnimationFrame(renderLoop);
     }
 
-    // --- SLS AVANZADO (MASCARA + CUERPO) ---
     function drawSLS(poses) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        // Escalar de canvas pequeño (192) a canvas real (4K/1080p)
         const scaleX = slsCanvas.width / detCanvas.width;
         const scaleY = slsCanvas.height / detCanvas.height;
-        const pulse = (Math.sin(Date.now() / 200) + 1) / 2; // 0 a 1
-        const radius = 3 + (pulse * 3); // 3 a 6px
 
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['nose','left_eye'],['nose','right_eye'],['left_eye','left_ear'],['right_eye','right_ear'],['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
             
-            // 1. CARA (MASCARA BIOMETRICA)
+            // CARA
             const nose = k.find(p => p.name === 'nose');
             const lEye = k.find(p => p.name === 'left_eye');
             const rEye = k.find(p => p.name === 'right_eye');
-            const lEar = k.find(p => p.name === 'left_ear');
-            const rEar = k.find(p => p.name === 'right_ear');
-
             if(nose && lEye && rEye && nose.score > 0.1) {
                  const xs = [nose,lEye,rEye].map(p=>p.x * scaleX);
                  const ys = [nose,lEye,rEye].map(p=>p.y * scaleY);
                  const minX=Math.min(...xs)-30; const maxX=Math.max(...xs)+30;
                  const minY=Math.min(...ys)-40; const maxY=Math.max(...ys)+40;
-                 
-                 // Recuadro Rojo Objetivo
-                 ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                 ctx.lineWidth = 2;
+                 ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; ctx.lineWidth = 4;
                  ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
-                 
-                 // Malla Poligonal
-                 ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; 
-                 ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
-                 ctx.lineWidth = 1;
-                 ctx.beginPath();
-                 if(rEar) ctx.lineTo(rEar.x * scaleX, rEar.y * scaleY);
-                 ctx.lineTo(rEye.x * scaleX, rEye.y * scaleY);
-                 ctx.lineTo(nose.x * scaleX, nose.y * scaleY);
-                 ctx.lineTo(lEye.x * scaleX, lEye.y * scaleY);
-                 if(lEar) ctx.lineTo(lEar.x * scaleX, lEar.y * scaleY);
-                 ctx.closePath();
-                 ctx.fill();
-                 ctx.stroke();
+                 ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)'; ctx.lineWidth = 2;
+                 ctx.beginPath(); ctx.moveTo(rEye.x * scaleX, rEye.y * scaleY); ctx.lineTo(nose.x * scaleX, nose.y * scaleY); ctx.lineTo(lEye.x * scaleX, lEye.y * scaleY); ctx.closePath(); ctx.fill(); ctx.stroke();
             }
 
-            // 2. CUERPO (TERMICO VOLUMETRICO)
-            ctx.shadowBlur = 30; ctx.shadowColor = 'rgba(255, 69, 0, 0.8)'; 
-            ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 25; 
+            // CUERPO
+            ctx.shadowBlur = 40; ctx.shadowColor = 'rgba(255, 69, 0, 0.8)'; ctx.strokeStyle = 'rgba(255, 69, 0, 0.4)'; ctx.lineWidth = 40; 
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
             
-            // 3. PUNTOS ROJOS PULSANTES (JOINTS)
-            ctx.shadowBlur = 10; ctx.shadowColor = '#ff0000';
-            ctx.fillStyle = `rgba(255, 0, 0, ${0.7 + (pulse * 0.3)})`;
-            k.forEach(kp => {
-                if (kp.score > 0.1) {
-                    ctx.beginPath();
-                    ctx.arc(kp.x * scaleX, kp.y * scaleY, radius, 0, 2 * Math.PI);
-                    ctx.fill();
-                }
-            });
+            ctx.shadowBlur = 0; ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 6;
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>0.10 && p2.score>0.10) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
         });
     }
 
-    // --- DETECCION (192px) ---
     async function detectionLoop() {
         while(true) {
             if(detector && (isSLSActive || isPareidoliaActive)) {
                 try { 
                     detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.8}); 
+                    poses = await detector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.10}); 
                 } catch(e){}
             } else { poses = []; }
             await new Promise(r => setTimeout(r, 40));
@@ -483,7 +473,7 @@
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
         
-        // APLICAR CLASES CSS AL BODY (Para vista local con texturas)
+        // CSS Fallback
         document.body.className = '';
         if(f === 'night') document.body.classList.add('filter-night-vision');
         if(f === 'thermal') document.body.classList.add('filter-thermal');
@@ -491,24 +481,7 @@
         if(f === 'sls') document.body.classList.add('filter-pareidolia');
 
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
-        
         if(isPareidoliaActive) togglePareidolia();
-    }
-
-    function spawnScanRects() {
-        const layer = document.getElementById('scan-layer');
-        for(let i=0; i<5; i++) {
-            setTimeout(() => {
-                const rect = document.createElement('div');
-                rect.className = 'scan-rect';
-                const w = Math.random() * 80 + 40; const h = Math.random() * 80 + 40;
-                rect.style.width = w + 'px'; rect.style.height = h + 'px';
-                rect.style.left = Math.random() * (window.innerWidth - w) + 'px';
-                rect.style.top = Math.random() * (window.innerHeight - h) + 'px';
-                layer.appendChild(rect);
-                setTimeout(() => rect.remove(), 700);
-            }, i * 250);
-        }
     }
 
     function speakText(t) { 
@@ -525,9 +498,7 @@
     async function triggerPareidolia() { 
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
-        
         isAIProcessing = true; 
-        spawnScanRects();
 
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
