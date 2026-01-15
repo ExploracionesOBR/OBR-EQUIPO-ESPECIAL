@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v184 (VISUAL FX)</title> 
+    <title>CAMARA OBR v197 (SENSITIVITY 0.2)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -16,13 +16,12 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- LIBRERÍAS (Local -> CDN Fallback) -->
+    <!-- LIBRERÍAS IA -->
     <script src="js/tf.min.js"></script>
     <script src="js/pose-detection.min.js"></script>
     <script src="js/face_mesh.js"></script>
     <script src="js/peerjs.min.js"></script>
 
-    <!-- FALLBACK CDN -->
     <script>
         if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"><\/script>');
@@ -35,36 +34,12 @@
 
     <style>
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
-        
-        /* RESTAURADO A ROJO */
         :root { --hud-primary: #ff3333; }
-
-        body { 
-            background: #000; overflow: hidden; 
-            font-family: 'Orbitron', sans-serif; 
-            width: 100vw; height: 100vh;
-            margin: 0; padding: 0;
-        }
-
-        @media screen and (orientation: portrait) {
-            body {
-                transform: rotate(90deg);
-                transform-origin: bottom left;
-                position: absolute;
-                top: -100vw; left: 0;
-                height: 100vw; width: 100vh;
-            }
-        }
+        body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
+        @media screen and (orientation: portrait) { body { transform: rotate(90deg); transform-origin: bottom left; position: absolute; top: -100vw; left: 0; height: 100vw; width: 100vh; } }
         
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
-        
-        #zoom-container { 
-            position: absolute; inset: 0; width: 100%; height: 100%;
-            transform-origin: center center; 
-            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
-            will-change: transform;
-        }
-
+        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
         #heatmap-buffer { display: none; }
@@ -77,6 +52,7 @@
         .filter-urbex #sls-canvas { filter: sepia(100%) contrast(1.2) brightness(1.3) saturate(1.5); }
         .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(50,30,0,0.6); mix-blend-mode: multiply; }
         
+        .filter-heatmap #sls-canvas { filter: none; } 
         .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
         /* UI */
@@ -95,8 +71,6 @@
         .menu-container.visible { opacity: 1; pointer-events: auto; }
         .menu-container.left-side { left: 20px; }
         .menu-container.right-side { right: 20px; }
-        
-        /* BOTONES EN ROJO OBR */
         .menu-btn { width: 50px; height: 50px; border: 2px solid var(--hud-primary); border-radius: 50%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; color: var(--hud-primary); font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); box-shadow: 0 0 15px rgba(255, 51, 51, 0.3); transition: all 0.2s; }
         .menu-btn:active { transform: scale(0.9); }
         .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
@@ -114,7 +88,6 @@
         #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
         #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: var(--hud-primary); font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px var(--hud-primary); background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid var(--hud-primary); border-radius: 4px; }
         
-        /* MONITOR DE CONEXIÓN */
         #perf-stats { 
             position: absolute; bottom: 5px; right: 5px; 
             font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; 
@@ -152,20 +125,9 @@
     <div id="ui-layer">
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
-        
-        <!-- HEADER RESTAURADO -->
-        <div id="live-header-container">
-            <div class="flex items-center gap-2 mb-1">
-                <img src="obr-logo.png" class="w-8 h-8 object-contain drop-shadow-[0_0_5px_red]">
-                <span class="font-orbitron text-lg font-bold text-white tracking-widest drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">EXPLORACIONES OBR</span>
-            </div>
-            <div id="clock" class="text-xs font-mono text-red-400 ml-10 tracking-widest">--/--/-- --:--:--</div>
-        </div>
-
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
         <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
         
-        <!-- MONITOR DE CONEXIÓN -->
         <div id="perf-stats">
             <div id="res-fps">Init...</div>
             <div id="conn-stat" class="flex items-center justify-end mt-1">
@@ -203,7 +165,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v184</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v197</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -236,25 +198,25 @@
     </div>
 
 <script>
-    // --- GLOBAL CONFIG ---
     let API_KEY = localStorage.getItem("obr_gemini_key") || "";
     let CURRENT_AI_MODEL = localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025";
     let GEMINI_API_KEY = API_KEY; 
 
-    // --- VISUAL CONFIGS (V184) ---
-    const HEAT_PARTICLES = 32;
-    const HEAT_RADIUS = 22;
-    const HEAT_JITTER = 16;
-    const HEAT_ALPHA_BASE = 0.06;
+    // CONFIG VISUAL (V197 - TUNED 0.2)
+    const AI_THRESHOLD = 0.02; // 20% Sensibilidad Global
+    
+    const SLS_LINE_COLOR = "#d946ef"; 
+    const SLS_NODE_COLOR = "#a855f7"; 
+    const SLS_LINE_WIDTH = 7.0; 
+
     const HEAT_SENSITIVITY = 1.8;
+    const HEAT_PARTICLES = 45; 
+    const HEAT_RADIUS = 30;
+    const HEAT_JITTER = 20;
+    const HEAT_ALPHA_BASE = 0.05;
     
-    const FACEMESH_COLOR = "#00ffd5"; // Neon Cyan/Green
-    const FACEMESH_ALPHA = 0.85;
-    const FACEMESH_LINE_WIDTH = 1.2;
-    
-    const SLS_LINE_COLOR = "rgba(180, 0, 255, 0.85)"; // Intense Purple
-    const SLS_NODE_COLOR = "rgba(220, 0, 255, 1)";
-    const SLS_LINE_WIDTH = 2.4;
+    const FACEMESH_COLOR = "#00ffff"; 
+    const FACEMESH_LINE_WIDTH = 1.0;
 
     let currentFilter = 'normal';
     let isSLSActive = false;
@@ -262,6 +224,7 @@
     let isPareidoliaActive = false;
     let isAIProcessing = false;
     
+    // MODELOS
     let poseDetector = null;
     let faceMesh = null;
     let poses = [];
@@ -277,6 +240,7 @@
     let pareidoliaInterval = null;
     let audioCtx, micSource, destNode; 
     let lastPingTime = 0;
+    let particleSprite;
 
     const video = document.getElementById('shared-video-element');
     const slsCanvas = document.getElementById('sls-canvas');
@@ -289,6 +253,18 @@
     const detCanvas = document.createElement('canvas');
     detCanvas.width = 192; detCanvas.height = 108; 
     const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
+
+    function initHeatSprite() {
+        const s = document.createElement('canvas'); s.width = 64; s.height = 64;
+        const c = s.getContext('2d');
+        const grad = c.createRadialGradient(32,32,0,32,32,32);
+        grad.addColorStop(0, 'rgba(255, 255, 220, 0.9)');
+        grad.addColorStop(0.2, 'rgba(255, 220, 0, 0.6)');
+        grad.addColorStop(0.5, 'rgba(255, 60, 0, 0.4)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = grad; c.fillRect(0,0,64,64);
+        particleSprite = s;
+    }
 
     function updateProgress(percent, text) {
         document.getElementById('progress-bar').style.width = percent + '%';
@@ -349,14 +325,7 @@
 
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
     async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
-    window.onload = () => {
-        if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
-        setInterval(() => {
-            const d = new Date();
-            const timeStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
-            document.getElementById('clock').innerText = timeStr;
-        }, 1000);
-    };
+    window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
 
     // --- INIT APP ---
     async function initApp() {
@@ -374,13 +343,15 @@
             const stream = await camPromise;
             videoStream = stream; video.srcObject = stream;
             initAudioMix(stream);
-            updateProgress(30, "CÁMARA LISTA");
+            initHeatSprite();
             
             video.play();
+            updateProgress(30, "CÁMARA LISTA");
+            
             document.getElementById('loading').style.display = 'none';
             resize(); renderLoop(); 
             
-            setTimeout(loadModelsBackground, 500);
+            setTimeout(loadModelsBackground, 200);
 
             window.addEventListener('resize', resize);
             setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
@@ -392,20 +363,18 @@
             await tf.setBackend('webgl');
             await tf.ready();
             
-            // 1. MoveNet
             try {
                 poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
                     modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-                    modelUrl: './models/movenet/model.json' 
+                    modelUrl: 'indexeddb://obr-movenet-lightning' 
                 });
             } catch(e) {
                 poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
             }
 
-            // 2. FaceMesh
-            faceMesh = new FaceMesh({locateFile: (file) => `face_mesh/${file}`});
-            // HIGH SENSITIVITY CONFIG
-            faceMesh.setOptions({ maxNumFaces: 3, refineLandmarks: true, minDetectionConfidence: 0.2, minTrackingConfidence: 0.2 });
+            faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+            // MULTIDETECTION (5 FACES) & SENSITIVITY 0.2
+            faceMesh.setOptions({ maxNumFaces: 5, refineLandmarks: true, minDetectionConfidence: AI_THRESHOLD, minTrackingConfidence: AI_THRESHOLD });
             faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
             
             poseDetectionLoop();
@@ -422,7 +391,6 @@
             const t = video.srcObject ? video.srcObject.getVideoTracks()[0].getSettings() : null;
             document.getElementById('res-fps').innerText = `${t.width}x${t.height} | ${frameCount}FPS`;
             
-            // PING CHECK
             if(conn && conn.open) {
                 const nowTs = Date.now();
                 if(nowTs - lastPingTime > 5000) { 
@@ -449,21 +417,35 @@
             heatCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             heatCtx.fillRect(0, 0, heatCanvas.width, heatCanvas.height);
             
-            // Draw Heat CLOUDS
-            heatCtx.globalCompositeOperation = 'source-over';
+            // Draw Heat Ovals
+            heatCtx.globalCompositeOperation = 'screen';
             if(poses.length > 0) {
                 const scaleX = slsCanvas.width / detCanvas.width;
                 const scaleY = slsCanvas.height / detCanvas.height;
                 poses.forEach(pose => {
-                    pose.keypoints.forEach(k => {
-                        if(k.score > 0.2) {
-                            const x = k.x * scaleX; const y = k.y * scaleY;
-                            drawHeatCloud(heatCtx, x, y, HEAT_SENSITIVITY);
+                    const k = pose.keypoints;
+                    const getPt = (name) => { const p = k.find(kp => kp.name === name); return (p && p.score > AI_THRESHOLD) ? {x: p.x*scaleX, y: p.y*scaleY} : null; };
+                    
+                    const limbs = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle'],['left_shoulder','left_hip'],['right_shoulder','right_hip']];
+
+                    limbs.forEach(([a,b]) => {
+                        const p1 = getPt(a); const p2 = getPt(b);
+                        if(p1 && p2) {
+                            const steps = 6;
+                            for(let i=0; i<=steps; i++) {
+                                const t = i/steps;
+                                const ix = p1.x + (p2.x - p1.x) * t;
+                                const iy = p1.y + (p2.y - p1.y) * t;
+                                heatCtx.drawImage(particleSprite, ix - 40, iy - 60, 80, 120);
+                            }
                         }
                     });
+                    
+                    const nose = getPt('nose');
+                    if(nose) heatCtx.drawImage(particleSprite, nose.x - 60, nose.y - 80, 120, 160);
                 });
             }
-            ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'screen'; 
+            ctx.globalAlpha = 0.9; ctx.globalCompositeOperation = 'screen'; 
             ctx.drawImage(heatCanvas, 0, 0); 
             ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
         }
@@ -471,116 +453,87 @@
         // --- SLS (BIOMETRIC) ---
         if(isSLSActive && !isHeatmapActive) {
             ctx.filter = 'none'; 
-            if(poses.length > 0) drawSLS(ctx, poses);
-            if(faces.length > 0) drawFaceMesh3D(ctx, faces, slsCanvas.width, slsCanvas.height);
-        }
-    }
-    
-    // --- NUEVO DRAWING SYSTEM ---
-    
-    function getRenderCoords(x, y, sX, sY, sW, sH) {
-        const canvasX = ((x - sX) / sW) * slsCanvas.width;
-        const canvasY = ((y - sY) / sH) * slsCanvas.height;
-        return { x: canvasX, y: canvasY };
-    }
-
-    function drawHeatCloud(ctx, x, y, intensity = 1) {
-        for (let i = 0; i < HEAT_PARTICLES; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * HEAT_RADIUS;
-            const jitterX = Math.cos(angle) * radius + (Math.random() - 0.5) * HEAT_JITTER;
-            const jitterY = Math.sin(angle) * radius + (Math.random() - 0.5) * HEAT_JITTER;
-    
-            const alpha = HEAT_ALPHA_BASE * intensity * Math.random();
-    
-            ctx.beginPath();
-            ctx.fillStyle = `rgba(255, 60, 0, ${alpha})`;
-            ctx.shadowColor = "rgba(255, 80, 0, 0.8)";
-            ctx.shadowBlur = 18;
-            ctx.arc(x + jitterX, y + jitterY, 6 + Math.random() * 4, 0, Math.PI * 2);
-            ctx.fill();
+            if(poses.length > 0) drawSLS(poses);
+            if(faces.length > 0) drawFaceMesh(faces);
         }
     }
 
-    function drawSLS(ctx, poses) {
-        ctx.lineWidth = SLS_LINE_WIDTH;
-        ctx.strokeStyle = SLS_LINE_COLOR;
-        
+    function drawSLS(poses) {
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
         const scaleX = slsCanvas.width / detCanvas.width;
         const scaleY = slsCanvas.height / detCanvas.height;
+        const pulse = (Math.sin(Date.now() / 150) + 1) / 2;
 
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
             
-            ctx.beginPath(); 
-            edges.forEach(([a,b]) => { 
-                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); 
-                if(p1.score>0.10 && p2.score>0.10) { 
-                    ctx.moveTo(p1.x*scaleX, p1.y*scaleY); 
-                    ctx.lineTo(p2.x*scaleX, p2.y*scaleY); 
-                } 
-            }); 
+            ctx.shadowBlur = 0; ctx.strokeStyle = SLS_LINE_COLOR; ctx.lineWidth = SLS_LINE_WIDTH;
+            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(p1.x*scaleX,p1.y*scaleY); ctx.lineTo(p2.x*scaleX,p2.y*scaleY); } }); ctx.stroke();
+            
+            // CONEXIÓN ROSTRO
+            const faceEdges = [['nose','left_eye'],['nose','right_eye']];
+            ctx.beginPath();
+            faceEdges.forEach(([a,b]) => {
+                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b);
+                if(p1 && p2 && p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) {
+                    ctx.moveTo(p1.x*scaleX, p1.y*scaleY); ctx.lineTo(p2.x*scaleX, p2.y*scaleY);
+                }
+            });
             ctx.stroke();
 
-            // NODOS
+            // CONEXIÓN CUELLO
+            const nose = k.find(p => p.name === 'nose');
+            const lShoulder = k.find(p => p.name === 'left_shoulder');
+            const rShoulder = k.find(p => p.name === 'right_shoulder');
+            if (lShoulder && rShoulder && lShoulder.score > 0.1 && rShoulder.score > 0.1) {
+                const neckX = (lShoulder.x + rShoulder.x) / 2 * scaleX;
+                const neckY = (lShoulder.y + rShoulder.y) / 2 * scaleY;
+                ctx.beginPath();
+                ctx.moveTo(lShoulder.x*scaleX, lShoulder.y*scaleY);
+                ctx.lineTo(neckX, neckY);
+                ctx.lineTo(rShoulder.x*scaleX, rShoulder.y*scaleY);
+                ctx.stroke();
+                if (nose && nose.score > 0.1) {
+                    ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(nose.x*scaleX, nose.y*scaleY); ctx.stroke();
+                }
+            }
+
+            // Puntos Pulsantes
+            ctx.fillStyle = SLS_NODE_COLOR; ctx.shadowBlur = 15; ctx.shadowColor = 'red';
             k.forEach(p => { 
-                if(p.score > 0.10 && !p.name.includes('eye') && !p.name.includes('nose') && !p.name.includes('ear')) {
-                    ctx.beginPath();
-                    ctx.fillStyle = SLS_NODE_COLOR;
-                    ctx.shadowColor = "rgba(200,0,255,0.9)";
-                    ctx.shadowBlur = 14;
-                    ctx.arc(p.x*scaleX, p.y*scaleY, 5.5, 0, Math.PI * 2);
-                    ctx.fill();
+                if(p.score > AI_THRESHOLD && !p.name.includes('ear')) { 
+                    const r = 5 + (pulse * 3);
+                    ctx.beginPath(); ctx.arc(p.x*scaleX, p.y*scaleY, r, 0, 2*Math.PI); ctx.fill(); 
                 } 
             });
+            ctx.shadowBlur = 0;
         });
     }
 
-    function drawFaceMesh3D(ctx, faces, width, height) {
-        const scaleX = width / video.videoWidth; 
-        const scaleY = height / video.videoHeight;
-        
+    function drawFaceMesh(faces) {
+        if(faces.length === 0) return;
+        const scaleX = slsCanvas.width / video.videoWidth; 
+        const scaleY = slsCanvas.height / video.videoHeight;
+
         faces.forEach(face => {
-            const landmarks = face.multiFaceLandmarks ? face.multiFaceLandmarks[0] : face; 
+            const points = face.multiFaceLandmarks ? face.multiFaceLandmarks[0] : face; 
             
-            ctx.strokeStyle = FACEMESH_COLOR;
-            ctx.lineWidth = FACEMESH_LINE_WIDTH;
-            ctx.globalAlpha = FACEMESH_ALPHA;
-        
-            // UNIÓN TOTAL (CONTOUR)
-            ctx.beginPath();
-            landmarks.forEach((p, i) => {
-                const x = p.x * width; // MediaPipe normalized
-                const y = p.y * height;
-                // Simple sequential connection for wireframe effect
-                if (i === 0) ctx.moveTo(x, y);
-                else if(i % 2 === 0) ctx.lineTo(x, y); // Skip for perf
-            });
-            ctx.closePath();
-            ctx.stroke();
-        
-            // EFECTO 3D (Z DEPTH)
-            /* Too heavy for full mesh
-            landmarks.forEach(p => {
-                const x = p.x * width;
-                const y = p.y * height;
-                const z = p.z || 0;
-                ctx.beginPath();
-                ctx.fillStyle = `rgba(0,255,213,${0.6 - z * 2})`;
-                ctx.arc(x, y, 1.6, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            */
+            // PUNTOS DENSOS
+            ctx.fillStyle = '#39ff14'; 
+            for(let i=0; i<points.length; i++) { 
+                 const p = points[i];
+                 ctx.fillRect(p.x * slsCanvas.width, p.y * slsCanvas.height, 2, 2);
+            }
             
-            // BOX
-            const xs = landmarks.map(p => p.x * width); const ys = landmarks.map(p => p.y * height);
+            // TARGET BOX
+            const xs = points.map(p => p.x * slsCanvas.width); 
+            const ys = points.map(p => p.y * slsCanvas.height);
             const minX = Math.min(...xs)-20; const maxX = Math.max(...xs)+20;
             const minY = Math.min(...ys)-30; const maxY = Math.max(...ys)+30;
-            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 2; ctx.shadowBlur = 5; ctx.shadowColor = 'red';
+            
+            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 3; ctx.shadowBlur = 10; ctx.shadowColor = 'red';
             ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
-        
-            ctx.globalAlpha = 1;
         });
     }
 
@@ -589,10 +542,11 @@
             if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) {
                 try { 
                     detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 3, flipHorizontal: false, scoreThreshold: 0.2}); // High Sensitivity
+                    // MULTI POSE (5 PERSONAS) & SENSITIVITY 0.2
+                    poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); 
                 } catch(e){}
             } else { poses = []; }
-            await new Promise(r => setTimeout(r, 40)); // NO FRAME SKIP
+            await new Promise(r => setTimeout(r, 40));
         }
     }
 
@@ -612,9 +566,7 @@
         document.getElementById('connect-modal').classList.remove('active');
         peer = new Peer();
         
-        setInterval(() => {
-            if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); }
-        }, 2000);
+        setInterval(() => { if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); } }, 2000);
 
         peer.on('open', myId => {
             conn = peer.connect(id);
@@ -622,7 +574,6 @@
                 document.getElementById('link-status').innerText = "ONLINE: PRODOCK";
                 document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-green-400 bg-green-900/40 px-2 py-1 rounded border border-green-500 font-bold";
                 conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
-                document.getElementById('signal-ui').className = "signal-bars signal-good";
             });
             conn.on('data', d => {
                 if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
@@ -651,15 +602,19 @@
     function setFilter(f, btn) {
         if(currentFilter === f && f !== 'normal') { setFilter('normal'); return; }
         currentFilter = f;
+        
         isSLSActive = (f === 'sls');
         isHeatmapActive = (f === 'heatmap');
+        
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
+        
         document.body.className = '';
         if(f === 'night') { document.body.classList.add('filter-night-vision'); toggleTorch(true); } else { toggleTorch(false); }
         if(f === 'thermal') document.body.classList.add('filter-thermal');
         if(f === 'urbex') document.body.classList.add('filter-urbex');
         if(f === 'sls') document.body.classList.add('filter-pareidolia');
+
         document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
         if(isPareidoliaActive) togglePareidolia();
     }
