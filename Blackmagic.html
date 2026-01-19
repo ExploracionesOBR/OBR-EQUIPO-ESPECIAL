@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EXPLORACIONES OBR | STUDIO</title>
+    <title>EXPLORACIONES OBR | STUDIO v117 (AUDIO FIX)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -38,9 +38,6 @@
             100% { transform: scale(1); filter: brightness(1) blur(0px); }
         }
         .film-effect { animation: film-transition 0.8s ease-in-out forwards; }
-
-        .water-pop-hide { opacity: 0; transition: opacity 0.5s ease; }
-        .glitch-restore { opacity: 1; transition: opacity 0.5s ease; }
 
         .toast-enter { transform: translateX(100%); opacity: 0; }
         .toast-enter-active { transform: translateX(0); opacity: 1; transition: all 300ms; }
@@ -77,7 +74,10 @@
                 iceServers: [
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+                    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+                    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
                 ],
                 iceCandidatePoolSize: 10,
             }
@@ -123,10 +123,16 @@
             return container ? createPortal(children, container) : null;
         };
 
-        const RemoteAudio = ({ stream, isMuted, volume = 1 }) => {
+        const RemoteAudio = ({ stream, isMuted, globalMute, volume = 1 }) => {
             const audioRef = useRef();
             useEffect(() => { if (audioRef.current && stream) audioRef.current.srcObject = stream; }, [stream]);
-            useEffect(() => { if (audioRef.current) { audioRef.current.volume = volume; audioRef.current.muted = isMuted; } }, [isMuted, volume]);
+            useEffect(() => { 
+                if (audioRef.current) { 
+                    audioRef.current.volume = volume; 
+                    // Mute logic: Si GlobalMute está activo (Intro/Outro/Standby) OR Mute individual está activo.
+                    audioRef.current.muted = globalMute || isMuted; 
+                } 
+            }, [isMuted, globalMute, volume]);
             return <audio ref={audioRef} autoPlay playsInline />;
         };
 
@@ -174,10 +180,8 @@
             if (!activeMedia) return null;
             const src = STUDIO_ASSETS[activeMedia];
             const isBanner = activeMedia === 'banner';
-            // Banner abajo, Video pantalla completa
             const containerStyle = isBanner ? "absolute bottom-0 left-0 w-full h-[150px] z-40 flex items-end justify-center pointer-events-none pb-2" : "absolute inset-0 z-50 bg-black flex items-center justify-center";
             const videoStyle = isBanner ? "w-full h-full object-cover object-center opacity-95" : "w-full h-full object-contain";
-            
             const shouldLoop = activeMedia === 'standby'; 
             
             return (
@@ -190,18 +194,13 @@
                       loop={shouldLoop} 
                       playsInline
                       className={videoStyle} 
-                      onEnded={() => { 
-                          if (!shouldLoop && onFinish) { 
-                              onFinish(); 
-                          } 
-                      }} 
+                      onEnded={() => { if (!shouldLoop && onFinish) { onFinish(); } }} 
                       onError={() => { console.error("Error Video"); if(onFinish) onFinish(); }} 
                     />
                 </div>
             );
         };
 
-        // --- DIRECTOR PANEL (Sin Cambios Lógicos Mayores) ---
         const DirectorPanel = ({ activeCam, conn, onCommand, onPlayLocal, isOffline }) => {
             return (
                 <div className="h-full w-64 bg-[#111] border-l border-neutral-800 flex flex-col animate-in slide-in-from-right duration-300 shrink-0">
@@ -213,7 +212,6 @@
                             <button onClick={() => onPlayLocal('banner')} className="col-span-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs py-2 rounded border border-neutral-600 flex items-center justify-center gap-1"><Layers size={10}/> MOSTRAR BANNER</button>
                         </div>
                     </div>
-                    {/* ... (Resto del panel igual) ... */}
                      <div className="flex-1 overflow-y-auto p-4 space-y-6">
                         {!activeCam ? (
                             <div className="text-center text-neutral-600 py-10"><Aperture size={32} className="mx-auto mb-2 opacity-20" /><p className="text-[10px] font-mono">SELECCIONA CÁMARA</p></div>
@@ -248,10 +246,8 @@
                 </div>
             );
         };
-        // ... (RemoteDirector igual) ...
+        
         const RemoteDirector = ({ onBack }) => {
-            // ... (copia exacta de la v207 para RemoteDirector, sin cambios lógicos necesarios aqui) ...
-            // Para mantener el archivo completo y limpio, simplemente re-renderizo el componente
              const [dockId, setDockId] = useState('');
             const [status, setStatus] = useState('DESCONECTADO');
             const [isConnected, setIsConnected] = useState(false);
@@ -364,7 +360,6 @@
                     </div>
                 );
             }
-            // RENDER COMPLETO DIRECTOR
              return (
                 <div className="min-h-screen bg-black flex flex-col font-sans relative">
                     <ToastContainer notifications={notifications} />
@@ -453,7 +448,7 @@
                 <button onClick={onCreate} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform"><Monitor size={20} /> CREAR ESTUDIO (PC)</button>
                 <div className="h-px bg-[#333] w-full"></div>
                 <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors"><Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)</button>
-                <p className="text-[9px] text-center text-gray-600 mt-2">v115.0 - OBR EQUIPO ESPECIAL</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v117.0 - OBR EQUIPO ESPECIAL</p>
               </div>
             </div>
           );
@@ -483,8 +478,13 @@
           const programIdRef = useRef(null);
           const directorConnRef = useRef(null);
           const obsSocketRef = useRef(null);
-          
           const previewCanvasRef = useRef(document.createElement('canvas'));
+
+          // LOGICA MUTE GLOBAL: SOLO PARA INTRO, OUTRO Y PAUSA (Banner excluido)
+          const isGlobalMuted = useMemo(() => {
+              if (activeMedia === 'intro' || activeMedia === 'outro' || activeMedia === 'standby') return true;
+              return false; // Si es 'banner' o null, retorna false (no mute)
+          }, [activeMedia]);
 
           const notify = (msg, type = 'success') => {
               const id = Date.now();
@@ -492,7 +492,6 @@
               setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
           };
 
-          // --- PRECARGA ASSETS ---
           useEffect(() => {
               Object.values(STUDIO_ASSETS).forEach(src => {
                   const video = document.createElement('video');
@@ -501,17 +500,18 @@
               });
           }, []);
 
-          // --- LOGICA DE BANNER: OCULTAR HUD ---
           useEffect(() => {
+              // Header logic: Ocultar si hay banner o videos full screen
               if (activeMedia === 'banner') setHeaderHidden(true);
-              else if (activeMedia !== 'banner' && activeMedia !== 'intro' && activeMedia !== 'outro') setHeaderHidden(false);
+              else if (activeMedia !== 'banner' && activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby') setHeaderHidden(false);
+              // Si es intro/outro/standby, el MediaOverlay cubre todo, asi que el header da igual que esté o no, pero mejor ocultarlo.
+              if (activeMedia === 'intro' || activeMedia === 'outro' || activeMedia === 'standby') setHeaderHidden(true);
           }, [activeMedia]);
 
           useEffect(() => {
               const interval = setInterval(() => {
                   if (directorConnRef.current && directorConnRef.current.open) {
                       directorConnRef.current.send({ type: 'obs-state-update', state: { streaming: obsStreaming, recording: obsRecording } });
-                      
                       const list = Object.values(camerasRef.current).map(c => {
                           let previewData = null;
                           const videoEl = document.getElementById(`video-${c.id}`);
@@ -522,15 +522,7 @@
                               ctx.drawImage(videoEl, 0, 0, 100, 56);
                               previewData = previewCanvasRef.current.toDataURL('image/jpeg', 0.3);
                           }
-                          return { 
-                              id: c.id, 
-                              name: c.name, 
-                              tally: c.tally, 
-                              hasAI: c.hasAI || false, 
-                              preview: previewData,
-                              ping: Math.floor(Math.random() * 50 + 20),
-                              netQuality: 'BUENA'
-                          };
+                          return { id: c.id, name: c.name, tally: c.tally, hasAI: c.hasAI || false, preview: previewData, ping: Math.floor(Math.random() * 50 + 20), netQuality: 'BUENA' };
                       });
                       directorConnRef.current.send({ type: 'camera-list-update', cameras: list });
                   }
@@ -541,7 +533,7 @@
           useEffect(() => { camerasRef.current = cameras; }, [cameras]);
           useEffect(() => { programIdRef.current = programId; }, [programId]);
 
-          // OBS Websocket (Igual que antes)
+          // OBS Websocket
           useEffect(() => {
               let ws; let reconnectInt;
               const connectOBS = () => {
@@ -562,9 +554,7 @@
               if (obsSocketRef.current && obsSocketRef.current.readyState === WebSocket.OPEN) {
                   const reqId = Math.random().toString(36).substring(7);
                   obsSocketRef.current.send(JSON.stringify({ op: 6, d: { requestType: requestType, requestId: reqId } }));
-              } else {
-                  notify("OBS no está conectado", "error");
-              }
+              } else { notify("OBS no está conectado", "error"); }
           };
 
           useEffect(() => {
@@ -584,9 +574,6 @@
                         notify("Director Móvil Conectado");
                     }
                     if (data.type === 'director-cmd') handleDirectorCommand(data);
-                    
-                    // --- AUXILIAR DIGITAL DE AUDIO ---
-                    // Recibe el texto de la cámara y lo habla localmente en el Prodock
                     if (data.type === 'ai-speech') {
                         if ('speechSynthesis' in window) {
                             window.speechSynthesis.cancel();
@@ -609,7 +596,6 @@
           }, []); 
 
           const handleDirectorCommand = (cmd) => {
-              // ... (Igual que antes) ...
               if (cmd.category === 'obs') {
                   if (cmd.action === 'start-stream') sendObsCommand('StartStream');
                   if (cmd.action === 'stop-stream') sendObsCommand('StopStream');
@@ -639,7 +625,6 @@
               return () => window.removeEventListener('remote-mix', handler);
           }); 
 
-          // ... (Funciones auxiliares updateCameraState, removeCamera, etc. iguales) ...
           const updateCameraState = (peerId, newData) => { setCameras(prev => ({ ...prev, [peerId]: { ...(prev[peerId] || {}), ...newData } })); };
           const removeCamera = (peerId) => { setCameras(prev => { const n = { ...prev }; delete n[peerId]; return n; }); if (programId === peerId) setProgramId(null); if (previewId === peerId) setPreviewId(null); };
           const deleteCamera = (id, e) => { e.stopPropagation(); if(confirm("¿Eliminar cámara?")) { if(cameras[id]?.conn) cameras[id].conn.close(); removeCamera(id); } };
@@ -659,7 +644,7 @@
              if (programId && cameras[programId]?.conn) cameras[programId].conn.send({ type: 'cmd', action: 'reset' });
              if (newId && cameras[newId]?.conn) cameras[newId].conn.send({ type: 'cmd', action: 'reset' });
              setProgramId(newId); setPreviewId(null); sendTallyUpdate(newId, null); setActiveMedia(null); 
-             // Al salir de media, HUD visible (salvo que sea otro video)
+             // Si quitamos el mute, debemos asegurar que el header se muestre si no hay media activo
              setHeaderHidden(false);
           };
 
@@ -673,38 +658,27 @@
           
           const toggleMute = (id, e) => { e.stopPropagation(); setAudioState(prev => ({ ...prev, [id]: { ...prev[id], muted: !prev[id]?.muted } })); };
           
-          // --- LOGICA INTELIGENTE DE FINALIZACIÓN DE VIDEO ---
           const handleMediaFinish = () => {
               if (activeMedia === 'intro') {
-                  // Lógica específica para INTRO -> CÁMARA
                   let target = previewId; 
-                  
-                  // Si no hay preview, buscar cámara PRINCIPAL o CAM 1
                   if (!target) {
                       const cams = Object.values(camerasRef.current);
                       const principal = cams.find(c => c.name.toUpperCase().includes('PRINCIPAL') || c.name.toUpperCase().includes('CAM 1'));
                       if (principal) target = principal.id;
-                      else if (cams.length > 0) target = cams[0].id; // Fallback a la primera
+                      else if (cams.length > 0) target = cams[0].id; 
                   }
-
                   if (target) {
-                      // Simular AUTO MIX
-                      setPreviewId(null); // Limpiar previo para que no moleste
+                      setPreviewId(null); 
                       setInTransition(true); 
-                      // Transición
                       setTimeout(() => {
                           setProgramId(target);
                           sendTallyUpdate(target, null);
                           setActiveMedia(null);
-                          setHeaderHidden(false); // Mostrar HUD
+                          setHeaderHidden(false); 
                           setInTransition(false);
                       }, 500); 
-                  } else {
-                      // Si no hay cámaras, volver a negro/standby
-                      setActiveMedia(null);
-                  }
+                  } else { setActiveMedia(null); }
               } else {
-                  // Comportamiento normal para otros videos
                   let target = previewId || programId;
                   if(!target) {
                       const cams = Object.values(camerasRef.current);
@@ -718,11 +692,12 @@
           const camList = Object.values(cameras);
           const previewCam = previewId ? cameras[previewId] : null;
 
-          // ... (Renderizado sin cambios mayores, solo integración) ...
           return (
             <div className="h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden relative">
                 <ToastContainer notifications={notifications} />
-                {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} volume={1} />)}
+                {/* COMPONENTE DE AUDIO REMOTO CON LA LÓGICA DE MUTE GLOBAL */}
+                {camList.map(cam => <RemoteAudio key={cam.id} stream={cam.stream} isMuted={audioState[cam.id]?.muted} globalMute={isGlobalMuted} volume={1} />)}
+                
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-between px-4 z-10 shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2"><img src="./obr-logo.png" className="w-6 h-6 object-contain" alt="OBR" /><span className="font-bold text-white tracking-widest text-xs">EXPLORACIONES OBR</span></div>
@@ -746,7 +721,6 @@
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/50 relative overflow-hidden flex flex-col shadow-[0_0_30px_rgba(200,0,0,0.1)]">
                                  <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-wider shadow-md flex items-center gap-1"><span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> PROGRAM</div>
                                  
-                                 {/* PROGRAM CONTENT */}
                                  {!obsWindowOpen && (
                                     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
                                         <div className={`w-full h-full absolute inset-0 ${inTransition ? 'film-effect' : ''}`}>
@@ -754,7 +728,6 @@
                                                 <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-cover absolute inset-0" />
                                             ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
                                         </div>
-                                        {/* HUD se oculta si headerHidden es true (banner activo) */}
                                         {activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby' && <BroadcastHUD hidden={headerHidden} />}
                                         <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
                                     </div>
@@ -763,7 +736,6 @@
                                  {obsWindowOpen && <div className="flex items-center justify-center h-full text-neutral-600 text-xs font-mono">MOSTRANDO EN VENTANA EXTERNA...</div>}
                             </div>
                         </div>
-                        {/* ... (Botones de corte y lista de cámaras igual) ... */}
                         <div className="h-16 bg-[#111] rounded-xl border border-neutral-800 flex items-center justify-center gap-8 px-8 shadow-inner shrink-0">
                              <button onClick={handleCut} className="h-10 px-8 bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded shadow-lg border-b-4 border-neutral-900 active:translate-y-0.5 active:border-b-0 transition-all text-xs tracking-wider">CUT</button>
                              <div className="h-full w-px bg-neutral-800 mx-4"></div>
@@ -797,7 +769,6 @@
                     <DirectorPanel activeCam={previewCam} conn={previewCam?.conn} onCommand={sendCommand} onPlayLocal={handlePlayLocal} />
                 </div>
                 {obsWindowOpen && (<OBSWindow onClose={() => setObsWindowOpen(false)}>
-                    {/* Contenido en ventana OBS externo, replica la lógica de Program */}
                     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
                         <div className={`w-full h-full absolute inset-0 ${inTransition ? 'film-effect' : ''}`}>
                             {programId && cameras[programId]?.stream ? (
@@ -811,7 +782,7 @@
             </div>
           );
         };
-        // ... (App y render igual) ...
+
         const App = () => {
           const isPeerReady = usePeerJS();
           const [mode, setMode] = useState('lobby'); 
@@ -823,6 +794,7 @@
             </>
           );
         };
+
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
