@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v207 (GLITCH HUD)</title> 
+    <title>CAMARA OBR v208 (HIGH FIDELITY)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -40,27 +40,31 @@
         
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
         #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+        
+        /* CORRECCIÓN DE ZOOM: Usar contain o cover con cuidado */
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
+        
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
         #heatmap-buffer { display: none; }
 
         /* --- ESTILOS DE FILTROS CSS --- */
+        /* Nota: Se aplican al body para afectar a toda la escena */
         
-        .filter-night-vision #main-view-area::after { 
+        body.filter-night-vision #main-view-area::after { 
             content: ""; position: absolute; inset: 0; pointer-events: none; 
             background: radial-gradient(circle, rgba(50, 255, 50, 0.05) 50%, rgba(0,20,0,0.6) 95%); 
             background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px); 
             z-index: 5; mix-blend-mode: overlay; 
         }
         
-        .filter-urbex #main-view-area::after { 
+        body.filter-urbex #main-view-area::after { 
             content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; 
             box-shadow: inset 0 0 150px rgba(20,10,5,0.6); 
             mix-blend-mode: multiply; 
         }
         
-        .filter-heatmap #sls-canvas { filter: none; } 
-        .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
+        body.filter-heatmap #sls-canvas { filter: none; } 
+        body.filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
         /* UI */
         #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
@@ -71,72 +75,27 @@
         
         /* HEADER V207: FONDO ELIMINADO + EFECTO GLITCH */
         #live-header-container { 
-            position: absolute; 
-            top: 20px; 
-            left: 20px; 
-            display: flex; 
-            align-items: center; 
-            gap: 12px; 
-            z-index: 60; 
-            pointer-events: none;
-            
-            /* Fondo eliminado */
-            background: transparent;
-            padding: 0;
-            
-            /* Escala reducida */
-            transform: scale(0.85);
-            transform-origin: top left;
-
-            /* Animación de Glitch aplicada al contenedor */
+            position: absolute; top: 20px; left: 20px; display: flex; align-items: center; gap: 12px; z-index: 60; pointer-events: none;
+            background: transparent; padding: 0; transform: scale(0.85); transform-origin: top left;
             animation: hudGlitch 4s infinite linear;
         }
 
-        /* Animación de Glitch Tecnológico */
         @keyframes hudGlitch {
             0% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: none; }
             92% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: none; }
             93% { transform: scale(0.85) translate(-2px, 1px); opacity: 0.8; filter: hue-rotate(90deg); }
             94% { transform: scale(0.85) translate(2px, -1px); opacity: 1; filter: none; }
-            95% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: sepia(100%) saturate(300%) hue-rotate(-50deg); } /* Flash Rojo/Naranja */
+            95% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: sepia(100%) saturate(300%) hue-rotate(-50deg); } 
             96% { transform: scale(0.85) translate(-1px, 2px); opacity: 0.9; filter: none; }
             97% { transform: scale(0.85) skewX(5deg); }
             98% { transform: scale(0.85) skewX(0deg); }
             100% { transform: scale(0.85) translate(0, 0); opacity: 1; }
         }
 
-        #header-logo { 
-            width: 40px; 
-            height: 40px; 
-            object-fit: contain; 
-            filter: drop-shadow(0 0 5px rgba(255,0,0,0.6)); /* Sombra roja para resaltar sin fondo */
-        }
-
-        #header-text-col { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center;
-        }
-
-        #header-title { 
-            color: #ffffff; 
-            font-family: 'Orbitron', sans-serif; 
-            font-weight: 800; 
-            font-size: 0.9rem; 
-            letter-spacing: 1px; 
-            line-height: 1.1; 
-            text-shadow: 2px 2px 0px rgba(0,0,0,0.8); /* Sombra dura para legibilidad */
-        }
-
-        #header-time { 
-            color: #ff3333; 
-            font-family: 'Share Tech Mono', monospace; 
-            font-size: 0.75rem; 
-            margin-top: 2px; 
-            letter-spacing: 1px; 
-            opacity: 1; 
-            text-shadow: 1px 1px 0px black;
-        }
+        #header-logo { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(255,0,0,0.6)); }
+        #header-text-col { display: flex; flex-direction: column; justify-content: center; }
+        #header-title { color: #ffffff; font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 0.9rem; letter-spacing: 1px; line-height: 1.1; text-shadow: 2px 2px 0px rgba(0,0,0,0.8); }
+        #header-time { color: #ff3333; font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; margin-top: 2px; letter-spacing: 1px; opacity: 1; text-shadow: 1px 1px 0px black; }
 
         #ai-vision-header { position: absolute; top: 90px; left: 20px; display: flex; flex-direction: column; align-items: flex-start; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 60; width: 220px; }
         #ai-vision-header.active { opacity: 1; }
@@ -244,7 +203,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v207</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v208 (HIGH-FI)</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -273,58 +232,26 @@
 
 <script>
     /* =============================================================
-       --- CONFIGURACIÓN DE FILTROS (EDITAR AQUÍ) ---
-       Copia este bloque para guardar tu configuración personalizada.
+       --- CONFIGURACIÓN DE FILTROS ---
        ============================================================= */
     const FILTER_CONFIG = {
-        NOCT: {
-            grayscale: '100%',
-            sepia: '100%',
-            hueRotate: '90deg',
-            saturate: '100%',  // Verde suave para que se vea la persona
-            contrast: '1.1',   
-            brightness: '1.0'  
-        },
-        NEG: { 
-            invert: '100%',
-            grayscale: '100%',
-            contrast: '200%',
-            brightness: '1.0'
-        },
-        URBEX: {
-            sepia: '50%',      
-            hueRotate: '-15deg',
-            saturate: '90%',
-            contrast: '1.1',   
-            brightness: '0.8'  
-        },
-        HEATMAP: {
-            contrast: '1.2',
-            brightness: '0.7'
-        }
+        NOCT: { grayscale: '100%', sepia: '100%', hueRotate: '90deg', saturate: '100%', contrast: '1.1', brightness: '1.0' },
+        NEG: { invert: '100%', grayscale: '100%', contrast: '200%', brightness: '1.0' },
+        URBEX: { sepia: '50%', hueRotate: '-15deg', saturate: '90%', contrast: '1.1', brightness: '0.8' },
+        HEATMAP: { contrast: '1.2', brightness: '0.7' }
     };
-    /* ============================================================= */
-
 
     let API_KEY = localStorage.getItem("obr_gemini_key") || "";
     let CURRENT_AI_MODEL = localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025";
     let GEMINI_API_KEY = API_KEY; 
 
-    // CONFIG VISUAL (V207 - HUD GLITCH)
-    const AI_THRESHOLD = 0.02; // Sensibilidad Global
-    
+    // CONFIG VISUAL
+    const AI_THRESHOLD = 0.02; 
     const SLS_LINE_COLOR = "#d946ef"; 
     const SLS_NODE_COLOR = "#a855f7"; 
     const SLS_LINE_WIDTH = 7.0; 
-
     const HEAT_SENSITIVITY = 0.02;
     const HEAT_PARTICLES = 45; 
-    const HEAT_RADIUS = 30;
-    const HEAT_JITTER = 20;
-    const HEAT_ALPHA_BASE = 0.05;
-    
-    const FACEMESH_COLOR = "#39ff14"; 
-    const FACEMESH_LINE_WIDTH = 1.0;
 
     let currentFilter = 'normal';
     let isSLSActive = false;
@@ -369,7 +296,6 @@
         const s = document.createElement('canvas'); s.width = 128; s.height = 128;
         const c = s.getContext('2d');
         const grad = c.createRadialGradient(64,64,0,64,64,64);
-        // Rojo Nucleo -> Amarillo -> Naranja -> Azul Blanquecino
         grad.addColorStop(0, 'rgba(255, 0, 0, 0.8)');
         grad.addColorStop(0.3, 'rgba(255, 165, 0, 0.6)');
         grad.addColorStop(0.6, 'rgba(255, 255, 0, 0.4)');
@@ -383,7 +309,10 @@
         document.getElementById('progress-text').innerText = text;
     }
 
+    // --- AUDIO MIX (MODIFICADO) ---
     function initAudioMix(stream) {
+        // Ya no mezclamos el audio de la IA aquí para evitar feedback
+        // Solo mezclamos el micrófono ambiente
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
@@ -460,79 +389,80 @@
         btn.disabled = true; btn.style.display = 'none'; pBar.style.display = 'block';
         
         try {
-            updateProgress(10, "INICIANDO CÁMARA...");
-            const camPromise = navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true }, 
-                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 }, advanced: [{ focusMode: "continuous" }] } 
-            }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } }));
+            updateProgress(10, "CONFIGURANDO SENSOR...");
+            
+            // CONSTRAINTS MEJORADOS PARA CALIDAD Y ESTABILIDAD
+            const constraints = {
+                audio: { 
+                    echoCancellation: true, 
+                    noiseSuppression: true,
+                    autoGainControl: true
+                },
+                video: { 
+                    facingMode: 'environment', 
+                    // Solicitamos resolución más alta posible para evitar zoom digital excesivo
+                    width: { ideal: 3840 }, 
+                    height: { ideal: 2160 },
+                    frameRate: { ideal: 60, min: 30 },
+                    // Configuración avanzada
+                    advanced: [
+                        { focusMode: "continuous" },
+                        { whiteBalanceMode: "continuous-auto" },
+                        { exposureMode: "continuous" }
+                    ]
+                }
+            };
+
+            const camPromise = navigator.mediaDevices.getUserMedia(constraints)
+                .catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } })); // Fallback
             
             const stream = await camPromise;
+            
+            // Intento de aplicar estabilización si está disponible
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            if (capabilities && capabilities.focusMode) {
+                try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch(e){}
+            }
+            
             videoStream = stream; video.srcObject = stream;
             initAudioMix(stream);
             initHeatSprite();
             
             video.play();
-            updateProgress(30, "CÁMARA LISTA");
+            updateProgress(30, "SENSOR ACTIVO");
             
             document.getElementById('loading').style.display = 'none';
-            
-            // INICIAR RELOJ
-            setInterval(updateClock, 1000);
-            updateClock();
-            
+            setInterval(updateClock, 1000); updateClock();
             resize(); renderLoop(); 
-            
             setTimeout(loadModelsBackground, 200);
-
             window.addEventListener('resize', resize);
             setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
+
         } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
     }
 
     async function warmUpAI() {
-        console.log("Iniciando calentamiento IA...");
         try {
-            detCtx.fillRect(0,0,192,108); // Limpiar con negro
-            
-            if(poseDetector) {
-                for(let i=0; i<5; i++) {
-                    await poseDetector.estimatePoses(detCanvas, {maxPoses: 1, flipHorizontal: false});
-                    await new Promise(r => setTimeout(r, 20)); 
-                }
-            }
-            if(faceMesh) {
-                for(let i=0; i<5; i++) {
-                   try { await faceMesh.send({image: detCanvas}); } catch(e){}
-                   await new Promise(r => setTimeout(r, 20));
-                }
-            }
-            console.log("Calentamiento IA completado.");
-        } catch(e) { console.log("Warmup error (no critico)", e); }
+            detCtx.fillRect(0,0,192,108);
+            if(poseDetector) { for(let i=0; i<3; i++) { await poseDetector.estimatePoses(detCanvas, {maxPoses: 1, flipHorizontal: false}); await new Promise(r => setTimeout(r, 20)); } }
+            if(faceMesh) { for(let i=0; i<3; i++) { try { await faceMesh.send({image: detCanvas}); } catch(e){} await new Promise(r => setTimeout(r, 20)); } }
+        } catch(e) {}
     }
 
     async function loadModelsBackground() {
         try {
-            await tf.setBackend('webgl');
-            await tf.ready();
-            
+            await tf.setBackend('webgl'); await tf.ready();
             try {
-                poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
-                    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-                    modelUrl: 'indexeddb://obr-movenet-lightning' 
-                });
+                poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING, modelUrl: 'indexeddb://obr-movenet-lightning' });
             } catch(e) {
                 poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
             }
-
             faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
             faceMesh.setOptions({ maxNumFaces: 5, refineLandmarks: true, minDetectionConfidence: AI_THRESHOLD, minTrackingConfidence: AI_THRESHOLD });
             faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
-            
-            // PRE-ACTIVACION OCULTA (WARM UP)
             await warmUpAI();
-            
-            poseDetectionLoop();
-            faceDetectionLoop();
+            poseDetectionLoop(); faceDetectionLoop();
         } catch(e) { console.error("AI Load Fail:", e); }
     }
 
@@ -544,20 +474,14 @@
         if (now - lastTime >= 1000) {
             const t = video.srcObject ? video.srcObject.getVideoTracks()[0].getSettings() : null;
             document.getElementById('res-fps').innerText = `${t.width}x${t.height} | ${frameCount}FPS`;
-            
             if(conn && conn.open) {
                 const nowTs = Date.now();
-                if(nowTs - lastPingTime > 5000) { 
-                    document.getElementById('signal-ui').className = "signal-bars signal-bad";
-                    document.getElementById('ping-val').innerText = "TIMEOUT";
-                }
+                if(nowTs - lastPingTime > 5000) { document.getElementById('signal-ui').className = "signal-bars signal-bad"; document.getElementById('ping-val').innerText = "TIMEOUT"; }
             }
             frameCount = 0; lastTime = now;
         }
 
-        // --- APLICACIÓN DE FILTROS DESDE CONFIGURACIÓN ---
         ctx.filter = 'none'; 
-        
         if(currentFilter === 'night') {
             const c = FILTER_CONFIG.NOCT;
             ctx.filter = `grayscale(${c.grayscale}) sepia(${c.sepia}) hue-rotate(${c.hueRotate}) saturate(${c.saturate}) contrast(${c.contrast}) brightness(${c.brightness})`;
@@ -575,53 +499,30 @@
             ctx.filter = `contrast(${c.contrast}) brightness(${c.brightness})`;
         }
 
-        // --- SMART CROP CALCULATION ---
-        // Esto previene que la imagen se estire o aplaste
+        // SMART CROP
         if (video.videoWidth > 0 && slsCanvas.width > 0) {
             const vRatio = video.videoWidth / video.videoHeight;
             const cRatio = slsCanvas.width / slsCanvas.height;
-            
-            if (cRatio > vRatio) {
-                // Pantalla más ancha que video: cortar arriba/abajo
-                drawW = slsCanvas.width;
-                drawH = slsCanvas.width / vRatio;
-                drawX = 0;
-                drawY = (slsCanvas.height - drawH) / 2;
-            } else {
-                // Pantalla más alta que video: cortar lados
-                drawW = slsCanvas.height * vRatio;
-                drawH = slsCanvas.height;
-                drawX = (slsCanvas.width - drawW) / 2;
-                drawY = 0;
-            }
-            // Dibujar video proporcional
+            if (cRatio > vRatio) { drawW = slsCanvas.width; drawH = slsCanvas.width / vRatio; drawX = 0; drawY = (slsCanvas.height - drawH) / 2; } 
+            else { drawW = slsCanvas.height * vRatio; drawH = slsCanvas.height; drawX = (slsCanvas.width - drawW) / 2; drawY = 0; }
             ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, drawX, drawY, drawW, drawH);
         } else {
-            // Fallback si no hay dimensiones
             drawW = slsCanvas.width; drawH = slsCanvas.height; drawX = 0; drawY = 0;
         }
         
-        // --- HEATMAP MODE ---
         if(isHeatmapActive) {
-            // Heatmap ignora filtros de color base para mostrar colores reales del calor
             ctx.filter = 'none'; 
-            
             heatCtx.globalCompositeOperation = 'destination-out';
             heatCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             heatCtx.fillRect(0, 0, heatCanvas.width, heatCanvas.height);
-            
-            // Draw Heat CLOUDS
             heatCtx.globalCompositeOperation = 'source-over';
             if(poses.length > 0) {
                 const mapX = (val) => (val / detCanvas.width) * drawW + drawX;
                 const mapY = (val) => (val / detCanvas.height) * drawH + drawY;
-                
                 poses.forEach(pose => {
                     const k = pose.keypoints;
                     const getPt = (name) => { const p = k.find(kp => kp.name === name); return (p && p.score > AI_THRESHOLD) ? {x: mapX(p.x), y: mapY(p.y)} : null; };
-                    
                     const limbs = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle'],['left_shoulder','left_hip'],['right_shoulder','right_hip']];
-
                     limbs.forEach(([a,b]) => {
                         const p1 = getPt(a); const p2 = getPt(b);
                         if(p1 && p2) {
@@ -637,12 +538,8 @@
                             }
                         }
                     });
-                    
                     const nose = getPt('nose');
-                    if(nose) {
-                         const size = 150;
-                         heatCtx.drawImage(particleSprite, nose.x - size/2, nose.y - size/2, size, size);
-                    }
+                    if(nose) { const size = 150; heatCtx.drawImage(particleSprite, nose.x - size/2, nose.y - size/2, size, size); }
                 });
             }
             ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'screen'; 
@@ -650,10 +547,7 @@
             ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
         }
 
-        // --- SLS (BIOMETRIC) ---
         if(isSLSActive && !isHeatmapActive) {
-            // SLS ya usa el filtro aplicado por 'ctx.filter' arriba (si es nocturno, etc)
-            // No reseteamos filtro aqui para que el SLS se dibuje SOBRE la imagen filtrada
             if(poses.length > 0) drawSLS(poses);
             if(faces.length > 0) drawFaceMesh(faces);
         }
@@ -661,94 +555,50 @@
 
     function drawSLS(poses) {
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        // Mismo helper de mapeo
         const mapX = (val) => (val / detCanvas.width) * drawW + drawX;
         const mapY = (val) => (val / detCanvas.height) * drawH + drawY;
         const pulse = (Math.sin(Date.now() / 150) + 1) / 2;
-
         poses.forEach(pose => {
             const k = pose.keypoints;
             const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
-            
             ctx.shadowBlur = 0; ctx.strokeStyle = SLS_LINE_COLOR; ctx.lineWidth = SLS_LINE_WIDTH;
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(mapX(p1.x),mapY(p1.y)); ctx.lineTo(mapX(p2.x),mapY(p2.y)); } }); ctx.stroke();
-            
             const faceEdges = [['nose','left_eye'],['nose','right_eye']];
             ctx.beginPath();
-            faceEdges.forEach(([a,b]) => {
-                const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b);
-                if(p1 && p2 && p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) {
-                    ctx.moveTo(mapX(p1.x), mapY(p1.y)); ctx.lineTo(mapX(p2.x), mapY(p2.y));
-                }
-            });
-            ctx.stroke();
-
-            const nose = k.find(p => p.name === 'nose');
-            const lShoulder = k.find(p => p.name === 'left_shoulder');
-            const rShoulder = k.find(p => p.name === 'right_shoulder');
+            faceEdges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1 && p2 && p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(mapX(p1.x), mapY(p1.y)); ctx.lineTo(mapX(p2.x), mapY(p2.y)); } }); ctx.stroke();
+            const nose = k.find(p => p.name === 'nose'); const lShoulder = k.find(p => p.name === 'left_shoulder'); const rShoulder = k.find(p => p.name === 'right_shoulder');
             if (lShoulder && rShoulder && lShoulder.score > 0.1 && rShoulder.score > 0.1) {
-                const neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2;
-                const neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
-                ctx.beginPath();
-                ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y));
-                ctx.lineTo(neckX, neckY);
-                ctx.lineTo(mapX(rShoulder.x), mapY(rShoulder.y));
-                ctx.stroke();
-                if (nose && nose.score > 0.1) {
-                    ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke();
-                }
+                const neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; const neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
+                ctx.beginPath(); ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); ctx.lineTo(neckX, neckY); ctx.lineTo(mapX(rShoulder.x), mapY(rShoulder.y)); ctx.stroke();
+                if (nose && nose.score > 0.1) { ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); }
             }
-
             ctx.fillStyle = SLS_NODE_COLOR; ctx.shadowBlur = 15; ctx.shadowColor = 'red';
-            k.forEach(p => { 
-                if(p.score > AI_THRESHOLD && !p.name.includes('ear')) { 
-                    const r = 5 + (pulse * 3);
-                    ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), r, 0, 2*Math.PI); ctx.fill(); 
-                } 
-            });
+            k.forEach(p => { if(p.score > AI_THRESHOLD && !p.name.includes('ear')) { const r = 5 + (pulse * 3); ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), r, 0, 2*Math.PI); ctx.fill(); } });
             ctx.shadowBlur = 0;
         });
     }
 
     function drawFaceMesh(faces) {
         if(faces.length === 0) return;
-        // FaceMesh devuelve normalizado (0..1), es mas facil: multiplicar por drawW y sumar drawX
         faces.forEach(face => {
             const points = face.multiFaceLandmarks ? face.multiFaceLandmarks[0] : face; 
             ctx.fillStyle = '#39ff14'; 
-            for(let i=0; i<points.length; i++) { 
-                 const p = points[i];
-                 ctx.fillRect(p.x * drawW + drawX, p.y * drawH + drawY, 2, 2);
-            }
-            
-            const xs = points.map(p => p.x * drawW + drawX); 
-            const ys = points.map(p => p.y * drawH + drawY);
-            const minX = Math.min(...xs)-20; const maxX = Math.max(...xs)+20;
-            const minY = Math.min(...ys)-30; const maxY = Math.max(...ys)+30;
-            
-            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 3; ctx.shadowBlur = 10; ctx.shadowColor = 'red';
-            ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
+            for(let i=0; i<points.length; i++) { const p = points[i]; ctx.fillRect(p.x * drawW + drawX, p.y * drawH + drawY, 2, 2); }
+            const xs = points.map(p => p.x * drawW + drawX); const ys = points.map(p => p.y * drawH + drawY);
+            const minX = Math.min(...xs)-20; const maxX = Math.max(...xs)+20; const minY = Math.min(...ys)-30; const maxY = Math.max(...ys)+30;
+            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 3; ctx.shadowBlur = 10; ctx.shadowColor = 'red'; ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
         });
     }
 
     async function poseDetectionLoop() {
         while(true) {
-            if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) {
-                try { 
-                    detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height);
-                    poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); 
-                } catch(e){}
-            } else { poses = []; }
-            await new Promise(r => setTimeout(r, 40));
+            if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) { try { detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height); poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); } catch(e){} } else { poses = []; } await new Promise(r => setTimeout(r, 40));
         }
     }
 
     async function faceDetectionLoop() {
         while(true) {
-            if(faceMesh && isSLSActive && !isHeatmapActive) {
-                try { await faceMesh.send({image: video}); } catch(e) {}
-            } else { faces = []; }
-            await new Promise(r => setTimeout(r, 100)); 
+            if(faceMesh && isSLSActive && !isHeatmapActive) { try { await faceMesh.send({image: video}); } catch(e) {} } else { faces = []; } await new Promise(r => setTimeout(r, 100)); 
         }
     }
 
@@ -757,44 +607,18 @@
         const id = document.getElementById('dock-id').value.trim();
         if(!id) return;
         document.getElementById('connect-modal').classList.remove('active');
-        
-        // --- TUNEL VPN PRODOCK (ICE CONFIG) ---
-        // Configuración agresiva de servidores STUN para atravesar NATs moviles (4G/5G)
-        peer = new Peer(null, {
-            debug: 1,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
-                ]
-            }
-        });
-        
+        peer = new Peer(null, { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
         setInterval(() => { if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); } }, 2000);
-
         peer.on('open', myId => {
             conn = peer.connect(id);
             conn.on('open', () => {
-                // INDICADOR VISUAL DE VPN
                 document.getElementById('link-status').innerText = "ENLACE: VPN PRODOCK (SEGURO)";
                 document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-cyan-400 bg-cyan-900/40 px-2 py-1 rounded border border-cyan-500 font-bold shadow-[0_0_10px_cyan]";
                 conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
             });
             conn.on('data', d => {
                 if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
-                if(d.type === 'pong') {
-                    lastPingTime = Date.now();
-                    const latency = Date.now() - d.time;
-                    document.getElementById('ping-val').innerText = latency + "ms";
-                    const sig = document.getElementById('signal-ui');
-                    if(latency < 100) sig.className = "signal-bars signal-good";
-                    else if(latency < 300) sig.className = "signal-bars signal-ok";
-                    else sig.className = "signal-bars signal-bad";
-                }
+                if(d.type === 'pong') { lastPingTime = Date.now(); const latency = Date.now() - d.time; document.getElementById('ping-val').innerText = latency + "ms"; const sig = document.getElementById('signal-ui'); if(latency < 100) sig.className = "signal-bars signal-good"; else if(latency < 300) sig.className = "signal-bars signal-ok"; else sig.className = "signal-bars signal-bad"; }
                 if(d.type === 'cmd') {
                     if(d.action === 'filter') setFilter(d.value); 
                     if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
@@ -818,7 +642,9 @@
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
         
-        document.body.className = '';
+        // FIX: Asegurar que se limpia todo y se aplica al BODY correctamente
+        document.body.classList.remove('filter-night-vision', 'filter-thermal', 'filter-urbex', 'filter-pareidolia', 'filter-heatmap');
+        
         if(f === 'night') { document.body.classList.add('filter-night-vision'); toggleTorch(true); } else { toggleTorch(false); }
         if(f === 'thermal') document.body.classList.add('filter-thermal');
         if(f === 'urbex') document.body.classList.add('filter-urbex');
@@ -831,10 +657,7 @@
     async function toggleTorch(enable) {
         if (!videoStream) return;
         const track = videoStream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        if (capabilities.torch) {
-            try { await track.applyConstraints({ advanced: [{ torch: enable }] }); } catch (e) {}
-        }
+        try { await track.applyConstraints({ advanced: [{ torch: enable }] }); } catch (e) {}
     }
 
     function speakText(t) { 
@@ -845,6 +668,12 @@
             u.onend = () => { setTimeout(() => { isAIProcessing = false; }, 2000); };
             u.onerror = () => { isAIProcessing = false; };
             window.speechSynthesis.speak(u);
+            
+            // --- AUXILIAR DIGITAL ---
+            // Envía el texto a Prodock para que lo hable allá también (sin estática)
+            if(conn && conn.open) {
+                conn.send({ type: 'ai-speech', text: t });
+            }
         } else { setTimeout(() => { isAIProcessing = false; }, 2000); }
     }
 
@@ -921,8 +750,6 @@
     }
 
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
-    // --- DOWNLOADER OFFLINE ---
-    // (Funciones antiguas eliminadas como se solicitó)
 </script>
 </body>
 </html>
