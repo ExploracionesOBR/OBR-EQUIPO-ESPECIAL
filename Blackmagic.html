@@ -167,6 +167,37 @@
             );
         };
 
+        const MediaOverlay = ({ activeMedia, onFinish }) => {
+            if (!activeMedia) return null;
+            const src = STUDIO_ASSETS[activeMedia];
+            const isBanner = activeMedia === 'banner';
+            const containerStyle = isBanner ? "absolute bottom-[50px] left-0 w-full h-[135px] z-40 flex items-center justify-center pointer-events-none" : "absolute inset-0 z-50 bg-black flex items-center justify-center";
+            const videoStyle = isBanner ? "w-full h-full object-cover object-center opacity-90" : "w-full h-full object-contain";
+            
+            // FIX: Bucle estrictamente desactivado para todo excepto standby
+            const shouldLoop = activeMedia === 'standby'; 
+            
+            return (
+                <div className={containerStyle}>
+                    <video 
+                      key={activeMedia} 
+                      id="studio-media-player" 
+                      src={src} 
+                      autoPlay 
+                      loop={shouldLoop} 
+                      playsInline
+                      className={videoStyle} 
+                      onEnded={() => { 
+                          if (!shouldLoop && onFinish) { 
+                              onFinish(); 
+                          } 
+                      }} 
+                      onError={() => { console.error("Error Video"); if(onFinish) onFinish(); }} 
+                    />
+                </div>
+            );
+        };
+
         const DirectorPanel = ({ activeCam, conn, onCommand, onPlayLocal, isOffline }) => {
             return (
                 <div className="h-full w-64 bg-[#111] border-l border-neutral-800 flex flex-col animate-in slide-in-from-right duration-300 shrink-0">
@@ -686,34 +717,6 @@
           };
           
           const toggleMute = (id, e) => { e.stopPropagation(); setAudioState(prev => ({ ...prev, [id]: { ...prev[id], muted: !prev[id]?.muted } })); };
-
-          const camList = Object.values(cameras);
-          const previewCam = previewId ? cameras[previewId] : null;
-
-          const MediaOverlay = () => {
-              if (!activeMedia) return null;
-              const src = STUDIO_ASSETS[activeMedia];
-              const isBanner = activeMedia === 'banner';
-              const containerStyle = isBanner ? "absolute bottom-[50px] left-0 w-full h-[135px] z-40 flex items-center justify-center pointer-events-none" : "absolute inset-0 z-50 bg-black flex items-center justify-center";
-              const videoStyle = isBanner ? "w-full h-full object-cover object-center opacity-90" : "w-full h-full object-contain";
-              
-              const loop = activeMedia === 'standby'; 
-              
-              return (
-                  <div className={containerStyle}>
-                      <video 
-                        key={activeMedia} 
-                        id="studio-media-player" 
-                        src={src} 
-                        autoPlay 
-                        loop={loop} 
-                        className={videoStyle} 
-                        onEnded={() => { if(!loop && activeMedia !== 'standby') { setActiveMedia(null); handleMediaFinish(); } }} 
-                        onError={() => { setActiveMedia(null); notify("Falta video: " + src, "error"); }} 
-                      />
-                  </div>
-              );
-          };
           
           const handleMediaFinish = () => {
               let target = previewId || programId;
@@ -724,17 +727,8 @@
               if(target) switchProgram(target);
           };
 
-          const ProgramContent = () => (
-              <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
-                  <div className={`w-full h-full absolute inset-0 ${inTransition ? 'film-effect' : ''}`}>
-                      {programId && cameras[programId]?.stream ? (
-                          <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-cover absolute inset-0" />
-                      ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
-                  </div>
-                  {activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby' && <BroadcastHUD hidden={headerHidden} />}
-                  <MediaOverlay />
-              </div>
-          );
+          const camList = Object.values(cameras);
+          const previewCam = previewId ? cameras[previewId] : null;
 
           return (
             <div className="h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden relative">
@@ -762,7 +756,20 @@
                             </div>
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/50 relative overflow-hidden flex flex-col shadow-[0_0_30px_rgba(200,0,0,0.1)]">
                                  <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold tracking-wider shadow-md flex items-center gap-1"><span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> PROGRAM</div>
-                                 {!obsWindowOpen && <ProgramContent />}
+                                 
+                                 {/* PROGRAM CONTENT RENDER DIRECTO */}
+                                 {!obsWindowOpen && (
+                                    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+                                        <div className={`w-full h-full absolute inset-0 ${inTransition ? 'film-effect' : ''}`}>
+                                            {programId && cameras[programId]?.stream ? (
+                                                <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-cover absolute inset-0" />
+                                            ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
+                                        </div>
+                                        {activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby' && <BroadcastHUD hidden={headerHidden} />}
+                                        <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
+                                    </div>
+                                 )}
+
                                  {obsWindowOpen && <div className="flex items-center justify-center h-full text-neutral-600 text-xs font-mono">MOSTRANDO EN VENTANA EXTERNA...</div>}
                             </div>
                         </div>
@@ -798,7 +805,17 @@
                     </div>
                     <DirectorPanel activeCam={previewCam} conn={previewCam?.conn} onCommand={sendCommand} onPlayLocal={handlePlayLocal} />
                 </div>
-                {obsWindowOpen && (<OBSWindow onClose={() => setObsWindowOpen(false)}><ProgramContent /></OBSWindow>)}
+                {obsWindowOpen && (<OBSWindow onClose={() => setObsWindowOpen(false)}>
+                    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+                        <div className={`w-full h-full absolute inset-0 ${inTransition ? 'film-effect' : ''}`}>
+                            {programId && cameras[programId]?.stream ? (
+                                <VideoDisplay stream={cameras[programId].stream} className="w-full h-full object-cover absolute inset-0" />
+                            ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
+                        </div>
+                        {activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby' && <BroadcastHUD hidden={headerHidden} />}
+                        <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
+                    </div>
+                </OBSWindow>)}
             </div>
           );
         };
