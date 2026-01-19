@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v208 (HIGH FIDELITY)</title> 
+    <title>CAMARA OBR v209 (LINK RESTORED)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -203,7 +203,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v208 (HIGH-FI)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v209 (LINK RESTORED)</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -222,7 +222,12 @@
     <div id="settings-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
             <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
-            <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
+            
+            <a href="https://aistudio.google.com/api-keys" target="_blank" class="flex items-center justify-center w-full border border-blue-900 text-blue-400 py-2 rounded hover:bg-blue-900/20 text-xs font-bold mb-4 transition-colors">
+                <i class="fas fa-external-link-alt mr-2"></i> CONSEGUIR GEMINI API KEY
+            </a>
+
+            <input type="password" id="api-key-internal" placeholder="PEGAR API KEY AQUÍ" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
             <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
             
             <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
