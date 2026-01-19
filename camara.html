@@ -3,16 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#000000">
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
-    <title>CAMARA OBR v209 (LINK RESTORED)</title> 
+    <title>CAMARA OBR v212 (OPTIMIZED & HUD SYNC)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
-    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM","short_name":"OBR","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -36,66 +32,33 @@
         * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; outline: none; touch-action: none; }
         :root { --hud-primary: #ff3333; }
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
-        @media screen and (orientation: portrait) { body { transform: rotate(90deg); transform-origin: bottom left; position: absolute; top: -100vw; left: 0; height: 100vw; width: 100vh; } }
         
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
-        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s; will-change: transform; }
         
-        /* CORRECCIÓN DE ZOOM: Usar contain o cover con cuidado */
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
         
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
         #heatmap-buffer { display: none; }
 
-        /* --- ESTILOS DE FILTROS CSS --- */
-        /* Nota: Se aplican al body para afectar a toda la escena */
-        
-        body.filter-night-vision #main-view-area::after { 
-            content: ""; position: absolute; inset: 0; pointer-events: none; 
-            background: radial-gradient(circle, rgba(50, 255, 50, 0.05) 50%, rgba(0,20,0,0.6) 95%); 
-            background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px); 
-            z-index: 5; mix-blend-mode: overlay; 
-        }
-        
-        body.filter-urbex #main-view-area::after { 
-            content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; 
-            box-shadow: inset 0 0 150px rgba(20,10,5,0.6); 
-            mix-blend-mode: multiply; 
-        }
-        
+        /* ORIENTATION LOCK */
+        #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; }
+        @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
+
+        /* FILTROS CSS */
+        body.filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(50, 255, 50, 0.05) 50%, rgba(0,20,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px); z-index: 5; mix-blend-mode: overlay; }
+        body.filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(20,10,5,0.6); mix-blend-mode: multiply; }
         body.filter-heatmap #sls-canvas { filter: none; } 
         body.filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
-        /* UI */
         #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
         .interactive { pointer-events: auto; }
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: border-width 0.2s; z-index: 50; pointer-events: none; }
         #tally-border.program { border: 12px solid red; box-shadow: inset 0 0 40px red; }
         #tally-border.preview { border: 12px solid #00ff00; }
         
-        /* HEADER V207: FONDO ELIMINADO + EFECTO GLITCH */
-        #live-header-container { 
-            position: absolute; top: 20px; left: 20px; display: flex; align-items: center; gap: 12px; z-index: 60; pointer-events: none;
-            background: transparent; padding: 0; transform: scale(0.85); transform-origin: top left;
-            animation: hudGlitch 4s infinite linear;
-        }
-
-        @keyframes hudGlitch {
-            0% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: none; }
-            92% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: none; }
-            93% { transform: scale(0.85) translate(-2px, 1px); opacity: 0.8; filter: hue-rotate(90deg); }
-            94% { transform: scale(0.85) translate(2px, -1px); opacity: 1; filter: none; }
-            95% { transform: scale(0.85) translate(0, 0); opacity: 1; filter: sepia(100%) saturate(300%) hue-rotate(-50deg); } 
-            96% { transform: scale(0.85) translate(-1px, 2px); opacity: 0.9; filter: none; }
-            97% { transform: scale(0.85) skewX(5deg); }
-            98% { transform: scale(0.85) skewX(0deg); }
-            100% { transform: scale(0.85) translate(0, 0); opacity: 1; }
-        }
-
-        #header-logo { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(255,0,0,0.6)); }
-        #header-text-col { display: flex; flex-direction: column; justify-content: center; }
-        #header-title { color: #ffffff; font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 0.9rem; letter-spacing: 1px; line-height: 1.1; text-shadow: 2px 2px 0px rgba(0,0,0,0.8); }
-        #header-time { color: #ff3333; font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; margin-top: 2px; letter-spacing: 1px; opacity: 1; text-shadow: 1px 1px 0px black; }
+        /* HEADER (Ahora solo se usa para calcular posición, se dibuja en canvas) */
+        #live-header-container { display: none; } 
 
         #ai-vision-header { position: absolute; top: 90px; left: 20px; display: flex; flex-direction: column; align-items: flex-start; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 60; width: 220px; }
         #ai-vision-header.active { opacity: 1; }
@@ -130,13 +93,18 @@
         .signal-bad .bar:nth-child(1) { background: #ff0000; }
         
         #ai-feedback-overlay { display: none; }
-        .scan-rect { position: absolute; border: 2px solid rgba(0, 255, 65, 0.9); box-shadow: 0 0 15px rgba(0, 255, 65, 0.6); z-index: 55; pointer-events: none; background: rgba(0, 255, 0, 0.05); animation: scanBlinkBlur 0.8s forwards ease-out; }
-        @keyframes scanBlinkBlur { 0% { opacity: 0; transform: scale(0.8); filter: blur(0px); } 30% { opacity: 1; transform: scale(1); filter: blur(0px); border-color: #00ff41; } 80% { opacity: 1; transform: scale(1); filter: blur(2px); border-color: red; } 100% { opacity: 0; transform: scale(1.2); filter: blur(8px); border-color: transparent; } }
         #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; box-shadow: 0 0 15px #00ff00; transition: transform 0.3s, opacity 0.3s; }
         #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
     </style>
 </head>
 <body>
+
+    <div id="orientation-lock">
+        <img src="obr-logo.png" class="w-32 h-32 object-contain mb-6 animate-pulse drop-shadow-[0_0_20px_rgba(255,0,0,0.6)]">
+        <i class="fas fa-mobile-alt text-4xl mb-4 rotate-90 text-red-500"></i>
+        <h2 class="text-xl font-bold font-orbitron tracking-widest text-red-500 mb-2">SISTEMA PAUSADO</h2>
+        <p class="text-sm font-mono text-gray-400">COLOCA EN HORIZONTAL</p>
+    </div>
 
     <div id="main-view-area">
         <div id="zoom-container">
@@ -146,21 +114,10 @@
     </div>
     
     <canvas id="heatmap-buffer"></canvas>
-    <div id="scan-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-50"></div>
     <div id="touch-surface"></div>
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        
-        <!-- HEADER AGRUPADO -->
-        <div id="live-header-container">
-            <img src="obr-logo.png" id="header-logo" alt="">
-            <div id="header-text-col">
-                <div id="header-title">EXPLORACIONES OBR</div>
-                <div id="header-time">-- - -- - -- | --:--:--</div>
-            </div>
-        </div>
-
         <div id="tally-border"></div>
         <div id="sls-pip">● SLS ACTIVO</div>
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
@@ -178,13 +135,12 @@
             </div>
         </div>
 
-        <!-- MENUS -->
         <div id="menu-left" class="menu-container left-side">
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('heatmap', this)"><i class="fas fa-fire-alt"></i></div><div class="menu-label">HEAT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('heatmap', this)" id="btn-heatmap"><i class="fas fa-fire-alt"></i></div><div class="menu-label">HEAT</div></div>
         </div>
         <div id="menu-right" class="menu-container right-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
@@ -196,20 +152,17 @@
             <img id="ai-mini-img" alt="Scan">
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
-        <div id="ai-feedback-overlay"></div>
     </div>
 
-    <!-- PANTALLA CARGA -->
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v209 (LINK RESTORED)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v212 (OPTIMIZED)</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
     </div>
 
-    <!-- MODALS -->
     <div id="connect-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center shadow-[0_0_30px_rgba(0,255,255,0.1)]">
             <h3 class="text-cyan-400 mb-6 text-xl tracking-widest font-bold">ENLACE PRODOCK</h3>
@@ -222,23 +175,17 @@
     <div id="settings-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
             <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
-            
             <a href="https://aistudio.google.com/api-keys" target="_blank" class="flex items-center justify-center w-full border border-blue-900 text-blue-400 py-2 rounded hover:bg-blue-900/20 text-xs font-bold mb-4 transition-colors">
                 <i class="fas fa-external-link-alt mr-2"></i> CONSEGUIR GEMINI API KEY
             </a>
-
             <input type="password" id="api-key-internal" placeholder="PEGAR API KEY AQUÍ" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
             <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
-            
             <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
         </div>
     </div>
 
 <script>
-    /* =============================================================
-       --- CONFIGURACIÓN DE FILTROS ---
-       ============================================================= */
     const FILTER_CONFIG = {
         NOCT: { grayscale: '100%', sepia: '100%', hueRotate: '90deg', saturate: '100%', contrast: '1.1', brightness: '1.0' },
         NEG: { invert: '100%', grayscale: '100%', contrast: '200%', brightness: '1.0' },
@@ -250,13 +197,11 @@
     let CURRENT_AI_MODEL = localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025";
     let GEMINI_API_KEY = API_KEY; 
 
-    // CONFIG VISUAL
+    // CONFIGURACIÓN AI / VISUAL
     const AI_THRESHOLD = 0.02; 
     const SLS_LINE_COLOR = "#d946ef"; 
     const SLS_NODE_COLOR = "#a855f7"; 
     const SLS_LINE_WIDTH = 7.0; 
-    const HEAT_SENSITIVITY = 0.02;
-    const HEAT_PARTICLES = 45; 
 
     let currentFilter = 'normal';
     let isSLSActive = false;
@@ -269,9 +214,9 @@
     let faceMesh = null;
     let poses = [];
     let faces = [];
+    let lastAITime = 0; // Para limitar FPS de IA
     
     let zoomLevel = 1; 
-    let zoomStage = 0; 
     let peer, conn;
     let deferredPrompt;
     let menuTimer;
@@ -281,8 +226,9 @@
     let audioCtx, micSource, destNode; 
     let lastPingTime = 0;
     let particleSprite;
+    let logoImage = new Image(); logoImage.src = 'obr-logo.png';
+    let timeString = "--:--:--";
     
-    // RENDERING VARS (Smart Crop)
     let drawW, drawH, drawX, drawY;
 
     const video = document.getElementById('shared-video-element');
@@ -314,10 +260,7 @@
         document.getElementById('progress-text').innerText = text;
     }
 
-    // --- AUDIO MIX (MODIFICADO) ---
     function initAudioMix(stream) {
-        // Ya no mezclamos el audio de la IA aquí para evitar feedback
-        // Solo mezclamos el micrófono ambiente
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
@@ -369,7 +312,6 @@
         hideMenus();
     }
 
-    // --- RELOJ ---
     function updateClock() {
         const now = new Date();
         const d = String(now.getDate()).padStart(2, '0');
@@ -378,16 +320,13 @@
         const h = String(now.getHours()).padStart(2, '0');
         const min = String(now.getMinutes()).padStart(2, '0');
         const s = String(now.getSeconds()).padStart(2, '0');
-        const str = `${d} - ${m} - ${y} | ${h}:${min}:${s}`;
-        const el = document.getElementById('header-time');
-        if(el) el.innerText = str;
+        timeString = `${d} - ${m} - ${y} | ${h}:${min}:${s}`;
     }
 
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; document.getElementById('pwa-btn').style.display = 'inline-block'; });
-    async function installPWA() { if(deferredPrompt) deferredPrompt.prompt(); }
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; });
     window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
 
-    // --- INIT APP ---
+    // --- INIT APP (OPTIMIZADO PARA TEMPERATURA) ---
     async function initApp() {
         const btn = document.querySelector('.load-btn');
         const pBar = document.getElementById('progress-container');
@@ -396,34 +335,22 @@
         try {
             updateProgress(10, "CONFIGURANDO SENSOR...");
             
-            // CONSTRAINTS MEJORADOS PARA CALIDAD Y ESTABILIDAD
+            // RESOLUCIÓN REDUCIDA A 720p PARA EVITAR SOBRECALENTAMIENTO
             const constraints = {
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: true,
-                    autoGainControl: true
-                },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
                 video: { 
                     facingMode: 'environment', 
-                    // Solicitamos resolución más alta posible para evitar zoom digital excesivo
-                    width: { ideal: 3840 }, 
-                    height: { ideal: 2160 },
-                    frameRate: { ideal: 60, min: 30 },
-                    // Configuración avanzada
-                    advanced: [
-                        { focusMode: "continuous" },
-                        { whiteBalanceMode: "continuous-auto" },
-                        { exposureMode: "continuous" }
-                    ]
+                    width: { ideal: 1280 }, // 720p es mucho mas fresco
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }, // 30 FPS estable es mejor que 60 cayendo a 10
+                    advanced: [{ focusMode: "continuous" }, { whiteBalanceMode: "continuous-auto" }, { exposureMode: "continuous" }]
                 }
             };
 
             const camPromise = navigator.mediaDevices.getUserMedia(constraints)
-                .catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } })); // Fallback
+                .catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } })); 
             
             const stream = await camPromise;
-            
-            // Intento de aplicar estabilización si está disponible
             const track = stream.getVideoTracks()[0];
             const capabilities = track.getCapabilities();
             if (capabilities && capabilities.focusMode) {
@@ -441,7 +368,12 @@
             setInterval(updateClock, 1000); updateClock();
             resize(); renderLoop(); 
             setTimeout(loadModelsBackground, 200);
-            window.addEventListener('resize', resize);
+            
+            window.addEventListener('resize', () => {
+                clearTimeout(window.resizeTimer);
+                window.resizeTimer = setTimeout(resize, 200);
+            });
+            
             setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
 
         } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
@@ -467,14 +399,55 @@
             faceMesh.setOptions({ maxNumFaces: 5, refineLandmarks: true, minDetectionConfidence: AI_THRESHOLD, minTrackingConfidence: AI_THRESHOLD });
             faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
             await warmUpAI();
-            poseDetectionLoop(); faceDetectionLoop();
+            aiLoop(); // BUCLE AI SEPARADO
         } catch(e) { console.error("AI Load Fail:", e); }
     }
 
-    function resize() { slsCanvas.width = window.innerWidth; slsCanvas.height = window.innerHeight; heatCanvas.width = window.innerWidth; heatCanvas.height = window.innerHeight; }
+    function resize() { 
+        slsCanvas.width = window.innerWidth; 
+        slsCanvas.height = window.innerHeight; 
+        heatCanvas.width = window.innerWidth; 
+        heatCanvas.height = window.innerHeight; 
+    }
+
+    // --- NUEVO SISTEMA DE DIBUJO DE HUD EN CANVAS (TRANSMITE EN VIDEO) ---
+    function drawHUD(c) {
+        c.save();
+        // Escala del HUD
+        const scale = 0.85;
+        const x = 20; const y = 20;
+        
+        // Simular Glitch leve
+        const jitterX = Math.random() > 0.95 ? (Math.random() - 0.5) * 5 : 0;
+        
+        c.translate(x + jitterX, y);
+        c.scale(scale, scale);
+        
+        // Logo
+        if (logoImage.complete) {
+            c.shadowColor = "rgba(255,0,0,0.6)"; c.shadowBlur = 10;
+            c.drawImage(logoImage, 0, 0, 40, 40);
+        }
+        
+        // Texto Titulo
+        c.fillStyle = "#ffffff";
+        c.font = "800 16px 'Orbitron', sans-serif";
+        c.shadowColor = "rgba(0,0,0,0.8)"; c.shadowBlur = 0; c.shadowOffsetX = 2; c.shadowOffsetY = 2;
+        c.fillText("EXPLORACIONES OBR", 52, 20);
+        
+        // Texto Hora
+        c.fillStyle = "#ff3333";
+        c.font = "14px 'Share Tech Mono', monospace";
+        c.shadowOffsetX = 1; c.shadowOffsetY = 1;
+        c.fillText(timeString, 52, 38);
+        
+        c.restore();
+    }
 
     function renderLoop() {
         requestAnimationFrame(renderLoop);
+        if(window.innerHeight > window.innerWidth) return; // Pausa en vertical
+
         const now = performance.now(); frameCount++;
         if (now - lastTime >= 1000) {
             const t = video.srcObject ? video.srcObject.getVideoTracks()[0].getSettings() : null;
@@ -487,19 +460,17 @@
         }
 
         ctx.filter = 'none'; 
+        // Aplicar filtros visuales al contexto (esto afecta lo que ve el usuario local Y lo que se envía por stream)
         if(currentFilter === 'night') {
             const c = FILTER_CONFIG.NOCT;
             ctx.filter = `grayscale(${c.grayscale}) sepia(${c.sepia}) hue-rotate(${c.hueRotate}) saturate(${c.saturate}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        }
-        if(currentFilter === 'thermal') {
+        } else if(currentFilter === 'thermal') {
             const c = FILTER_CONFIG.NEG;
             ctx.filter = `invert(${c.invert}) grayscale(${c.grayscale}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        }
-        if(currentFilter === 'urbex') {
+        } else if(currentFilter === 'urbex') {
             const c = FILTER_CONFIG.URBEX;
             ctx.filter = `sepia(${c.sepia}) hue-rotate(${c.hueRotate}) saturate(${c.saturate}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        }
-        if(currentFilter === 'heatmap') {
+        } else if(currentFilter === 'heatmap') {
             const c = FILTER_CONFIG.HEATMAP;
             ctx.filter = `contrast(${c.contrast}) brightness(${c.brightness})`;
         }
@@ -515,6 +486,7 @@
             drawW = slsCanvas.width; drawH = slsCanvas.height; drawX = 0; drawY = 0;
         }
         
+        // Heatmap
         if(isHeatmapActive) {
             ctx.filter = 'none'; 
             heatCtx.globalCompositeOperation = 'destination-out';
@@ -526,25 +498,12 @@
                 const mapY = (val) => (val / detCanvas.height) * drawH + drawY;
                 poses.forEach(pose => {
                     const k = pose.keypoints;
-                    const getPt = (name) => { const p = k.find(kp => kp.name === name); return (p && p.score > AI_THRESHOLD) ? {x: mapX(p.x), y: mapY(p.y)} : null; };
-                    const limbs = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle'],['left_shoulder','left_hip'],['right_shoulder','right_hip']];
-                    limbs.forEach(([a,b]) => {
-                        const p1 = getPt(a); const p2 = getPt(b);
-                        if(p1 && p2) {
-                            const steps = 8;
-                            for(let i=0; i<=steps; i++) {
-                                const t = i/steps;
-                                const ix = p1.x + (p2.x - p1.x) * t;
-                                const iy = p1.y + (p2.y - p1.y) * t;
-                                const jx = (Math.random() - 0.5) * 60;
-                                const jy = (Math.random() - 0.5) * 60;
-                                const size = 80 + Math.random() * 50;
-                                heatCtx.drawImage(particleSprite, ix + jx - size/2, iy + jy - size/2, size, size);
-                            }
-                        }
+                    k.forEach(p => {
+                         if(p.score > AI_THRESHOLD) {
+                             const px = mapX(p.x); const py = mapY(p.y);
+                             heatCtx.drawImage(particleSprite, px - 60, py - 60, 120, 120);
+                         }
                     });
-                    const nose = getPt('nose');
-                    if(nose) { const size = 150; heatCtx.drawImage(particleSprite, nose.x - size/2, nose.y - size/2, size, size); }
                 });
             }
             ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'screen'; 
@@ -552,10 +511,15 @@
             ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
         }
 
+        // SLS
         if(isSLSActive && !isHeatmapActive) {
             if(poses.length > 0) drawSLS(poses);
             if(faces.length > 0) drawFaceMesh(faces);
         }
+
+        // DIBUJAR HUD SOBRE EL VIDEO (SIN FILTROS DE COLOR)
+        ctx.filter = 'none';
+        drawHUD(ctx);
     }
 
     function drawSLS(poses) {
@@ -568,9 +532,6 @@
             const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
             ctx.shadowBlur = 0; ctx.strokeStyle = SLS_LINE_COLOR; ctx.lineWidth = SLS_LINE_WIDTH;
             ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(mapX(p1.x),mapY(p1.y)); ctx.lineTo(mapX(p2.x),mapY(p2.y)); } }); ctx.stroke();
-            const faceEdges = [['nose','left_eye'],['nose','right_eye']];
-            ctx.beginPath();
-            faceEdges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1 && p2 && p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(mapX(p1.x), mapY(p1.y)); ctx.lineTo(mapX(p2.x), mapY(p2.y)); } }); ctx.stroke();
             const nose = k.find(p => p.name === 'nose'); const lShoulder = k.find(p => p.name === 'left_shoulder'); const rShoulder = k.find(p => p.name === 'right_shoulder');
             if (lShoulder && rShoulder && lShoulder.score > 0.1 && rShoulder.score > 0.1) {
                 const neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; const neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
@@ -595,15 +556,24 @@
         });
     }
 
-    async function poseDetectionLoop() {
+    // BUCLE DE IA LIMITADO (THROTTLE) PARA REDUCIR CALENTAMIENTO
+    async function aiLoop() {
         while(true) {
-            if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) { try { detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height); poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); } catch(e){} } else { poses = []; } await new Promise(r => setTimeout(r, 40));
-        }
-    }
+            const now = Date.now();
+            if (now - lastAITime > 100) { // Max 10 calculos por segundo
+                if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) { 
+                    try { 
+                        detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height); 
+                        poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); 
+                    } catch(e){} 
+                } else { poses = []; }
 
-    async function faceDetectionLoop() {
-        while(true) {
-            if(faceMesh && isSLSActive && !isHeatmapActive) { try { await faceMesh.send({image: video}); } catch(e) {} } else { faces = []; } await new Promise(r => setTimeout(r, 100)); 
+                if(faceMesh && isSLSActive && !isHeatmapActive) { 
+                    try { await faceMesh.send({image: video}); } catch(e) {} 
+                } else { faces = []; }
+                lastAITime = now;
+            }
+            await new Promise(r => setTimeout(r, 20)); // Pequeña pausa
         }
     }
 
@@ -612,7 +582,23 @@
         const id = document.getElementById('dock-id').value.trim();
         if(!id) return;
         document.getElementById('connect-modal').classList.remove('active');
-        peer = new Peer(null, { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
+        
+        // --- ICE SERVERS (TURN) GRATUITOS PARA CONECTAR ENTRE REDES ---
+        peer = new Peer(null, { 
+            debug: 1, 
+            config: { 
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }, 
+                    { urls: 'stun:stun1.l.google.com:19302' }, 
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    // Open Relay (Free TURN)
+                    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+                    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+                    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+                ] 
+            } 
+        });
+        
         setInterval(() => { if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); } }, 2000);
         peer.on('open', myId => {
             conn = peer.connect(id);
@@ -625,8 +611,18 @@
                 if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
                 if(d.type === 'pong') { lastPingTime = Date.now(); const latency = Date.now() - d.time; document.getElementById('ping-val').innerText = latency + "ms"; const sig = document.getElementById('signal-ui'); if(latency < 100) sig.className = "signal-bars signal-good"; else if(latency < 300) sig.className = "signal-bars signal-ok"; else sig.className = "signal-bars signal-bad"; }
                 if(d.type === 'cmd') {
-                    if(d.action === 'filter') setFilter(d.value); 
-                    if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia();
+                    // --- CORRECCIÓN DE CONTROL REMOTO ---
+                    // En lugar de llamar setFilter directamente, SIMULAMOS el click en el botón local
+                    // Esto asegura que todos los estados (botones activos, clases de body, flash) se actualicen igual que si lo tocara el usuario
+                    if(d.action === 'filter') {
+                        const btnMap = { 'night': 'btn-night', 'thermal': 'btn-thermal', 'urbex': 'btn-urbex', 'sls': 'btn-sls', 'heatmap': 'btn-heatmap', 'normal': null };
+                        if(d.value === 'normal') setFilter('normal');
+                        else if(btnMap[d.value]) {
+                            // Llamamos a setFilter pasando el elemento del botón real para activar el estado visual
+                            setFilter(d.value, document.getElementById(btnMap[d.value]));
+                        }
+                    }
+                    if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia(document.getElementById('btn-ia'));
                     if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
                 }
             });
@@ -647,9 +643,9 @@
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
         if(btn && f !== 'normal') btn.classList.add('active-state');
         
-        // FIX: Asegurar que se limpia todo y se aplica al BODY correctamente
         document.body.classList.remove('filter-night-vision', 'filter-thermal', 'filter-urbex', 'filter-pareidolia', 'filter-heatmap');
         
+        // IMPORTANTE: Al aplicar la clase, el CSS 'body.filter-night-vision #main-view-area::after' se activa
         if(f === 'night') { document.body.classList.add('filter-night-vision'); toggleTorch(true); } else { toggleTorch(false); }
         if(f === 'thermal') document.body.classList.add('filter-thermal');
         if(f === 'urbex') document.body.classList.add('filter-urbex');
@@ -674,8 +670,6 @@
             u.onerror = () => { isAIProcessing = false; };
             window.speechSynthesis.speak(u);
             
-            // --- AUXILIAR DIGITAL ---
-            // Envía el texto a Prodock para que lo hable allá también (sin estática)
             if(conn && conn.open) {
                 conn.send({ type: 'ai-speech', text: t });
             }
@@ -686,8 +680,6 @@
         if(!GEMINI_API_KEY) return; 
         if(isAIProcessing || window.speechSynthesis.speaking) return; 
         isAIProcessing = true; 
-        const header = document.getElementById('live-header-container');
-        if(header) { header.classList.remove('glitch-restore'); header.classList.add('water-pop-hide'); }
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
         canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
@@ -707,7 +699,7 @@
             const aiHeader = document.getElementById('ai-vision-header'); const aiImg = document.getElementById('ai-mini-img'); const aiText = document.getElementById('ai-mini-text');
             aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiHeader.classList.add('active');
             speakText(text); 
-        } catch(e) { console.log(e); isAIProcessing = false; if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); } } 
+        } catch(e) { console.log(e); isAIProcessing = false; } 
     }
 
     function togglePareidolia(btnElement) { 
@@ -723,9 +715,8 @@
             document.body.classList.remove('filter-pareidolia'); 
             speakText("VISIÓN DESACTIVADA"); clearInterval(pareidoliaInterval); 
             isAIProcessing = false; 
-            const header = document.getElementById('live-header-container'); const aiHeader = document.getElementById('ai-vision-header');
+            const aiHeader = document.getElementById('ai-vision-header');
             if(aiHeader) aiHeader.classList.remove('active'); 
-            if(header) { header.classList.remove('water-pop-hide'); header.classList.add('glitch-restore'); }
         } 
         showMenus(); 
     }
