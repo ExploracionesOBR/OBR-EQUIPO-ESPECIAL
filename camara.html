@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR v212 (OPTIMIZED & HUD SYNC)</title> 
+    <title>CAMARA OBR v213 (TAILSCALE READY)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -157,7 +157,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v212 (OPTIMIZED)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v213 (TAILSCALE READY)</p>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="progress-text">ESPERANDO INICIO...</div>
         <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -181,6 +181,31 @@
             <input type="password" id="api-key-internal" placeholder="PEGAR API KEY AQUÍ" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
             <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
             <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
+
+            <!-- NUEVA SECCION RED PRIVADA -->
+            <div class="mt-4 pt-4 border-t border-gray-800">
+                <h3 class="text-cyan-500 font-bold text-xs mb-3 flex items-center gap-2">
+                    <i class="fas fa-network-wired"></i> RED PRIVADA (TAILSCALE / LAN)
+                </h3>
+                <div class="flex items-center gap-2 mb-3">
+                    <input type="checkbox" id="use-local-server" class="accent-cyan-500 cursor-pointer" onclick="toggleLocalServerInputs()"/>
+                    <label for="use-local-server" class="text-xs text-gray-400 cursor-pointer">USAR SERVIDOR PROPIO</label>
+                </div>
+                
+                <div id="local-server-config" class="space-y-2 hidden opacity-50 transition-opacity duration-300">
+                    <input type="text" id="local-host" placeholder="IP HOST (Ej: 100.x.x.x)" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase">
+                    <div class="flex gap-2">
+                        <input type="number" id="local-port" placeholder="PUERTO (9000)" class="w-1/2 bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono">
+                        <input type="text" id="local-path" placeholder="RUTA (/myapp)" class="w-1/2 bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono">
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                         <input type="checkbox" id="local-secure" class="accent-cyan-500">
+                         <label for="local-secure" class="text-[10px] text-gray-500">USAR SSL (HTTPS/WSS)</label>
+                    </div>
+                </div>
+                <button onclick="saveNetworkSettings()" class="w-full mt-2 border border-cyan-800 text-cyan-500 py-2 rounded hover:bg-cyan-900/20 text-xs font-bold">GUARDAR CONFIG. RED</button>
+            </div>
+
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
         </div>
     </div>
@@ -324,7 +349,46 @@
     }
 
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; });
-    window.onload = () => { if(API_KEY) document.getElementById('api-key-internal').value = API_KEY; };
+    window.onload = () => { 
+        if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
+        loadNetworkSettings(); // Cargar config de red
+    };
+
+    // --- CARGAR / GUARDAR SETTINGS DE RED ---
+    function loadNetworkSettings() {
+        const useLocal = localStorage.getItem('obr_use_local') === 'true';
+        document.getElementById('use-local-server').checked = useLocal;
+        if(useLocal) {
+            document.getElementById('local-server-config').classList.remove('hidden');
+            setTimeout(() => document.getElementById('local-server-config').classList.remove('opacity-50'), 50);
+        }
+        
+        document.getElementById('local-host').value = localStorage.getItem('obr_local_host') || '';
+        document.getElementById('local-port').value = localStorage.getItem('obr_local_port') || '9000';
+        document.getElementById('local-path').value = localStorage.getItem('obr_local_path') || '/';
+        document.getElementById('local-secure').checked = localStorage.getItem('obr_local_secure') === 'true';
+    }
+
+    function toggleLocalServerInputs() {
+        const chk = document.getElementById('use-local-server');
+        const div = document.getElementById('local-server-config');
+        if(chk.checked) {
+            div.classList.remove('hidden');
+            setTimeout(() => div.classList.remove('opacity-50'), 50);
+        } else {
+            div.classList.add('opacity-50');
+            setTimeout(() => div.classList.add('hidden'), 300);
+        }
+    }
+
+    function saveNetworkSettings() {
+        localStorage.setItem('obr_use_local', document.getElementById('use-local-server').checked);
+        localStorage.setItem('obr_local_host', document.getElementById('local-host').value.trim());
+        localStorage.setItem('obr_local_port', document.getElementById('local-port').value.trim());
+        localStorage.setItem('obr_local_path', document.getElementById('local-path').value.trim());
+        localStorage.setItem('obr_local_secure', document.getElementById('local-secure').checked);
+        alert("Configuración de Red Guardada. Reinicia la app para aplicar cambios.");
+    }
 
     // --- INIT APP (OPTIMIZADO PARA TEMPERATURA) ---
     async function initApp() {
@@ -583,42 +647,69 @@
         if(!id) return;
         document.getElementById('connect-modal').classList.remove('active');
         
-        // --- ICE SERVERS (TURN) GRATUITOS PARA CONECTAR ENTRE REDES ---
-        peer = new Peer(null, { 
-            debug: 1, 
-            config: { 
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' }, 
-                    { urls: 'stun:stun1.l.google.com:19302' }, 
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    // Open Relay (Free TURN)
-                    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-                    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-                    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
-                ] 
-            } 
-        });
+        // --- LOGICA DE CONEXION (LOCAL VS NUBE) ---
+        const useLocal = localStorage.getItem('obr_use_local') === 'true';
+        const localHost = localStorage.getItem('obr_local_host');
+        const localPort = localStorage.getItem('obr_local_port');
+        const localPath = localStorage.getItem('obr_local_path');
+        const localSecure = localStorage.getItem('obr_local_secure') === 'true';
+
+        let peerOptions = {};
+
+        if (useLocal && localHost && localPort) {
+            console.log("Conectando vía Servidor Local/Tailscale...");
+            // Indicador visual de modo local
+            document.getElementById('link-status').innerText = "ENLACE: SERVIDOR PRIVADO";
+            document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-purple-400 bg-purple-900/40 px-2 py-1 rounded border border-purple-500 font-bold shadow-[0_0_10px_purple]";
+            
+            peerOptions = {
+                host: localHost,
+                port: parseInt(localPort),
+                path: localPath || '/',
+                secure: localSecure,
+                debug: 1,
+                // Al usar IP directa (VPN/LAN), a veces es mejor desactivar ICE servers públicos para forzar ruta directa,
+                // o dejarlos vacíos si la red es plana (como Tailscale).
+                config: { iceServers: [] } 
+            };
+        } else {
+            console.log("Conectando vía Nube Pública...");
+            peerOptions = { 
+                debug: 1, 
+                config: { 
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }, 
+                        { urls: 'stun:stun1.l.google.com:19302' }, 
+                        { urls: 'stun:global.stun.twilio.com:3478' },
+                        // Open Relay (Free TURN)
+                        { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+                        { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+                        { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+                    ] 
+                } 
+            };
+        }
+
+        peer = new Peer(null, peerOptions);
         
         setInterval(() => { if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); } }, 2000);
         peer.on('open', myId => {
             conn = peer.connect(id);
             conn.on('open', () => {
-                document.getElementById('link-status').innerText = "ENLACE: VPN PRODOCK (SEGURO)";
-                document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-cyan-400 bg-cyan-900/40 px-2 py-1 rounded border border-cyan-500 font-bold shadow-[0_0_10px_cyan]";
+                if(!useLocal) {
+                    document.getElementById('link-status').innerText = "ENLACE: VPN PRODOCK (SEGURO)";
+                    document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-cyan-400 bg-cyan-900/40 px-2 py-1 rounded border border-cyan-500 font-bold shadow-[0_0_10px_cyan]";
+                }
                 conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
             });
             conn.on('data', d => {
                 if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
                 if(d.type === 'pong') { lastPingTime = Date.now(); const latency = Date.now() - d.time; document.getElementById('ping-val').innerText = latency + "ms"; const sig = document.getElementById('signal-ui'); if(latency < 100) sig.className = "signal-bars signal-good"; else if(latency < 300) sig.className = "signal-bars signal-ok"; else sig.className = "signal-bars signal-bad"; }
                 if(d.type === 'cmd') {
-                    // --- CORRECCIÓN DE CONTROL REMOTO ---
-                    // En lugar de llamar setFilter directamente, SIMULAMOS el click en el botón local
-                    // Esto asegura que todos los estados (botones activos, clases de body, flash) se actualicen igual que si lo tocara el usuario
                     if(d.action === 'filter') {
                         const btnMap = { 'night': 'btn-night', 'thermal': 'btn-thermal', 'urbex': 'btn-urbex', 'sls': 'btn-sls', 'heatmap': 'btn-heatmap', 'normal': null };
                         if(d.value === 'normal') setFilter('normal');
                         else if(btnMap[d.value]) {
-                            // Llamamos a setFilter pasando el elemento del botón real para activar el estado visual
                             setFilter(d.value, document.getElementById(btnMap[d.value]));
                         }
                     }
