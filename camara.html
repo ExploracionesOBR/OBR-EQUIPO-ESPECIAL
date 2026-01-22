@@ -3,26 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR v213 (TAILSCALE READY)</title> 
+    <title>CAMARA OBR PRO v5.1.26</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
+    
+    <!-- PWA MANIFEST -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- LIBRERÍAS IA -->
+    <!-- LIBRERÍAS: Carga Local Prioritaria -->
     <script src="js/tf.min.js"></script>
     <script src="js/pose-detection.min.js"></script>
     <script src="js/face_mesh.js"></script>
-    <script src="js/peerjs.min.js"></script>
+    <script src="js/selfie_segmentation.js"></script> 
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
+    <!-- FALLBACKS BLINDADOS -->
     <script>
-        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"><\/script>');
-        if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"><\/script>');
-        if(!window.FaceMesh) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"><\/script>');
-        if(!window.Peer) document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"><\/script>');
+        if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3"><\/script>');
+        if(!window.FaceMesh) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"><\/script>');
+        if(!window.SelfieSegmentation) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"><\/script>');
     </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -34,76 +40,248 @@
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
-        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s; will-change: transform; }
+        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
         
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
-        
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
-        #heatmap-buffer { display: none; }
-
-        /* ORIENTATION LOCK */
-        #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; }
-        @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
-
-        /* FILTROS CSS */
-        body.filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(50, 255, 50, 0.05) 50%, rgba(0,20,0,0.6) 95%); background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px); z-index: 5; mix-blend-mode: overlay; }
-        body.filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 150px rgba(20,10,5,0.6); mix-blend-mode: multiply; }
-        body.filter-heatmap #sls-canvas { filter: none; } 
-        body.filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
+        
+        #heatmap-buffer, #lidar-buffer { display: none; }
 
         #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
-        .interactive { pointer-events: auto; }
-        #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: border-width 0.2s; z-index: 50; pointer-events: none; }
-        #tally-border.program { border: 12px solid red; box-shadow: inset 0 0 40px red; }
-        #tally-border.preview { border: 12px solid #00ff00; }
+        .interactive { pointer-events: auto; cursor: pointer; }
         
-        /* HEADER (Ahora solo se usa para calcular posición, se dibuja en canvas) */
-        #live-header-container { display: none; } 
+        #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        #ai-vision-header { position: absolute; top: 90px; left: 20px; display: flex; flex-direction: column; align-items: flex-start; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 60; width: 220px; }
-        #ai-vision-header.active { opacity: 1; }
-        #ai-mini-img { width: 100%; height: auto; border: 2px solid #ff3333; box-shadow: 0 0 25px rgba(255, 0, 0, 0.4); filter: invert(1) hue-rotate(180deg) contrast(1.5); margin-bottom: 0; background: black; display: block; }
-        #ai-mini-text { width: 100%; background: rgba(10, 0, 0, 0.95); border: 1px solid #ff3333; border-top: none; border-left: 4px solid #ff3333; color: #ffcccc; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; padding: 8px; text-align: left; text-transform: uppercase; box-shadow: 0 5px 15px rgba(0,0,0,0.8); text-shadow: 0 0 5px red; line-height: 1.2; }
+        /* FILTROS */
+        .filter-night-vision #sls-canvas { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2); }
+        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(50, 255, 50, 0.1) 40%, rgba(0,20,0,0.8) 100%); background-size: 4px 4px; z-index: 5; mix-blend-mode: overlay; }
+        
+        .filter-thermal #sls-canvas { filter: invert(100%) grayscale(100%) contrast(1.5); }
+        
+        /* URBEX */
+        .filter-urbex #sls-canvas { filter: sepia(100%) hue-rotate(-15deg) contrast(1.1) brightness(0.9) saturate(1.2); }
+        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 150px rgba(0,0,0,0.95); z-index: 5; }
+        
+        .filter-pareidolia #sls-canvas { filter: contrast(1.1); }
+        .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
 
-        .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; pointer-events: auto; transition: opacity 0.2s; opacity: 0; pointer-events: none; }
+        #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
+        #tally-border.preview { border: 4px solid #800000; opacity: 0.6; }
+        #tally-border.online { border: 6px solid #00ff00; box-shadow: inset 0 0 20px rgba(0,255,0,0.5), 0 0 15px rgba(0,255,0,0.5); opacity: 1; }
+
+        /* --- HUD INDEPENDIENTE --- */
+        #hud-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 70; 
+            pointer-events: none;
+            animation: independentGlitch 6s infinite; 
+            transition: opacity 0.5s ease;
+        }
+        
+        #hud-layer.hud-hidden {
+            opacity: 0;
+        }
+
+        #hud-logo {
+            width: 40px;
+            height: 40px;
+            filter: drop-shadow(0px 0px 4px black);
+        }
+
+        #hud-text-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        #hud-title {
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 800;
+            font-size: 16px;
+            text-shadow: 2px 2px 0px black;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        #hud-time {
+            color: #ff3333;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            text-shadow: 1px 1px 0px black;
+        }
+
+        @keyframes independentGlitch {
+            0% { transform: translate(0,0); filter: none; }
+            95% { transform: translate(0,0); filter: none; }
+            96% { transform: translate(-2px, 1px); filter: hue-rotate(90deg) contrast(1.2); }
+            97% { transform: translate(1px, -1px); filter: none; }
+            98% { transform: translate(0, 2px); filter: hue-rotate(-45deg); }
+            100% { transform: translate(0,0); filter: none; }
+        }
+
+        /* --- IA VISION HEADER --- */
+        #ai-vision-header { 
+            position: absolute; 
+            top: 20px; 
+            left: 20px; 
+            width: 170px; 
+            opacity: 0; 
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); 
+            z-index: 71; 
+            pointer-events: none; 
+            display: flex;
+            flex-direction: column;
+            gap: 6px; 
+            animation: independentGlitch 5s infinite reverse; 
+        }
+        
+        #ai-vision-header.active { 
+            opacity: 1; 
+        }
+
+        .ai-image-container {
+            position: relative;
+            width: 100%;
+            display: none; 
+            border: 0px solid transparent; 
+            background: transparent;
+            overflow: hidden;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .ai-image-container.has-data {
+            display: flex;
+            border: 2px solid #ff3333;
+            background: rgba(0,0,0,0.5);
+            min-height: 96px;
+            animation: expandDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes expandDown {
+            from { min-height: 0; opacity: 0; transform: translateY(-10px); }
+            to { min-height: 96px; opacity: 1; transform: translateY(0); }
+        }
+
+        #ai-mini-img { 
+            width: 100%; 
+            display: block;
+            filter: invert(1) hue-rotate(180deg) contrast(1.5); 
+            opacity: 0; 
+            transition: opacity 0.8s ease-in-out; 
+        }
+        
+        #ai-mini-img.visible {
+            opacity: 1;
+        }
+
+        #ai-mini-text { 
+            background: rgba(10, 0, 0, 0.90); 
+            border-left: 4px solid #ff3333; 
+            color: #ffcccc; 
+            font-family: 'Share Tech Mono'; 
+            font-size: 0.65rem; 
+            padding: 6px; 
+            line-height: 1.2; 
+            backdrop-filter: blur(2px);
+            min-height: 40px; 
+            display: -webkit-box;
+            -webkit-line-clamp: 4; 
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: normal;
+        }
+
+        /* --- SCAN OVERLAY --- */
+        #ai-scan-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 55; 
+            display: none; 
+            overflow: hidden;
+        }
+
+        .scan-box {
+            position: absolute;
+            border: 1px solid rgba(255, 0, 0, 0.8);
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
+            background: rgba(255, 0, 0, 0.05);
+            opacity: 0;
+            animation: targetScan 0.6s ease-out forwards;
+        }
+
+        .scan-box::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 1px solid transparent;
+            background: 
+                linear-gradient(to right, red 2px, transparent 2px) 0 0,
+                linear-gradient(to bottom, red 2px, transparent 2px) 0 0,
+                linear-gradient(to left, red 2px, transparent 2px) 100% 0,
+                linear-gradient(to bottom, red 2px, transparent 2px) 100% 0,
+                linear-gradient(to right, red 2px, transparent 2px) 0 100%,
+                linear-gradient(to top, red 2px, transparent 2px) 0 100%,
+                linear-gradient(to left, red 2px, transparent 2px) 100% 100%,
+                linear-gradient(to top, red 2px, transparent 2px) 100% 100%;
+            background-repeat: no-repeat;
+            background-size: 6px 6px;
+        }
+
+        @keyframes targetScan {
+            0% { transform: scale(1.2); opacity: 0; border-color: white; }
+            10% { opacity: 1; border-color: red; }
+            80% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0; }
+        }
+
+        #toast-container { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 200; pointer-events: none; width: 80%; align-items: center; }
+        .toast { background: rgba(0, 30, 0, 0.9); border: 1px solid #00ff00; color: #00ff00; padding: 10px 20px; border-radius: 4px; font-family: 'Share Tech Mono'; font-size: 14px; text-shadow: 0 0 5px #00ff00; box-shadow: 0 4px 15px rgba(0,0,0,0.8); animation: slideDown 0.3s ease-out; pointer-events: auto; text-align: center; }
+        .toast.error { border-color: red; color: red; background: rgba(30, 0, 0, 0.9); text-shadow: 0 0 5px red; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .menu-container { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
         .menu-container.visible { opacity: 1; pointer-events: auto; }
         .menu-container.left-side { left: 20px; }
         .menu-container.right-side { right: 20px; }
-        .menu-btn { width: 50px; height: 50px; border: 2px solid var(--hud-primary); border-radius: 50%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; color: var(--hud-primary); font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(4px); box-shadow: 0 0 15px rgba(255, 51, 51, 0.3); transition: all 0.2s; }
+        .menu-btn { width: 50px; height: 50px; border: 2px solid var(--hud-primary); border-radius: 50%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; color: var(--hud-primary); font-size: 1.2rem; backdrop-filter: blur(4px); transition: all 0.2s; cursor: pointer; pointer-events: auto; }
         .menu-btn:active { transform: scale(0.9); }
         .menu-btn.active-state { background: white; border-color: white; color: black; box-shadow: 0 0 20px white; }
-        .menu-label { font-size: 0.55rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; text-shadow: 1px 1px 2px black; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
+        .menu-label { font-size: 0.55rem; color: white; text-align: center; margin-top: 4px; font-family: 'Share Tech Mono'; background: rgba(0,0,0,0.6); border-radius: 4px; }
 
-        #loading { position: fixed; inset: 0; z-index: 200; background: black; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #220000 0%, #000000 100%); }
-        .load-btn { background: rgba(20,0,0,0.6); border: 2px solid var(--hud-primary); color: var(--hud-primary); padding: 18px 40px; font-size: 1.1rem; margin-top: 30px; cursor: pointer; font-weight: bold; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: 0.2s; }
-        
-        #progress-container { width: 80%; max-width: 300px; height: 4px; background: #333; margin-top: 20px; border-radius: 2px; overflow: hidden; display: none; }
-        #progress-bar { height: 100%; width: 0%; background: var(--hud-primary); transition: width 0.3s ease-out; box-shadow: 0 0 10px var(--hud-primary); }
-        #progress-text { font-family: 'Share Tech Mono'; color: var(--hud-primary); font-size: 0.65rem; margin-top: 5px; min-height: 1.2em; text-align: center; white-space: pre-wrap; }
+        #telemetry-container { position: absolute; bottom: 10px; right: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; z-index: 150; }
+        .stat-row { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: rgba(0, 255, 0, 0.7); text-shadow: 1px 1px 0px black; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px; display: flex; align-items: center; gap: 6px; }
+        .signal-bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; width: 16px; }
+        .bar { width: 4px; background: #333; border-radius: 1px; transition: background 0.3s; }
+        .bar:nth-child(1) { height: 33%; } .bar:nth-child(2) { height: 66%; } .bar:nth-child(3) { height: 100%; }
+        .signal-level-0 .bar { background: #333; }
+        .signal-level-1 .bar:nth-child(1) { background: #ff3333; }
+        .signal-level-2 .bar:nth-child(1), .signal-level-2 .bar:nth-child(2) { background: #ffff00; }
+        .signal-level-3 .bar { background: #00ff00; }
 
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; pointer-events: auto; }
+        #loading { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .modal-bg { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; }
         .modal-bg.active { display: flex; }
-        #touch-surface { position: absolute; inset: 0; z-index: 15; pointer-events: auto; }
-        #sls-pip { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); color: var(--hud-primary); font-family: 'Share Tech Mono'; font-size: 0.8rem; display: none; text-shadow: 0 0 5px var(--hud-primary); background: rgba(0,0,0,0.6); padding: 2px 8px; border: 1px solid var(--hud-primary); border-radius: 4px; }
-        #perf-stats { position: absolute; bottom: 5px; right: 5px; font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; color: rgba(0, 255, 0, 0.6); background: rgba(0,0,0,0.4); padding: 2px 4px; border-radius: 4px; pointer-events: none; z-index: 80; text-align: right; }
-        .signal-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 8px; margin-left: 5px; }
-        .bar { width: 3px; background: #333; }
-        .signal-good .bar { background: #00ff00; }
-        .signal-ok .bar:nth-child(1), .signal-ok .bar:nth-child(2) { background: #ffff00; }
-        .signal-bad .bar:nth-child(1) { background: #ff0000; }
+        #progress-bar { height: 100%; width: 0%; background: var(--hud-primary); transition: width 0.3s; }
         
-        #ai-feedback-overlay { display: none; }
-        #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; box-shadow: 0 0 15px #00ff00; transition: transform 0.3s, opacity 0.3s; }
+        #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; transition: transform 0.3s, opacity 0.3s; }
         #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
     </style>
 </head>
 <body>
 
     <div id="orientation-lock">
-        <img src="obr-logo.png" class="w-32 h-32 object-contain mb-6 animate-pulse drop-shadow-[0_0_20px_rgba(255,0,0,0.6)]">
         <i class="fas fa-mobile-alt text-4xl mb-4 rotate-90 text-red-500"></i>
-        <h2 class="text-xl font-bold font-orbitron tracking-widest text-red-500 mb-2">SISTEMA PAUSADO</h2>
-        <p class="text-sm font-mono text-gray-400">COLOCA EN HORIZONTAL</p>
+        <h2 class="text-xl font-bold font-orbitron tracking-widest text-red-500">GIRAR DISPOSITIVO</h2>
     </div>
 
     <div id="main-view-area">
@@ -111,28 +289,39 @@
             <video id="shared-video-element" autoplay playsinline muted></video>
             <canvas id="sls-canvas"></canvas>
         </div>
+        <!-- SCAN OVERLAY RESTAURADO -->
+        <div id="ai-scan-overlay"></div>
     </div>
-    
     <canvas id="heatmap-buffer"></canvas>
-    <div id="touch-surface"></div>
+    <canvas id="lidar-buffer"></canvas>
+    
+    <div id="touch-surface" class="absolute inset-0 z-10 interactive"></div>
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        <div id="tally-border"></div>
-        <div id="sls-pip">● SLS ACTIVO</div>
-        <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800">OFFLINE</div>
-        <div class="absolute top-4 right-4 interactive text-gray-500 cursor-pointer p-2 bg-black/30 rounded-full" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
-        
-        <div id="perf-stats">
-            <div id="res-fps">Init...</div>
-            <div id="conn-stat" class="flex items-center justify-end mt-1">
-                <span id="ping-val">--ms</span>
-                <div class="signal-bars signal-bad" id="signal-ui">
-                    <div class="bar" style="height: 30%"></div>
-                    <div class="bar" style="height: 60%"></div>
-                    <div class="bar" style="height: 100%"></div>
-                </div>
+        <!-- HUD INDEPENDIENTE -->
+        <div id="hud-layer">
+            <img src="obr-logo.png" id="hud-logo" alt="">
+            <div id="hud-text-container">
+                <div id="hud-title">EXPLORACIONES OBR</div>
+                <div id="hud-time">--/--/-- - --:--:--</div>
             </div>
+        </div>
+
+        <div id="toast-container"></div>
+        <div id="tally-border" class="preview"></div>
+        <div id="sls-pip" class="absolute top-4 left-1/2 -translate-x-1/2 text-purple-500 font-mono text-xs hidden bg-black/50 px-2 rounded border border-purple-500">● SLS ACTIVO</div>
+        
+        <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800 flex items-center gap-2">
+            <div id="status-dot" class="w-2 h-2 rounded-full bg-red-900"></div>
+            <span id="status-text">PREVIEW</span>
+        </div>
+
+        <div class="absolute top-4 right-4 interactive text-gray-500 p-2 bg-black/30 rounded-full hover:text-white" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
+        
+        <div id="telemetry-container">
+            <div class="stat-row"><span id="meta-res">INIT...</span><i class="fas fa-expand text-[8px]"></i></div>
+            <div class="stat-row"><span id="meta-fps">-- FPS</span><div class="signal-bars signal-level-0" id="signal-ui"><div class="bar"></div><div class="bar"></div><div class="bar"></div></div></div>
         </div>
 
         <div id="menu-left" class="menu-container left-side">
@@ -140,7 +329,7 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('heatmap', this)" id="btn-heatmap"><i class="fas fa-fire-alt"></i></div><div class="menu-label">HEAT</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('lidar', this)" id="btn-heatmap"><i class="fas fa-fingerprint"></i></div><div class="menu-label">LIDAR</div></div>
         </div>
         <div id="menu-right" class="menu-container right-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
@@ -148,8 +337,11 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
+        <!-- HEADER IA -->
         <div id="ai-vision-header">
-            <img id="ai-mini-img" alt="Scan">
+            <div class="ai-image-container" id="ai-container-box">
+                <img id="ai-mini-img" alt="Scan">
+            </div>
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
     </div>
@@ -157,17 +349,17 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">SYSTEM v213 (TAILSCALE READY)</p>
-        <div id="progress-container"><div id="progress-bar"></div></div>
-        <div id="progress-text">ESPERANDO INICIO...</div>
-        <button class="load-btn" onclick="initApp()">INICIAR CÁMARA</button>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.1.26 (SLS CLASSIC CORE)</p>
+        <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
+        <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
+        <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
     </div>
 
     <div id="connect-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center shadow-[0_0_30px_rgba(0,255,255,0.1)]">
-            <h3 class="text-cyan-400 mb-6 text-xl tracking-widest font-bold">ENLACE PRODOCK</h3>
-            <input type="text" id="dock-id" placeholder="ID DEL DIRECTOR" class="w-full bg-black border border-gray-700 text-white p-4 text-center uppercase mb-6 text-xl outline-none focus:border-cyan-400 transition-colors rounded">
-            <button onclick="connectToProdock()" class="w-full bg-cyan-900 text-white font-bold py-4 hover:bg-cyan-700 mb-4 rounded font-orbitron">CONECTAR</button>
+            <h3 class="text-cyan-400 mb-4 text-xl tracking-widest font-bold">TRANSMISIÓN HÍBRIDA</h3>
+            <input type="text" id="stream-name" placeholder="NOMBRE (EJ: cam1)" class="w-full bg-black border border-gray-700 text-white p-3 text-center uppercase mb-4 text-lg outline-none focus:border-cyan-400 rounded" value="cam1">
+            <button onclick="startHybridTransmission()" class="w-full bg-cyan-900 text-white font-bold py-3 hover:bg-cyan-700 mb-3 rounded font-orbitron">EN VIVO</button>
             <button onclick="document.getElementById('connect-modal').classList.remove('active')" class="text-gray-500 text-xs hover:text-white">CANCELAR</button>
         </div>
     </div>
@@ -175,668 +367,478 @@
     <div id="settings-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
             <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
-            <a href="https://aistudio.google.com/api-keys" target="_blank" class="flex items-center justify-center w-full border border-blue-900 text-blue-400 py-2 rounded hover:bg-blue-900/20 text-xs font-bold mb-4 transition-colors">
-                <i class="fas fa-external-link-alt mr-2"></i> CONSEGUIR GEMINI API KEY
-            </a>
-            <input type="password" id="api-key-internal" placeholder="PEGAR API KEY AQUÍ" class="w-full bg-black border border-gray-700 p-3 text-white mb-2 text-sm rounded outline-none focus:border-red-500">
-            <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-3 rounded hover:bg-green-900/20 font-bold mb-2">VALIDAR Y GUARDAR</button>
-            <div id="api-status-msg" class="text-xs font-mono mt-2 text-center text-yellow-500"></div>
+            <input type="text" id="mtx-host" placeholder="MTX IP (Ej: 192.168.1.70)" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase mb-4">
+            <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white mb-2 text-xs rounded outline-none focus:border-red-500">
+            
+            <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="w-full mb-3 py-1 text-[9px] border border-blue-900/50 rounded text-blue-400 hover:text-white hover:border-blue-400 hover:bg-blue-900/30 bg-black/40 font-mono transition-colors">
+                <i class="fas fa-external-link-alt mr-1"></i> OBTENER API KEY GRATIS
+            </button>
 
-            <!-- NUEVA SECCION RED PRIVADA -->
-            <div class="mt-4 pt-4 border-t border-gray-800">
-                <h3 class="text-cyan-500 font-bold text-xs mb-3 flex items-center gap-2">
-                    <i class="fas fa-network-wired"></i> RED PRIVADA (TAILSCALE / LAN)
-                </h3>
-                <div class="flex items-center gap-2 mb-3">
-                    <input type="checkbox" id="use-local-server" class="accent-cyan-500 cursor-pointer" onclick="toggleLocalServerInputs()"/>
-                    <label for="use-local-server" class="text-xs text-gray-400 cursor-pointer">USAR SERVIDOR PROPIO</label>
-                </div>
-                
-                <div id="local-server-config" class="space-y-2 hidden opacity-50 transition-opacity duration-300">
-                    <input type="text" id="local-host" placeholder="IP HOST (Ej: 100.x.x.x)" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase">
-                    <div class="flex gap-2">
-                        <input type="number" id="local-port" placeholder="PUERTO (9000)" class="w-1/2 bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono">
-                        <input type="text" id="local-path" placeholder="RUTA (/myapp)" class="w-1/2 bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono">
-                    </div>
-                    <div class="flex items-center gap-2 mt-2">
-                         <input type="checkbox" id="local-secure" class="accent-cyan-500">
-                         <label for="local-secure" class="text-[10px] text-gray-500">USAR SSL (HTTPS/WSS)</label>
-                    </div>
-                </div>
-                <button onclick="saveNetworkSettings()" class="w-full mt-2 border border-cyan-800 text-cyan-500 py-2 rounded hover:bg-cyan-900/20 text-xs font-bold">GUARDAR CONFIG. RED</button>
-            </div>
-
+            <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-2 rounded hover:bg-green-900/20 font-bold mb-4 text-xs">VALIDAR API</button>
+            <div id="api-status-msg" class="text-[10px] font-mono mb-4 text-center text-yellow-500"></div>
+            <button onclick="saveSettings()" class="w-full border border-cyan-800 text-cyan-500 py-2 rounded hover:bg-cyan-900/20 text-xs font-bold">GUARDAR TODO</button>
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
         </div>
     </div>
 
 <script>
-    const FILTER_CONFIG = {
-        NOCT: { grayscale: '100%', sepia: '100%', hueRotate: '90deg', saturate: '100%', contrast: '1.1', brightness: '1.0' },
-        NEG: { invert: '100%', grayscale: '100%', contrast: '200%', brightness: '1.0' },
-        URBEX: { sepia: '50%', hueRotate: '-15deg', saturate: '90%', contrast: '1.1', brightness: '0.8' },
-        HEATMAP: { contrast: '1.2', brightness: '0.7' }
-    };
-
-    let API_KEY = localStorage.getItem("obr_gemini_key") || "";
-    let CURRENT_AI_MODEL = localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025";
-    let GEMINI_API_KEY = API_KEY; 
-
-    // CONFIGURACIÓN AI / VISUAL
-    const AI_THRESHOLD = 0.02; 
-    const SLS_LINE_COLOR = "#d946ef"; 
-    const SLS_NODE_COLOR = "#a855f7"; 
-    const SLS_LINE_WIDTH = 7.0; 
-
-    let currentFilter = 'normal';
-    let isSLSActive = false;
-    let isHeatmapActive = false;
-    let isPareidoliaActive = false;
+    const AI_SENSITIVITY = 0.2; 
+    const state = { apiKey: localStorage.getItem("obr_gemini_key") || "", aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", mtxIp: localStorage.getItem("obr_mtx_ip") || "192.168.1.70", filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, zoom: 1 };
+    
+    // Globals
+    let GEMINI_API_KEY = state.apiKey;
+    let CURRENT_AI_MODEL = state.aiModel;
     let isAIProcessing = false;
-    
-    // MODELOS
-    let poseDetector = null;
-    let faceMesh = null;
-    let poses = [];
-    let faces = [];
-    let lastAITime = 0; // Para limitar FPS de IA
-    
-    let zoomLevel = 1; 
-    let peer, conn;
-    let deferredPrompt;
-    let menuTimer;
-    let videoStream;
-    let fps = 0, frameCount = 0, lastTime = performance.now();
+    let isPareidoliaActive = false;
     let pareidoliaInterval = null;
-    let audioCtx, micSource, destNode; 
-    let lastPingTime = 0;
-    let particleSprite;
-    let logoImage = new Image(); logoImage.src = 'obr-logo.png';
-    let timeString = "--:--:--";
+    let scanInterval = null;
+    let lastPareidoliaCall = 0; // Limiter timestamp
+
+    const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
+
+    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
     
-    let drawW, drawH, drawX, drawY;
+    // AJUSTE CLAVE: Resolución 320x180 (Balance perfecto entre velocidad v5.1.15 y multi-cuerpo)
+    const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
+    const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
-    const video = document.getElementById('shared-video-element');
-    const slsCanvas = document.getElementById('sls-canvas');
-    const heatCanvas = document.getElementById('heatmap-buffer');
-    const ctx = slsCanvas.getContext('2d', { alpha: true });
-    const heatCtx = heatCanvas.getContext('2d', { alpha: true });
-    const zoomLayer = document.getElementById('zoom-container');
-    const touchSurface = document.getElementById('touch-surface');
+    let aiDetector = null, faceMesh = null, segmenter = null, poses = [], faces = [], lidarMask = null;
+    let isPoseEstimationRunning = false;
+    let lidarBusy = false; // Flag simple para LIDAR (v5.1.15 style)
+    let lastLidarMask = null; // Mantenemos persistencia SOLO en LIDAR porque funciona bien
+    
+    let videoStream, peerCommand = null, pcVideo = null, conn = null;
+    let frameCount = 0, lastTime = performance.now(), currentFps = 0;
 
-    const detCanvas = document.createElement('canvas');
-    detCanvas.width = 192; detCanvas.height = 108; 
-    const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
+    let logoImg = new Image();
+    logoImg.src = 'obr-logo.png';
 
-    function initHeatSprite() {
-        const s = document.createElement('canvas'); s.width = 128; s.height = 128;
-        const c = s.getContext('2d');
-        const grad = c.createRadialGradient(64,64,0,64,64,64);
-        grad.addColorStop(0, 'rgba(255, 0, 0, 0.8)');
-        grad.addColorStop(0.3, 'rgba(255, 165, 0, 0.6)');
-        grad.addColorStop(0.6, 'rgba(255, 255, 0, 0.4)');
-        grad.addColorStop(1, 'rgba(200, 200, 255, 0)');
-        c.fillStyle = grad; c.fillRect(0,0,128,128);
-        particleSprite = s;
-    }
+    window.onload = () => { document.getElementById('api-key-internal').value = state.apiKey; document.getElementById('mtx-host').value = state.mtxIp; };
 
-    function updateProgress(percent, text) {
-        document.getElementById('progress-bar').style.width = percent + '%';
-        document.getElementById('progress-text').innerText = text;
-    }
-
-    function initAudioMix(stream) {
+    async function initApp() {
+        document.querySelector('.load-btn').style.display = 'none';
         try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            micSource = audioCtx.createMediaStreamSource(stream);
-            destNode = audioCtx.createMediaStreamDestination();
-            micSource.connect(destNode);
-        } catch(e) { console.error("Audio mix failed", e); }
+            updateProgress(10, "INICIANDO SENSOR...");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
+            videoStream = stream; el.video.srcObject = stream; el.video.play();
+        } catch(e) {
+            alert("Error Crítico Cámara: " + e.message);
+            return; 
+        }
+        updateProgress(100, "VIDEO OK");
+        document.getElementById('loading').style.display = 'none';
+        resize(); window.addEventListener('resize', resize);
+        requestAnimationFrame(renderLoop);
+        setInterval(telemetryLoop, 1000);
+        showToast("Cargando Motores IA...", false);
+        setTimeout(async () => {
+            try {
+                if(window.tf) { 
+                    try { 
+                        await tf.setBackend('webgl'); 
+                    } catch(e) { await tf.setBackend('cpu'); } 
+                }
+                
+                if(window.poseDetection) { 
+                    try { 
+                        aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
+                            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING 
+                        }); 
+                    } catch(e) {} 
+                }
+                
+                if(window.FaceMesh) { try { faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`}); faceMesh.setOptions({ maxNumFaces: 3, minDetectionConfidence: AI_SENSITIVITY }); faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; }); await faceMesh.initialize(); } catch(e) {} }
+                
+                if(window.SelfieSegmentation) { 
+                    try { 
+                        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); 
+                        selfieSegmentation.setOptions({ modelSelection: 1 }); // 1 = Landscape
+                        selfieSegmentation.onResults(res => { 
+                            if(res && res.segmentationMask) {
+                                lidarMask = res.segmentationMask; 
+                                lastLidarMask = res.segmentationMask; 
+                            }
+                            lidarBusy = false;
+                        }); 
+                        segmenter = selfieSegmentation; 
+                    } catch(e) {} 
+                }
+                
+                showToast("SISTEMAS IA ACTIVOS", false);
+                // BUCLE SIMPLE (v5.1.15 Style)
+                setInterval(aiLoop, 80); 
+            } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
+        }, 500); 
     }
 
-    // --- ZOOM ---
-    let pressTimer = null;
-    const LONG_PRESS_MS = 600;
-    touchSurface.addEventListener('pointerdown', (e) => {
-        const w = window.innerWidth;
-        const edgeThreshold = 100;
-        if (e.clientX < edgeThreshold || e.clientX > w - edgeThreshold) { showMenus(); return; }
-        pressTimer = setTimeout(() => { handleZoomPress(e.clientX, e.clientY); }, LONG_PRESS_MS);
-    });
-    touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer));
-    touchSurface.addEventListener('pointerleave', () => clearTimeout(pressTimer));
-    touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
+    function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
 
-    function handleZoomPress(x, y) {
-        if(navigator.vibrate) navigator.vibrate(50);
-        let nextZoom = (zoomLevel === 1) ? 3 : (zoomLevel === 3 ? 5 : 5);
-        if(zoomLevel === 5) return;
-        const ind = document.getElementById('zoom-target-indicator');
-        ind.style.left = x + 'px'; ind.style.top = y + 'px';
-        ind.classList.add('active'); setTimeout(() => ind.classList.remove('active'), 500);
-        const originX = (x / window.innerWidth) * 100;
-        const originY = (y / window.innerHeight) * 100;
-        zoomLayer.style.transformOrigin = `${originX}% ${originY}%`;
-        zoomLayer.style.transform = `scale(${nextZoom})`;
-        zoomLevel = nextZoom;
+    function drawLidarEffect(c, width, height) {
+        const maskToUse = lidarMask || lastLidarMask; 
+        if (!maskToUse) return; 
+        
+        lidarCtx.clearRect(0, 0, width, height);
+        lidarCtx.save();
+        lidarCtx.drawImage(maskToUse, 0, 0, width, height);
+        lidarCtx.globalCompositeOperation = 'source-in';
+        const grad = lidarCtx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
+        lidarCtx.fillStyle = grad; lidarCtx.fillRect(0, 0, width, height);
+        lidarCtx.restore();
+        c.globalCompositeOperation = 'screen'; c.drawImage(el.lidarCanvas, 0, 0, width, height); c.globalCompositeOperation = 'source-over';
     }
 
-    function showMenus() {
-        const left = document.getElementById('menu-left');
-        const right = document.getElementById('menu-right');
-        left.classList.add('visible'); right.classList.add('visible');
-        clearTimeout(menuTimer);
-        menuTimer = setTimeout(() => { left.classList.remove('visible'); right.classList.remove('visible'); }, 4000);
+    function resize() { el.canvas.width = window.innerWidth; el.canvas.height = window.innerHeight; el.lidarCanvas.width = window.innerWidth; el.lidarCanvas.height = window.innerHeight; }
+    function updateProgress(p, t) { document.getElementById('progress-bar').style.width = p + '%'; document.getElementById('progress-text').innerText = t; }
+
+    function renderLoop() {
+        frameCount++;
+        ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+        const vW = el.video.videoWidth, vH = el.video.videoHeight;
+        const cW = el.canvas.width, cH = el.canvas.height;
+        if (vW && vH) {
+            const vRatio = vW / vH, cRatio = cW / cH;
+            let dW, dH, dX, dY;
+            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } 
+            else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+            ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
+            window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
+        }
+        if (state.isSLS && !state.isLidar) drawSLS();
+        requestAnimationFrame(renderLoop);
     }
-    function resetZoom(btn) {
-        if(btn) { btn.classList.add('active-state'); setTimeout(()=>btn.classList.remove('active-state'), 200); }
-        zoomStage = 0; zoomLevel = 1;
-        zoomLayer.style.transform = `scale(1)`;
-        setTimeout(() => { zoomLayer.style.transformOrigin = `center center`; }, 400);
-        hideMenus();
+
+    // --- BUCLE IA V5.1.15 (PURO) ---
+    // Eliminada toda la lógica de persistencia/sticky que causaba parpadeos
+    async function aiLoop() {
+        if (isAIProcessing) return; 
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { 
+            poses = []; faces = []; lidarMask = null; return; 
+        }
+
+        if (state.isLidar && segmenter) { 
+            if(!lidarBusy) { 
+                lidarBusy = true; 
+                try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } 
+            } 
+        } else {
+            // SLS Directo
+            aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
+            
+            if (aiDetector && state.isSLS) { 
+                try { 
+                    // Detección directa y cruda -> Sin buffers que se limpien a destiempo
+                    poses = await aiDetector.estimatePoses(aiCanvas, {
+                        maxPoses: 5, // AJUSTE PARA MULTIPLES CUERPOS
+                        flipHorizontal: false,
+                        scoreThreshold: 0.25 
+                    }); 
+                } catch(e){} 
+            }
+            if (faceMesh && state.isSLS) { 
+                try { await faceMesh.send({image: el.video}); } catch(e){} 
+            }
+        }
+    }
+
+    function drawSLS() {
+        if (!window.drawCoords) return;
+        const { dW, dH, dX, dY } = window.drawCoords;
+        const mapX = (x) => (x / aiCanvas.width) * dW + dX; const mapY = (y) => (y / aiCanvas.height) * dH + dY;
+        ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.fillStyle = '#a855f7';
+        
+        poses.forEach(pose => {
+            const k = pose.keypoints;
+            const bodyPairs = [[5,7],[7,9],[6,8],[8,10],[11,12],[11,13],[13,15],[12,14],[14,16],[5,11],[6,12]];
+            ctx.beginPath(); bodyPairs.forEach(([i, j]) => { if(k[i].score > AI_SENSITIVITY && k[j].score > AI_SENSITIVITY) { ctx.moveTo(mapX(k[i].x), mapY(k[i].y)); ctx.lineTo(mapX(k[j].x), mapY(k[j].y)); } }); ctx.stroke();
+            const nose = k[0], lEye = k[1], rEye = k[2], lShoulder = k[5], rShoulder = k[6];
+            let neckX, neckY;
+            if(lShoulder.score > AI_SENSITIVITY && rShoulder.score > AI_SENSITIVITY) {
+                neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
+                ctx.beginPath(); ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(mapX(rShoulder.x), mapY(rShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
+                if(nose.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(nose.x), mapY(nose.y)); ctx.lineTo(neckX, neckY); ctx.stroke(); }
+            }
+            if(nose.score > AI_SENSITIVITY) { if(lEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(lEye.x), mapY(lEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } if(rEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(rEye.x), mapY(rEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } }
+            k.forEach((p, i) => { if(i === 3 || i === 4) return; if(p.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), 4, 0, 2*Math.PI); ctx.fill(); } });
+        });
+        if(faces.length > 0) {
+            faces.forEach(face => {
+                let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+                face.forEach((pt) => { const x=pt.x*dW+dX; const y=pt.y*dH+dY; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; });
+                const pad=20; ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+                ctx.fillStyle='#39ff14'; face.forEach((pt) => { ctx.fillRect(pt.x*dW+dX, pt.y*dH+dY, 1.5, 1.5); });
+            });
+        }
     }
 
     function updateClock() {
         const now = new Date();
-        const d = String(now.getDate()).padStart(2, '0');
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const y = String(now.getFullYear()).slice(-2);
-        const h = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        const s = String(now.getSeconds()).padStart(2, '0');
-        timeString = `${d} - ${m} - ${y} | ${h}:${min}:${s}`;
+        const dateStr = now.toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}); 
+        const timeStr = now.toLocaleTimeString();
+        const clockEl = document.getElementById('hud-time');
+        if (clockEl) clockEl.innerText = `${dateStr} - ${timeStr}`;
     }
 
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; });
-    window.onload = () => { 
-        if(API_KEY) document.getElementById('api-key-internal').value = API_KEY;
-        loadNetworkSettings(); // Cargar config de red
-    };
-
-    // --- CARGAR / GUARDAR SETTINGS DE RED ---
-    function loadNetworkSettings() {
-        const useLocal = localStorage.getItem('obr_use_local') === 'true';
-        document.getElementById('use-local-server').checked = useLocal;
-        if(useLocal) {
-            document.getElementById('local-server-config').classList.remove('hidden');
-            setTimeout(() => document.getElementById('local-server-config').classList.remove('opacity-50'), 50);
-        }
+    function telemetryLoop() {
+        const now = performance.now(); const elapsed = now - lastTime;
+        if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
+        updateClock(); 
+        let signal = 0;
+        if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++;
+        if(conn && conn.open) signal++;
+        if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) signal++;
         
-        document.getElementById('local-host').value = localStorage.getItem('obr_local_host') || '';
-        document.getElementById('local-port').value = localStorage.getItem('obr_local_port') || '9000';
-        document.getElementById('local-path').value = localStorage.getItem('obr_local_path') || '/';
-        document.getElementById('local-secure').checked = localStorage.getItem('obr_local_secure') === 'true';
-    }
-
-    function toggleLocalServerInputs() {
-        const chk = document.getElementById('use-local-server');
-        const div = document.getElementById('local-server-config');
-        if(chk.checked) {
-            div.classList.remove('hidden');
-            setTimeout(() => div.classList.remove('opacity-50'), 50);
+        const vW = el.video.videoWidth || 0; const vH = el.video.videoHeight || 0;
+        document.getElementById('meta-res').innerText = `${vW}x${vH}`;
+        document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
+        document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
+        
+        const statusEl = document.getElementById('status-text');
+        const dotEl = document.getElementById('status-dot');
+        const tallyEl = document.getElementById('tally-border');
+        
+        if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) {
+             statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono";
+             dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]";
+             tallyEl.className = "online";
         } else {
-            div.classList.add('opacity-50');
-            setTimeout(() => div.classList.add('hidden'), 300);
+             statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono";
+             dotEl.className = "w-2 h-2 rounded-full bg-red-900";
+             tallyEl.className = "preview";
         }
-    }
-
-    function saveNetworkSettings() {
-        localStorage.setItem('obr_use_local', document.getElementById('use-local-server').checked);
-        localStorage.setItem('obr_local_host', document.getElementById('local-host').value.trim());
-        localStorage.setItem('obr_local_port', document.getElementById('local-port').value.trim());
-        localStorage.setItem('obr_local_path', document.getElementById('local-path').value.trim());
-        localStorage.setItem('obr_local_secure', document.getElementById('local-secure').checked);
-        alert("Configuración de Red Guardada. Reinicia la app para aplicar cambios.");
-    }
-
-    // --- INIT APP (OPTIMIZADO PARA TEMPERATURA) ---
-    async function initApp() {
-        const btn = document.querySelector('.load-btn');
-        const pBar = document.getElementById('progress-container');
-        btn.disabled = true; btn.style.display = 'none'; pBar.style.display = 'block';
-        
-        try {
-            updateProgress(10, "CONFIGURANDO SENSOR...");
-            
-            // RESOLUCIÓN REDUCIDA A 720p PARA EVITAR SOBRECALENTAMIENTO
-            const constraints = {
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                video: { 
-                    facingMode: 'environment', 
-                    width: { ideal: 1280 }, // 720p es mucho mas fresco
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }, // 30 FPS estable es mejor que 60 cayendo a 10
-                    advanced: [{ focusMode: "continuous" }, { whiteBalanceMode: "continuous-auto" }, { exposureMode: "continuous" }]
-                }
-            };
-
-            const camPromise = navigator.mediaDevices.getUserMedia(constraints)
-                .catch(() => navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: 'environment' } })); 
-            
-            const stream = await camPromise;
-            const track = stream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-            if (capabilities && capabilities.focusMode) {
-                try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch(e){}
-            }
-            
-            videoStream = stream; video.srcObject = stream;
-            initAudioMix(stream);
-            initHeatSprite();
-            
-            video.play();
-            updateProgress(30, "SENSOR ACTIVO");
-            
-            document.getElementById('loading').style.display = 'none';
-            setInterval(updateClock, 1000); updateClock();
-            resize(); renderLoop(); 
-            setTimeout(loadModelsBackground, 200);
-            
-            window.addEventListener('resize', () => {
-                clearTimeout(window.resizeTimer);
-                window.resizeTimer = setTimeout(resize, 200);
-            });
-            
-            setInterval(() => { if (video.paused && video.srcObject) video.play().catch(()=>{}); }, 2000);
-
-        } catch(e) { alert("Error Inicio: " + e.message); location.reload(); }
-    }
-
-    async function warmUpAI() {
-        try {
-            detCtx.fillRect(0,0,192,108);
-            if(poseDetector) { for(let i=0; i<3; i++) { await poseDetector.estimatePoses(detCanvas, {maxPoses: 1, flipHorizontal: false}); await new Promise(r => setTimeout(r, 20)); } }
-            if(faceMesh) { for(let i=0; i<3; i++) { try { await faceMesh.send({image: detCanvas}); } catch(e){} await new Promise(r => setTimeout(r, 20)); } }
-        } catch(e) {}
-    }
-
-    async function loadModelsBackground() {
-        try {
-            await tf.setBackend('webgl'); await tf.ready();
-            try {
-                poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING, modelUrl: 'indexeddb://obr-movenet-lightning' });
-            } catch(e) {
-                poseDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
-            }
-            faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-            faceMesh.setOptions({ maxNumFaces: 5, refineLandmarks: true, minDetectionConfidence: AI_THRESHOLD, minTrackingConfidence: AI_THRESHOLD });
-            faceMesh.onResults((results) => { if(results.multiFaceLandmarks) faces = results.multiFaceLandmarks; else faces = []; });
-            await warmUpAI();
-            aiLoop(); // BUCLE AI SEPARADO
-        } catch(e) { console.error("AI Load Fail:", e); }
-    }
-
-    function resize() { 
-        slsCanvas.width = window.innerWidth; 
-        slsCanvas.height = window.innerHeight; 
-        heatCanvas.width = window.innerWidth; 
-        heatCanvas.height = window.innerHeight; 
-    }
-
-    // --- NUEVO SISTEMA DE DIBUJO DE HUD EN CANVAS (TRANSMITE EN VIDEO) ---
-    function drawHUD(c) {
-        c.save();
-        // Escala del HUD
-        const scale = 0.85;
-        const x = 20; const y = 20;
-        
-        // Simular Glitch leve
-        const jitterX = Math.random() > 0.95 ? (Math.random() - 0.5) * 5 : 0;
-        
-        c.translate(x + jitterX, y);
-        c.scale(scale, scale);
-        
-        // Logo
-        if (logoImage.complete) {
-            c.shadowColor = "rgba(255,0,0,0.6)"; c.shadowBlur = 10;
-            c.drawImage(logoImage, 0, 0, 40, 40);
-        }
-        
-        // Texto Titulo
-        c.fillStyle = "#ffffff";
-        c.font = "800 16px 'Orbitron', sans-serif";
-        c.shadowColor = "rgba(0,0,0,0.8)"; c.shadowBlur = 0; c.shadowOffsetX = 2; c.shadowOffsetY = 2;
-        c.fillText("EXPLORACIONES OBR", 52, 20);
-        
-        // Texto Hora
-        c.fillStyle = "#ff3333";
-        c.font = "14px 'Share Tech Mono', monospace";
-        c.shadowOffsetX = 1; c.shadowOffsetY = 1;
-        c.fillText(timeString, 52, 38);
-        
-        c.restore();
-    }
-
-    function renderLoop() {
-        requestAnimationFrame(renderLoop);
-        if(window.innerHeight > window.innerWidth) return; // Pausa en vertical
-
-        const now = performance.now(); frameCount++;
-        if (now - lastTime >= 1000) {
-            const t = video.srcObject ? video.srcObject.getVideoTracks()[0].getSettings() : null;
-            document.getElementById('res-fps').innerText = `${t.width}x${t.height} | ${frameCount}FPS`;
-            if(conn && conn.open) {
-                const nowTs = Date.now();
-                if(nowTs - lastPingTime > 5000) { document.getElementById('signal-ui').className = "signal-bars signal-bad"; document.getElementById('ping-val').innerText = "TIMEOUT"; }
-            }
-            frameCount = 0; lastTime = now;
-        }
-
-        ctx.filter = 'none'; 
-        // Aplicar filtros visuales al contexto (esto afecta lo que ve el usuario local Y lo que se envía por stream)
-        if(currentFilter === 'night') {
-            const c = FILTER_CONFIG.NOCT;
-            ctx.filter = `grayscale(${c.grayscale}) sepia(${c.sepia}) hue-rotate(${c.hueRotate}) saturate(${c.saturate}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        } else if(currentFilter === 'thermal') {
-            const c = FILTER_CONFIG.NEG;
-            ctx.filter = `invert(${c.invert}) grayscale(${c.grayscale}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        } else if(currentFilter === 'urbex') {
-            const c = FILTER_CONFIG.URBEX;
-            ctx.filter = `sepia(${c.sepia}) hue-rotate(${c.hueRotate}) saturate(${c.saturate}) contrast(${c.contrast}) brightness(${c.brightness})`;
-        } else if(currentFilter === 'heatmap') {
-            const c = FILTER_CONFIG.HEATMAP;
-            ctx.filter = `contrast(${c.contrast}) brightness(${c.brightness})`;
-        }
-
-        // SMART CROP
-        if (video.videoWidth > 0 && slsCanvas.width > 0) {
-            const vRatio = video.videoWidth / video.videoHeight;
-            const cRatio = slsCanvas.width / slsCanvas.height;
-            if (cRatio > vRatio) { drawW = slsCanvas.width; drawH = slsCanvas.width / vRatio; drawX = 0; drawY = (slsCanvas.height - drawH) / 2; } 
-            else { drawW = slsCanvas.height * vRatio; drawH = slsCanvas.height; drawX = (slsCanvas.width - drawW) / 2; drawY = 0; }
-            ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, drawX, drawY, drawW, drawH);
-        } else {
-            drawW = slsCanvas.width; drawH = slsCanvas.height; drawX = 0; drawY = 0;
-        }
-        
-        // Heatmap
-        if(isHeatmapActive) {
-            ctx.filter = 'none'; 
-            heatCtx.globalCompositeOperation = 'destination-out';
-            heatCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            heatCtx.fillRect(0, 0, heatCanvas.width, heatCanvas.height);
-            heatCtx.globalCompositeOperation = 'source-over';
-            if(poses.length > 0) {
-                const mapX = (val) => (val / detCanvas.width) * drawW + drawX;
-                const mapY = (val) => (val / detCanvas.height) * drawH + drawY;
-                poses.forEach(pose => {
-                    const k = pose.keypoints;
-                    k.forEach(p => {
-                         if(p.score > AI_THRESHOLD) {
-                             const px = mapX(p.x); const py = mapY(p.y);
-                             heatCtx.drawImage(particleSprite, px - 60, py - 60, 120, 120);
-                         }
-                    });
-                });
-            }
-            ctx.globalAlpha = 0.8; ctx.globalCompositeOperation = 'screen'; 
-            ctx.drawImage(heatCanvas, 0, 0); 
-            ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
-        }
-
-        // SLS
-        if(isSLSActive && !isHeatmapActive) {
-            if(poses.length > 0) drawSLS(poses);
-            if(faces.length > 0) drawFaceMesh(faces);
-        }
-
-        // DIBUJAR HUD SOBRE EL VIDEO (SIN FILTROS DE COLOR)
-        ctx.filter = 'none';
-        drawHUD(ctx);
-    }
-
-    function drawSLS(poses) {
-        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        const mapX = (val) => (val / detCanvas.width) * drawW + drawX;
-        const mapY = (val) => (val / detCanvas.height) * drawH + drawY;
-        const pulse = (Math.sin(Date.now() / 150) + 1) / 2;
-        poses.forEach(pose => {
-            const k = pose.keypoints;
-            const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']];
-            ctx.shadowBlur = 0; ctx.strokeStyle = SLS_LINE_COLOR; ctx.lineWidth = SLS_LINE_WIDTH;
-            ctx.beginPath(); edges.forEach(([a,b]) => { const p1=k.find(p=>p.name==a), p2=k.find(p=>p.name==b); if(p1.score>AI_THRESHOLD && p2.score>AI_THRESHOLD) { ctx.moveTo(mapX(p1.x),mapY(p1.y)); ctx.lineTo(mapX(p2.x),mapY(p2.y)); } }); ctx.stroke();
-            const nose = k.find(p => p.name === 'nose'); const lShoulder = k.find(p => p.name === 'left_shoulder'); const rShoulder = k.find(p => p.name === 'right_shoulder');
-            if (lShoulder && rShoulder && lShoulder.score > 0.1 && rShoulder.score > 0.1) {
-                const neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; const neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
-                ctx.beginPath(); ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); ctx.lineTo(neckX, neckY); ctx.lineTo(mapX(rShoulder.x), mapY(rShoulder.y)); ctx.stroke();
-                if (nose && nose.score > 0.1) { ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); }
-            }
-            ctx.fillStyle = SLS_NODE_COLOR; ctx.shadowBlur = 15; ctx.shadowColor = 'red';
-            k.forEach(p => { if(p.score > AI_THRESHOLD && !p.name.includes('ear')) { const r = 5 + (pulse * 3); ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), r, 0, 2*Math.PI); ctx.fill(); } });
-            ctx.shadowBlur = 0;
-        });
-    }
-
-    function drawFaceMesh(faces) {
-        if(faces.length === 0) return;
-        faces.forEach(face => {
-            const points = face.multiFaceLandmarks ? face.multiFaceLandmarks[0] : face; 
-            ctx.fillStyle = '#39ff14'; 
-            for(let i=0; i<points.length; i++) { const p = points[i]; ctx.fillRect(p.x * drawW + drawX, p.y * drawH + drawY, 2, 2); }
-            const xs = points.map(p => p.x * drawW + drawX); const ys = points.map(p => p.y * drawH + drawY);
-            const minX = Math.min(...xs)-20; const maxX = Math.max(...xs)+20; const minY = Math.min(...ys)-30; const maxY = Math.max(...ys)+30;
-            ctx.strokeStyle = '#FF0000'; ctx.lineWidth = 3; ctx.shadowBlur = 10; ctx.shadowColor = 'red'; ctx.strokeRect(minX, minY, maxX-minX, maxY-minY);
-        });
-    }
-
-    // BUCLE DE IA LIMITADO (THROTTLE) PARA REDUCIR CALENTAMIENTO
-    async function aiLoop() {
-        while(true) {
-            const now = Date.now();
-            if (now - lastAITime > 100) { // Max 10 calculos por segundo
-                if(poseDetector && (isSLSActive || isHeatmapActive || isPareidoliaActive)) { 
-                    try { 
-                        detCtx.drawImage(video, 0, 0, detCanvas.width, detCanvas.height); 
-                        poses = await poseDetector.estimatePoses(detCanvas, {maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_THRESHOLD}); 
-                    } catch(e){} 
-                } else { poses = []; }
-
-                if(faceMesh && isSLSActive && !isHeatmapActive) { 
-                    try { await faceMesh.send({image: video}); } catch(e) {} 
-                } else { faces = []; }
-                lastAITime = now;
-            }
-            await new Promise(r => setTimeout(r, 20)); // Pequeña pausa
-        }
+        if(conn && conn.open) conn.send({ type: 'stats', fps: currentFps, res: `${vW}x${vH}`, signal });
     }
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
-    async function connectToProdock() {
-        const id = document.getElementById('dock-id').value.trim();
-        if(!id) return;
+
+    async function startHybridTransmission() {
+        const name = document.getElementById('stream-name').value.trim();
+        if(!name) return;
+        let host = state.mtxIp.replace("http://",""); if(!host) { showToast("ERROR IP", true); return; } if(!host.includes(":")) host += ":8889";
         document.getElementById('connect-modal').classList.remove('active');
-        
-        // --- LOGICA DE CONEXION (LOCAL VS NUBE) ---
-        const useLocal = localStorage.getItem('obr_use_local') === 'true';
-        const localHost = localStorage.getItem('obr_local_host');
-        const localPort = localStorage.getItem('obr_local_port');
-        const localPath = localStorage.getItem('obr_local_path');
-        const localSecure = localStorage.getItem('obr_local_secure') === 'true';
+        showToast("Conectando...", false);
+        try {
+            pcVideo = new RTCPeerConnection();
+            const stream = el.canvas.captureStream(30); const audio = videoStream.getAudioTracks()[0];
+            if(audio) stream.addTrack(audio); stream.getTracks().forEach(t => pcVideo.addTrack(t, stream));
+            const offer = await pcVideo.createOffer(); await pcVideo.setLocalDescription(offer);
+            const controller = new AbortController(); const id = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(`http://${host}/${name}/whip`, { method: 'POST', body: offer.sdp, headers: {'Content-Type':'application/sdp'}, signal: controller.signal });
+            clearTimeout(id);
+            if(res.ok) { const answer = await res.text(); await pcVideo.setRemoteDescription({type:'answer', sdp:answer}); showToast("Video EN VIVO (MTX)", false); }
+        } catch(e) { showToast("Error Video: " + e.message, true); }
+        try {
+            if(peerCommand) peerCommand.destroy();
+            peerCommand = new Peer(`obr-cam-${name}`, { debug: 1 });
+            peerCommand.on('connection', (c) => { conn = c; conn.on('data', handleCommand); conn.on('open', () => showToast("Director Conectado")); });
+        } catch(e) { console.error(e); }
+    }
 
-        let peerOptions = {};
-
-        if (useLocal && localHost && localPort) {
-            console.log("Conectando vía Servidor Local/Tailscale...");
-            // Indicador visual de modo local
-            document.getElementById('link-status').innerText = "ENLACE: SERVIDOR PRIVADO";
-            document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-purple-400 bg-purple-900/40 px-2 py-1 rounded border border-purple-500 font-bold shadow-[0_0_10px_purple]";
-            
-            peerOptions = {
-                host: localHost,
-                port: parseInt(localPort),
-                path: localPath || '/',
-                secure: localSecure,
-                debug: 1,
-                // Al usar IP directa (VPN/LAN), a veces es mejor desactivar ICE servers públicos para forzar ruta directa,
-                // o dejarlos vacíos si la red es plana (como Tailscale).
-                config: { iceServers: [] } 
-            };
-        } else {
-            console.log("Conectando vía Nube Pública...");
-            peerOptions = { 
-                debug: 1, 
-                config: { 
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' }, 
-                        { urls: 'stun:stun1.l.google.com:19302' }, 
-                        { urls: 'stun:global.stun.twilio.com:3478' },
-                        // Open Relay (Free TURN)
-                        { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
-                        { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-                        { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
-                    ] 
-                } 
-            };
-        }
-
-        peer = new Peer(null, peerOptions);
-        
-        setInterval(() => { if(conn && conn.open) { conn.send({ type: 'ping', time: Date.now() }); } }, 2000);
-        peer.on('open', myId => {
-            conn = peer.connect(id);
-            conn.on('open', () => {
-                if(!useLocal) {
-                    document.getElementById('link-status').innerText = "ENLACE: VPN PRODOCK (SEGURO)";
-                    document.getElementById('link-status').className = "absolute bottom-4 left-4 text-[10px] font-mono text-cyan-400 bg-cyan-900/40 px-2 py-1 rounded border border-cyan-500 font-bold shadow-[0_0_10px_cyan]";
-                }
-                conn.send({ type: 'register', name: 'CAM-' + myId.substr(0,3) });
-            });
-            conn.on('data', d => {
-                if(d.type === 'tally') document.getElementById('tally-border').className = d.state !== 'idle' ? d.state : '';
-                if(d.type === 'pong') { lastPingTime = Date.now(); const latency = Date.now() - d.time; document.getElementById('ping-val').innerText = latency + "ms"; const sig = document.getElementById('signal-ui'); if(latency < 100) sig.className = "signal-bars signal-good"; else if(latency < 300) sig.className = "signal-bars signal-ok"; else sig.className = "signal-bars signal-bad"; }
-                if(d.type === 'cmd') {
-                    if(d.action === 'filter') {
-                        const btnMap = { 'night': 'btn-night', 'thermal': 'btn-thermal', 'urbex': 'btn-urbex', 'sls': 'btn-sls', 'heatmap': 'btn-heatmap', 'normal': null };
-                        if(d.value === 'normal') setFilter('normal');
-                        else if(btnMap[d.value]) {
-                            setFilter(d.value, document.getElementById(btnMap[d.value]));
-                        }
-                    }
-                    if(d.action === 'toggle' && d.value === 'pareidolia') togglePareidolia(document.getElementById('btn-ia'));
-                    if(d.action === 'reset') { setFilter('normal'); resetZoom(); }
-                }
-            });
-            const streamToSend = slsCanvas.captureStream(30); 
-            if(destNode) streamToSend.addTrack(destNode.stream.getAudioTracks()[0]);
-            else { const audioTrack = video.srcObject.getAudioTracks()[0]; if(audioTrack) streamToSend.addTrack(audioTrack); }
-            peer.call(id, streamToSend);
-        });
+    function handleCommand(cmd) {
+        showToast(`CMD: ${cmd.type.toUpperCase()}`);
+        if(cmd.type === 'filter') { const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; setFilter(cmd.val, document.getElementById(map[cmd.val])); }
+        else if(cmd.type === 'flash') toggleTorch(cmd.val);
+        else if(cmd.type === 'ai_trigger') togglePareidolia();
     }
 
     function setFilter(f, btn) {
-        if(currentFilter === f && f !== 'normal') { setFilter('normal'); return; }
-        currentFilter = f;
+        if(state.filter === f && f !== 'normal') f = 'normal';
+        state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
+        document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
+        document.body.className = ''; 
+        if(f !== 'normal') {
+            if(f === 'night') document.body.classList.add('filter-night-vision');
+            else if(f === 'thermal') document.body.classList.add('filter-thermal');
+            else if(f === 'urbex') document.body.classList.add('filter-urbex');
+            else if(f === 'sls') document.body.classList.add('filter-pareidolia');
+        }
+        if(f === 'night') toggleTorch(true); else toggleTorch(false);
+        document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none';
         
-        isSLSActive = (f === 'sls');
-        isHeatmapActive = (f === 'heatmap');
-        
-        document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); 
-        if(btn && f !== 'normal') btn.classList.add('active-state');
-        
-        document.body.classList.remove('filter-night-vision', 'filter-thermal', 'filter-urbex', 'filter-pareidolia', 'filter-heatmap');
-        
-        // IMPORTANTE: Al aplicar la clase, el CSS 'body.filter-night-vision #main-view-area::after' se activa
-        if(f === 'night') { document.body.classList.add('filter-night-vision'); toggleTorch(true); } else { toggleTorch(false); }
-        if(f === 'thermal') document.body.classList.add('filter-thermal');
-        if(f === 'urbex') document.body.classList.add('filter-urbex');
-        if(f === 'sls') document.body.classList.add('filter-pareidolia');
-
-        document.getElementById('sls-pip').style.display = isSLSActive ? 'block' : 'none';
-        if(isPareidoliaActive) togglePareidolia();
-    }
-    
-    async function toggleTorch(enable) {
-        if (!videoStream) return;
-        const track = videoStream.getVideoTracks()[0];
-        try { await track.applyConstraints({ advanced: [{ torch: enable }] }); } catch (e) {}
+        poses = [];
+        lidarMask = null;
+        lastLidarMask = null;
     }
 
-    function speakText(t) { 
-        if ('speechSynthesis' in window) { 
-            window.speechSynthesis.cancel(); 
-            const u = new SpeechSynthesisUtterance(t); 
-            u.lang = 'es-ES'; u.pitch = 0.6; u.rate = 0.9; 
-            u.onend = () => { setTimeout(() => { isAIProcessing = false; }, 2000); };
-            u.onerror = () => { isAIProcessing = false; };
+    async function toggleTorch(force) {
+        const t = videoStream?.getVideoTracks()[0]; if(!t) return;
+        const on = (typeof force === 'boolean') ? force : !t.getSettings().torch;
+        try { await t.applyConstraints({advanced:[{torch:on}]}); } catch(e){}
+    }
+
+    function speakText(text) {
+        if('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'es-ES'; u.rate = 1.1; u.pitch = 0.8;
             window.speechSynthesis.speak(u);
-            
-            if(conn && conn.open) {
-                conn.send({ type: 'ai-speech', text: t });
-            }
-        } else { setTimeout(() => { isAIProcessing = false; }, 2000); }
+        }
     }
 
-    async function triggerPareidolia() { 
-        if(!GEMINI_API_KEY) return; 
-        if(isAIProcessing || window.speechSynthesis.speaking) return; 
-        isAIProcessing = true; 
-        const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; 
-        canvas.getContext('2d').drawImage(video, 0, 0, 640, 360); 
-        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1]; 
-        const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras."; 
-        try { 
+    // --- FUNCIONES DE EFECTO ESCANEO (OVERLAY) ---
+    function startScanningEffect() {
+        const overlay = document.getElementById('ai-scan-overlay');
+        overlay.innerHTML = '';
+        overlay.style.display = 'block';
+        
+        scanInterval = setInterval(() => {
+            const box = document.createElement('div');
+            box.className = 'scan-box';
+            
+            const size = Math.floor(Math.random() * 80) + 40;
+            const x = Math.floor(Math.random() * (window.innerWidth - size));
+            const y = Math.floor(Math.random() * (window.innerHeight - size));
+            
+            box.style.width = `${size}px`;
+            box.style.height = `${size}px`;
+            box.style.left = `${x}px`;
+            box.style.top = `${y}px`;
+            
+            overlay.appendChild(box);
+            setTimeout(() => box.remove(), 800);
+        }, 150); 
+    }
+
+    function stopScanningEffect() {
+        clearInterval(scanInterval);
+        const overlay = document.getElementById('ai-scan-overlay');
+        overlay.innerHTML = '';
+        overlay.style.display = 'none';
+    }
+
+    // --- TRIGGER PRINCIPAL ---
+    async function triggerPareidolia() {
+        const video = el.video; 
+        if(!GEMINI_API_KEY) return;
+        if(isAIProcessing || window.speechSynthesis.speaking) return;
+
+        // --- LIMITADOR DE VELOCIDAD IA (5 por minuto = 12 segundos) ---
+        const now = Date.now();
+        if (now - lastPareidoliaCall < 12000) {
+            console.log("IA Vision: Enfriando motores...");
+            return;
+        }
+        lastPareidoliaCall = now;
+        
+        isAIProcessing = true;
+        
+        document.getElementById('ai-mini-text').innerText = "ANALIZANDO...";
+        
+        startScanningEffect();
+
+        const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
+        canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
+        const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
+        try {
             let attempts = 0; let success = false; let data = null;
             while(attempts < 3 && !success) {
                 try {
-                     const modelToUse = CURRENT_AI_MODEL || "gemini-2.5-flash-preview-09-2025";
-                     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }) }); 
-                     data = await resp.json();
-                     if (data.candidates && data.candidates[0].content) { success = true; } else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
+                    const modelToUse = CURRENT_AI_MODEL || "gemini-2.5-flash-preview-09-2025";
+                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }) });
+                    data = await resp.json();
+                    if (data.candidates && data.candidates[0].content) { success = true; } else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
                 } catch(err) { attempts++; }
             }
-            let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SIN DATOS CLAROS";
-            if(text.length < 3) text = "SIN DATOS CLAROS"; 
-            const aiHeader = document.getElementById('ai-vision-header'); const aiImg = document.getElementById('ai-mini-img'); const aiText = document.getElementById('ai-mini-text');
-            aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiHeader.classList.add('active');
-            speakText(text); 
-        } catch(e) { console.log(e); isAIProcessing = false; } 
+            
+            let text = "REINTENTANDO..."; 
+            if (success) {
+                 text = (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim();
+                 if(text.length < 3) text = "PRESENCIA DEBIL...";
+            } else {
+                 text = "SEÑAL DEBIL..."; 
+            }
+
+            const aiText = document.getElementById('ai-mini-text');
+            const aiImg = document.getElementById('ai-mini-img');
+            
+            aiImg.src = canvas.toDataURL(); 
+            aiText.innerText = text.toUpperCase(); 
+            speakText(text);
+        } catch(e) { console.log(e); isAIProcessing = false; }
+        
+        stopScanningEffect(); 
+        isAIProcessing = false; 
     }
 
-    function togglePareidolia(btnElement) { 
-        if(!GEMINI_API_KEY) { alert("NO API KEY"); return; } 
+    function togglePareidolia(btnElement) {
+        if(!GEMINI_API_KEY) { alert("NO API KEY"); return; }
         const btn = btnElement || document.getElementById('btn-ia');
-        isPareidoliaActive = !isPareidoliaActive; 
-        if(isPareidoliaActive) { 
+        isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
+        
+        const aiHeader = document.getElementById('ai-vision-header');
+        const aiImg = document.getElementById('ai-mini-img');
+        const aiText = document.getElementById('ai-mini-text');
+        const hudLayer = document.getElementById('hud-layer');
+
+        if(isPareidoliaActive) {
             if(btn) btn.classList.add('active-state');
-            document.body.classList.add('filter-pareidolia'); 
-            speakText("VISIÓN ACTIVADA"); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 8000); 
-        } else { 
+            document.body.classList.add('filter-pareidolia');
+            speakText("VISIÓN ACTIVADA"); 
+            
+            hudLayer.classList.add('hud-hidden');
+            
+            aiText.innerText = "INICIANDO ESCANEO...";
+            aiImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            
+            aiHeader.classList.add('active'); 
+            triggerPareidolia(); 
+            pareidoliaInterval = setInterval(triggerPareidolia, 12000);
+        } else {
             if(btn) btn.classList.remove('active-state');
-            document.body.classList.remove('filter-pareidolia'); 
-            speakText("VISIÓN DESACTIVADA"); clearInterval(pareidoliaInterval); 
-            isAIProcessing = false; 
-            const aiHeader = document.getElementById('ai-vision-header');
-            if(aiHeader) aiHeader.classList.remove('active'); 
-        } 
-        showMenus(); 
+            document.body.classList.remove('filter-pareidolia');
+            speakText("VISIÓN DESACTIVADA"); 
+            clearInterval(pareidoliaInterval);
+            isAIProcessing = false;
+            
+            hudLayer.classList.remove('hud-hidden');
+            
+            stopScanningEffect(); 
+            
+            aiHeader.classList.remove('active'); 
+            aiText.innerText = "";
+        }
+        showMenus();
     }
 
-    async function validateAndSaveKey() { 
-        const input = document.getElementById('api-key-internal'); 
-        const btn = document.getElementById('btn-validate-api'); 
-        const status = document.getElementById('api-status-msg'); 
-        const k = input.value.trim(); 
-        if(!k) { status.innerText = "❌ CAMPO VACIO"; return; } 
-        input.disabled = true; btn.disabled = true; 
+    async function validateAndSaveKey() {
+        const input = document.getElementById('api-key-internal');
+        const btn = document.getElementById('btn-validate-api');
+        const status = document.getElementById('api-status-msg');
+        const k = input.value.trim();
+        if(!k) { status.innerText = "❌ CAMPO VACIO"; return; }
+        input.disabled = true; btn.disabled = true;
         const modelsToTry = ["gemini-2.5-flash-preview-09-2025", "gemini-1.5-flash", "gemini-1.5-pro"];
         let workingModel = null;
-        for(const step of ["CONECTANDO...", "ENVIANDO PING...", "VERIFICANDO..."]) { status.innerText = step; await new Promise(r => setTimeout(r, 400)); } 
+        for(const step of ["CONECTANDO...", "ENVIANDO PING...", "VERIFICANDO..."]) { status.innerText = step; await new Promise(r => setTimeout(r, 400)); }
         for (const model of modelsToTry) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }) }); 
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }) });
                 if(response.ok) { workingModel = model; break; }
             } catch(e) {}
         }
-        if(workingModel) { 
-            status.innerText = "✅ ACTIVA (" + workingModel.replace("gemini-","").split("-")[0] + ")"; status.style.color = "#00ff41"; 
-            GEMINI_API_KEY = k; CURRENT_AI_MODEL = workingModel;
-            localStorage.setItem('obr_gemini_key', k); localStorage.setItem('obr_ai_model', workingModel); 
-        } else { status.innerText = "❌ ERROR: LLAVE INVALIDA"; status.style.color = "red"; } 
-        input.disabled = false; btn.disabled = false; btn.innerText = "VALIDAR"; 
+        if(workingModel) {
+            status.innerText = "✅ ACTIVA (" + workingModel.replace("gemini-","").split("-")[0] + ")"; status.style.color = "#00ff41";
+            GEMINI_API_KEY = k; CURRENT_AI_MODEL = workingModel; state.apiKey = k; state.aiModel = workingModel;
+            localStorage.setItem('obr_gemini_key', k); localStorage.setItem('obr_ai_model', workingModel);
+        } else { status.innerText = "❌ ERROR: LLAVE INVALIDA"; status.style.color = "red"; }
+        input.disabled = false; btn.disabled = false; btn.innerText = "VALIDAR";
     }
 
+    function saveSettings() { state.mtxIp = document.getElementById('mtx-host').value; localStorage.setItem('obr_mtx_ip', state.mtxIp); showToast("Config Guardada"); }
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
+    
+    let menuTimeout; const menus = [document.getElementById('menu-left'), document.getElementById('menu-right')];
+    document.getElementById('touch-surface').addEventListener('click', showMenus);
+    function showMenus() { menus.forEach(m => m.classList.add('visible')); clearTimeout(menuTimeout); menuTimeout = setTimeout(() => menus.forEach(m => m.classList.remove('visible')), 4000); }
+    function showToast(msg, isError = false) { const t = document.createElement('div'); t.className = `toast ${isError ? 'error' : ''}`; t.innerText = msg; document.getElementById('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000); }
+    let pressTimer; const touchSurface = document.getElementById('touch-surface');
+    touchSurface.addEventListener('pointerdown', (e) => { pressTimer = setTimeout(() => { state.zoom = state.zoom === 1 ? 2.5 : 1; const w = window.innerWidth, h = window.innerHeight; const xPct = (e.clientX / w) * 100; const yPct = (e.clientY / h) * 100; el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; el.zoom.style.transform = `scale(${state.zoom})`; const ind = document.getElementById('zoom-target-indicator'); ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; ind.classList.add('active'); setTimeout(()=>ind.classList.remove('active'),500); if(navigator.vibrate) navigator.vibrate(50); }, 500); });
+    touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer)); touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
+    function resetZoom(btn) { state.zoom = 1; el.zoom.style.transform = `scale(1)`; if(btn) btn.classList.add('active-state'); setTimeout(()=>btn?.classList.remove('active-state'), 200); }
 </script>
 </body>
 </html>
