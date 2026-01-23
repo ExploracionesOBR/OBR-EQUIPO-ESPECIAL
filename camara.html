@@ -25,7 +25,7 @@
 
     <!-- FALLBACKS BLINDADOS -->
     <script>
-        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"><\/script>');
+        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tf@4.10.0"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3"><\/script>');
         if(!window.FaceMesh) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"><\/script>');
         if(!window.SelfieSegmentation) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"><\/script>');
@@ -126,7 +126,7 @@
             100% { transform: translate(0,0); filter: none; }
         }
 
-        /* --- IA VISION HEADER UPDATED --- */
+        /* --- IA VISION HEADER --- */
         #ai-vision-header { 
             position: absolute; 
             top: 20px; 
@@ -146,7 +146,6 @@
             opacity: 1; 
         }
 
-        /* CONTENEDOR IMAGEN: Arriba */
         .ai-image-container {
             position: relative;
             width: 100%;
@@ -155,19 +154,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            
-            /* Estado Inicial: Oculto y colapsado */
             height: 0;
             opacity: 0;
             margin-bottom: 0;
             border: 0px solid transparent;
-
-            transition: height 0.6s cubic-bezier(0.25, 1, 0.5, 1), 
-                        opacity 0.6s ease-in,
-                        margin 0.6s ease;
+            transition: height 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease-in, margin 0.6s ease;
         }
         
-        /* Estado Activo: Se expande y empuja al texto */
         .ai-image-container.has-data {
             height: 96px; 
             opacity: 1;
@@ -182,7 +175,6 @@
             filter: invert(1) hue-rotate(180deg) contrast(1.5); 
         }
 
-        /* TEXTO: Abajo */
         #ai-mini-text { 
             background: rgba(10, 0, 0, 0.90); 
             border-left: 4px solid #ff3333; 
@@ -199,7 +191,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: normal;
-            
             transition: transform 0.3s ease;
         }
 
@@ -292,7 +283,6 @@
             <video id="shared-video-element" autoplay playsinline muted></video>
             <canvas id="sls-canvas"></canvas>
         </div>
-        <!-- SCAN OVERLAY RESTAURADO -->
         <div id="ai-scan-overlay"></div>
     </div>
     <canvas id="heatmap-buffer"></canvas>
@@ -340,13 +330,11 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
-        <!-- HEADER IA ORDENADO: IMAGEN ARRIBA, TEXTO ABAJO -->
+        <!-- HEADER IA ORDENADO -->
         <div id="ai-vision-header">
-            <!-- 1. Contenedor de Imagen (Empuja al texto) -->
             <div class="ai-image-container" id="ai-container-box">
                 <img id="ai-mini-img" alt="Scan">
             </div>
-            <!-- 2. Texto (Será empujado) -->
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
     </div>
@@ -369,11 +357,27 @@
         </div>
     </div>
 
+    <!-- MODAL DE CONFIGURACIÓN ACTUALIZADO -->
     <div id="settings-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
-            <h2 class="text-red-500 font-orbitron mb-4 font-bold">CONFIGURACIÓN</h2>
-            <input type="text" id="mtx-host" placeholder="MTX IP (Ej: 192.168.1.70)" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase mb-4">
-            <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white mb-2 text-xs rounded outline-none focus:border-red-500">
+            <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center">CONFIGURACIÓN</h2>
+            
+            <div class="mb-4">
+                <label class="text-[10px] text-gray-400 font-mono mb-1 block">HOST IP (MEDIA MTX)</label>
+                <input type="text" id="mtx-host" placeholder="Ej: 100.80.55.10:8889" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase outline-none focus:border-red-500">
+            </div>
+
+            <div class="mb-4">
+                <label class="text-[10px] text-gray-400 font-mono mb-1 block">STUDIO ID (DOCK ID)</label>
+                <input type="text" id="studio-id" placeholder="Ej: 100.80.55.10" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono uppercase outline-none focus:border-red-500">
+            </div>
+
+            <div class="h-px bg-gray-800 w-full mb-4"></div>
+
+            <div class="mb-2">
+                <label class="text-[10px] text-gray-400 font-mono mb-1 block">IA ANALYZER KEY</label>
+                <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded outline-none focus:border-red-500">
+            </div>
             
             <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="w-full mb-3 py-1 text-[9px] border border-blue-900/50 rounded text-blue-400 hover:text-white hover:border-blue-400 hover:bg-blue-900/30 bg-black/40 font-mono transition-colors">
                 <i class="fas fa-external-link-alt mr-1"></i> OBTENER API KEY GRATIS
@@ -381,6 +385,7 @@
 
             <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-2 rounded hover:bg-green-900/20 font-bold mb-4 text-xs">VALIDAR API</button>
             <div id="api-status-msg" class="text-[10px] font-mono mb-4 text-center text-yellow-500"></div>
+            
             <button onclick="saveSettings()" class="w-full border border-cyan-800 text-cyan-500 py-2 rounded hover:bg-cyan-900/20 text-xs font-bold">GUARDAR TODO</button>
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white">CERRAR</button>
         </div>
@@ -388,7 +393,17 @@
 
 <script>
     const AI_SENSITIVITY = 0.2; 
-    const state = { apiKey: localStorage.getItem("obr_gemini_key") || "", aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", mtxIp: localStorage.getItem("obr_mtx_ip") || "192.168.1.70", filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, zoom: 1 };
+    const state = { 
+        apiKey: localStorage.getItem("obr_gemini_key") || "", 
+        aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", 
+        mtxIp: localStorage.getItem("obr_mtx_ip") || "192.168.1.70",
+        studioId: localStorage.getItem("obr_studio_id") || "", // Nuevo campo
+        filter: 'normal', 
+        isSLS: false, 
+        isLidar: false, 
+        isPareidolia: false, 
+        zoom: 1 
+    };
     
     // Globals
     let GEMINI_API_KEY = state.apiKey;
@@ -397,30 +412,30 @@
     let isPareidoliaActive = false;
     let pareidoliaInterval = null;
     let scanInterval = null;
-    let lastPareidoliaCall = 0; // Limiter timestamp
+    let lastPareidoliaCall = 0; 
     let imageCollapseTimeout = null;
 
     const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
 
     const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
-    
-    // AJUSTE CLAVE: Resolución 320x180 (Balance perfecto entre velocidad v5.1.15 y multi-cuerpo)
     const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
     const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
     let aiDetector = null, faceMesh = null, segmenter = null, poses = [], faces = [], lidarMask = null;
-    let isPoseEstimationRunning = false;
-    let lidarBusy = false; // Flag simple para LIDAR (v5.1.15 style)
-    let lastLidarMask = null; // Mantenemos persistencia SOLO en LIDAR porque funciona bien
+    let lidarBusy = false; 
+    let lastLidarMask = null; 
     
     let videoStream, peerCommand = null, pcVideo = null, conn = null;
     let frameCount = 0, lastTime = performance.now(), currentFps = 0;
 
-    let logoImg = new Image();
-    logoImg.src = 'obr-logo.png';
+    let logoImg = new Image(); logoImg.src = 'obr-logo.png';
 
-    window.onload = () => { document.getElementById('api-key-internal').value = state.apiKey; document.getElementById('mtx-host').value = state.mtxIp; };
+    window.onload = () => { 
+        document.getElementById('api-key-internal').value = state.apiKey; 
+        document.getElementById('mtx-host').value = state.mtxIp; 
+        document.getElementById('studio-id').value = state.studioId; // Cargar Studio ID
+    };
 
     async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
@@ -428,10 +443,7 @@
             updateProgress(10, "INICIANDO SENSOR...");
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
-        } catch(e) {
-            alert("Error Crítico Cámara: " + e.message);
-            return; 
-        }
+        } catch(e) { alert("Error Crítico Cámara: " + e.message); return; }
         updateProgress(100, "VIDEO OK");
         document.getElementById('loading').style.display = 'none';
         resize(); window.addEventListener('resize', resize);
@@ -440,57 +452,21 @@
         showToast("Cargando Motores IA...", false);
         setTimeout(async () => {
             try {
-                if(window.tf) { 
-                    try { 
-                        await tf.setBackend('webgl'); 
-                    } catch(e) { await tf.setBackend('cpu'); } 
-                }
-                
-                if(window.poseDetection) { 
-                    try { 
-                        aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
-                            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING 
-                        }); 
-                    } catch(e) {} 
-                }
-                
+                if(window.tf) { try { await tf.setBackend('webgl'); } catch(e) { await tf.setBackend('cpu'); } }
+                if(window.poseDetection) { try { aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }); } catch(e) {} }
                 if(window.FaceMesh) { try { faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`}); faceMesh.setOptions({ maxNumFaces: 3, minDetectionConfidence: AI_SENSITIVITY }); faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; }); await faceMesh.initialize(); } catch(e) {} }
-                
-                if(window.SelfieSegmentation) { 
-                    try { 
-                        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); 
-                        selfieSegmentation.setOptions({ modelSelection: 1 }); // 1 = Landscape
-                        selfieSegmentation.onResults(res => { 
-                            if(res && res.segmentationMask) {
-                                lidarMask = res.segmentationMask; 
-                                lastLidarMask = res.segmentationMask; 
-                            }
-                            lidarBusy = false;
-                        }); 
-                        segmenter = selfieSegmentation; 
-                    } catch(e) {} 
-                }
-                
+                if(window.SelfieSegmentation) { try { const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); selfieSegmentation.setOptions({ modelSelection: 1 }); selfieSegmentation.onResults(res => { if(res && res.segmentationMask) { lidarMask = res.segmentationMask; lastLidarMask = res.segmentationMask; } lidarBusy = false; }); segmenter = selfieSegmentation; } catch(e) {} }
                 showToast("SISTEMAS IA ACTIVOS", false);
-                // BUCLE SIMPLE (v5.1.15 Style)
                 setInterval(aiLoop, 80); 
             } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
         }, 500); 
     }
 
-    function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
-function drawLidarEffect(c, width, height) {
-        const maskToUse = lidarMask || lastLidarMask; 
-        if (!maskToUse) return; 
-        
-        lidarCtx.clearRect(0, 0, width, height);
-        lidarCtx.save();
-        lidarCtx.drawImage(maskToUse, 0, 0, width, height);
-        lidarCtx.globalCompositeOperation = 'source-in';
-        const grad = lidarCtx.createLinearGradient(0, 0, 0, height);
-        grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
-        lidarCtx.fillStyle = grad; lidarCtx.fillRect(0, 0, width, height);
-        lidarCtx.restore();
+    function drawLidarEffect(c, width, height) {
+        const maskToUse = lidarMask || lastLidarMask; if (!maskToUse) return; 
+        lidarCtx.clearRect(0, 0, width, height); lidarCtx.save(); lidarCtx.drawImage(maskToUse, 0, 0, width, height); lidarCtx.globalCompositeOperation = 'source-in';
+        const grad = lidarCtx.createLinearGradient(0, 0, 0, height); grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
+        lidarCtx.fillStyle = grad; lidarCtx.fillRect(0, 0, width, height); lidarCtx.restore();
         c.globalCompositeOperation = 'screen'; c.drawImage(el.lidarCanvas, 0, 0, width, height); c.globalCompositeOperation = 'source-over';
     }
 
@@ -498,120 +474,46 @@ function drawLidarEffect(c, width, height) {
     function updateProgress(p, t) { document.getElementById('progress-bar').style.width = p + '%'; document.getElementById('progress-text').innerText = t; }
 
     function renderLoop() {
-        frameCount++;
-        ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
-        const vW = el.video.videoWidth, vH = el.video.videoHeight;
-        const cW = el.canvas.width, cH = el.canvas.height;
+        frameCount++; ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+        const vW = el.video.videoWidth, vH = el.video.videoHeight, cW = el.canvas.width, cH = el.canvas.height;
         if (vW && vH) {
-            const vRatio = vW / vH, cRatio = cW / cH;
-            let dW, dH, dX, dY;
-            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } 
-            else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+            const vRatio = vW / vH, cRatio = cW / cH; let dW, dH, dX, dY;
+            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
-            window.drawCoords = { dW, dH, dX, dY, vW, vH };
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
         if (state.isSLS && !state.isLidar) drawSLS();
         requestAnimationFrame(renderLoop);
     }
 
-    // --- BUCLE IA V5.1.15 (PURO) ---
-    // Eliminada toda la lógica de persistencia/sticky que causaba parpadeos
     async function aiLoop() {
         if (isAIProcessing) return; 
-        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { 
-            poses = []; faces = []; lidarMask = null; return; 
-        }
-
-        if (state.isLidar && segmenter) { 
-            if(!lidarBusy) { 
-                lidarBusy = true; 
-                try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } 
-            } 
-        } else {
-            // SLS Directo
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { poses = []; faces = []; lidarMask = null; return; }
+        if (state.isLidar && segmenter) { if(!lidarBusy) { lidarBusy = true; try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } } } else {
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
-            
-            if (aiDetector && state.isSLS) { 
-                try { 
-                    // Detección directa y cruda -> Sin buffers que se limpien a destiempo
-                    poses = await aiDetector.estimatePoses(aiCanvas, {
-                        maxPoses: 5, // AJUSTE PARA MULTIPLES CUERPOS
-                        flipHorizontal: false,
-                        scoreThreshold: 0.25 
-                    }); 
-                } catch(e){} 
-            }
-            if (faceMesh && state.isSLS) { 
-                try { await faceMesh.send({image: el.video}); } catch(e){} 
-            }
-        }
-    }
-    function drawSLS() {
-        if (!window.drawCoords) return;
-        const { dW, dH, dX, dY } = window.drawCoords;
-        const mapX = (x) => (x / aiCanvas.width) * dW + dX; const mapY = (y) => (y / aiCanvas.height) * dH + dY;
-        ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.fillStyle = '#a855f7';
-        
-        poses.forEach(pose => {
-            const k = pose.keypoints;
-            const bodyPairs = [[5,7],[7,9],[6,8],[8,10],[11,12],[11,13],[13,15],[12,14],[14,16],[5,11],[6,12]];
-            ctx.beginPath(); bodyPairs.forEach(([i, j]) => { if(k[i].score > AI_SENSITIVITY && k[j].score > AI_SENSITIVITY) { ctx.moveTo(mapX(k[i].x), mapY(k[i].y)); ctx.lineTo(mapX(k[j].x), mapY(k[j].y)); } }); ctx.stroke();
-            const nose = k[0], lEye = k[1], rEye = k[2], lShoulder = k[5], rShoulder = k[6];
-            let neckX, neckY;
-            if(lShoulder.score > AI_SENSITIVITY && rShoulder.score > AI_SENSITIVITY) {
-                neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
-                ctx.beginPath(); ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(mapX(rShoulder.x), mapY(rShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
-                if(nose.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(nose.x), mapY(nose.y)); ctx.lineTo(neckX, neckY); ctx.stroke(); }
-            }
-            if(nose.score > AI_SENSITIVITY) { if(lEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(lEye.x), mapY(lEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } if(rEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(rEye.x), mapY(rEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } }
-            k.forEach((p, i) => { if(i === 3 || i === 4) return; if(p.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), 4, 0, 2*Math.PI); ctx.fill(); } });
-        });
-        if(faces.length > 0) {
-            faces.forEach(face => {
-                let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-                face.forEach((pt) => { const x=pt.x*dW+dX; const y=pt.y*dH+dY; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; });
-                const pad=20; ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                ctx.fillStyle='#39ff14'; face.forEach((pt) => { ctx.fillRect(pt.x*dW+dX, pt.y*dH+dY, 1.5, 1.5); });
-            });
+            if (aiDetector && state.isSLS) { try { poses = await aiDetector.estimatePoses(aiCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25 }); } catch(e){} }
+            if (faceMesh && state.isSLS) { try { await faceMesh.send({image: el.video}); } catch(e){} }
         }
     }
 
     function updateClock() {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}); 
-        const timeStr = now.toLocaleTimeString();
-        const clockEl = document.getElementById('hud-time');
-        if (clockEl) clockEl.innerText = `${dateStr} - ${timeStr}`;
+        const now = new Date(); const dateStr = now.toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}); const timeStr = now.toLocaleTimeString();
+        const clockEl = document.getElementById('hud-time'); if (clockEl) clockEl.innerText = `${dateStr} - ${timeStr}`;
     }
 
     function telemetryLoop() {
         const now = performance.now(); const elapsed = now - lastTime;
         if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
         updateClock(); 
-        let signal = 0;
-        if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++;
-        if(conn && conn.open) signal++;
-        if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) signal++;
-        
-        const vW = el.video.videoWidth || 0; const vH = el.video.videoHeight || 0;
-        document.getElementById('meta-res').innerText = `${vW}x${vH}`;
-        document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
+        let signal = 0; if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++; if(conn && conn.open) signal++; if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) signal++;
+        const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
+        document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
-        
-        const statusEl = document.getElementById('status-text');
-        const dotEl = document.getElementById('status-dot');
-        const tallyEl = document.getElementById('tally-border');
-        
+        const statusEl = document.getElementById('status-text'), dotEl = document.getElementById('status-dot'), tallyEl = document.getElementById('tally-border');
         if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) {
-             statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono";
-             dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]";
-             tallyEl.className = "online";
+             statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; tallyEl.className = "online";
         } else {
-             statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono";
-             dotEl.className = "w-2 h-2 rounded-full bg-red-900";
-             tallyEl.className = "preview";
+             statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-red-900"; tallyEl.className = "preview";
         }
         if(conn && conn.open) conn.send({ type: 'stats', fps: currentFps, res: `${vW}x${vH}`, signal });
     }
@@ -619,258 +521,119 @@ function drawLidarEffect(c, width, height) {
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
 
     async function startHybridTransmission() {
-        const name = document.getElementById('stream-name').value.trim();
-        if(!name) return;
+        const name = document.getElementById('stream-name').value.trim(); if(!name) return;
         let host = state.mtxIp.replace("http://",""); if(!host) { showToast("ERROR IP", true); return; } if(!host.includes(":")) host += ":8889";
-        document.getElementById('connect-modal').classList.remove('active');
-        showToast("Conectando...", false);
+        document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
         try {
-            pcVideo = new RTCPeerConnection();
-            const stream = el.canvas.captureStream(30); const audio = videoStream.getAudioTracks()[0];
+            pcVideo = new RTCPeerConnection(); const stream = el.canvas.captureStream(30); const audio = videoStream.getAudioTracks()[0];
             if(audio) stream.addTrack(audio); stream.getTracks().forEach(t => pcVideo.addTrack(t, stream));
             const offer = await pcVideo.createOffer(); await pcVideo.setLocalDescription(offer);
             const controller = new AbortController(); const id = setTimeout(() => controller.abort(), 5000);
             const res = await fetch(`http://${host}/${name}/whip`, { method: 'POST', body: offer.sdp, headers: {'Content-Type':'application/sdp'}, signal: controller.signal });
-            clearTimeout(id);
-            if(res.ok) { const answer = await res.text(); await pcVideo.setRemoteDescription({type:'answer', sdp:answer}); showToast("Video EN VIVO (MTX)", false); }
+            clearTimeout(id); if(res.ok) { const answer = await res.text(); await pcVideo.setRemoteDescription({type:'answer', sdp:answer}); showToast("Video EN VIVO (MTX)", false); }
         } catch(e) { showToast("Error Video: " + e.message, true); }
-        try {
-            if(peerCommand) peerCommand.destroy();
-            peerCommand = new Peer(`obr-cam-${name}`, { debug: 1 });
-            peerCommand.on('connection', (c) => { conn = c; conn.on('data', handleCommand); conn.on('open', () => showToast("Director Conectado")); });
-        } catch(e) { console.error(e); }
+        try { if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(`obr-cam-${name}`, { debug: 1 }); peerCommand.on('connection', (c) => { conn = c; conn.on('data', handleCommand); conn.on('open', () => showToast("Director Conectado")); }); } catch(e) { console.error(e); }
     }
 
     function handleCommand(cmd) {
         showToast(`CMD: ${cmd.type.toUpperCase()}`);
         if(cmd.type === 'filter') { const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; setFilter(cmd.val, document.getElementById(map[cmd.val])); }
-        else if(cmd.type === 'flash') toggleTorch(cmd.val);
-        else if(cmd.type === 'ai_trigger') togglePareidolia();
+        else if(cmd.type === 'flash') toggleTorch(cmd.val); else if(cmd.type === 'ai_trigger') togglePareidolia();
     }
 
     function setFilter(f, btn) {
-        if(state.filter === f && f !== 'normal') f = 'normal';
-        state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
+        if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
-        document.body.className = ''; 
-        if(f !== 'normal') {
-            if(f === 'night') document.body.classList.add('filter-night-vision');
-            else if(f === 'thermal') document.body.classList.add('filter-thermal');
-            else if(f === 'urbex') document.body.classList.add('filter-urbex');
-            else if(f === 'sls') document.body.classList.add('filter-pareidolia');
-        }
-        if(f === 'night') toggleTorch(true); else toggleTorch(false);
-        document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none';
-        
-        poses = [];
-        lidarMask = null;
-        lastLidarMask = null;
+        document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
+        if(f === 'night') toggleTorch(true); else toggleTorch(false); document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
     }
 
-    async function toggleTorch(force) {
-        const t = videoStream?.getVideoTracks()[0]; if(!t) return;
-        const on = (typeof force === 'boolean') ? force : !t.getSettings().torch;
-        try { await t.applyConstraints({advanced:[{torch:on}]}); } catch(e){}
-    }
+    async function toggleTorch(force) { const t = videoStream?.getVideoTracks()[0]; if(!t) return; const on = (typeof force === 'boolean') ? force : !t.getSettings().torch; try { await t.applyConstraints({advanced:[{torch:on}]}); } catch(e){} }
 
     function speakText(text) {
         if('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            
-            // Limpieza básica (manteniendo la fluidez)
-            const cleanText = text.replace(/[\.,;:-]{2,}/g, '. ').replace(/[\n\r]/g, ' ');
-            
-            const u = new SpeechSynthesisUtterance(cleanText);
-            u.lang = 'es-MX'; // Prioridad Español Latino
-            u.rate = 1.0; 
-            u.pitch = 1.1; // Tono ligeramente más alto para favorecer voz femenina/clara
-
-            // Intentar buscar voz de mujer específica (opcional, pero ayuda)
+            window.speechSynthesis.cancel(); const cleanText = text.replace(/[\.,;:-]{2,}/g, '. ').replace(/[\n\r]/g, ' ');
+            const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'es-MX'; u.rate = 1.0; u.pitch = 1.1; 
             const voices = window.speechSynthesis.getVoices();
-            // Buscamos voces que suenen femeninas o default (Paulina, Sabina, Google Español)
-            // Evitamos las explícitamente masculinas si es posible
-            const femaleVoice = voices.find(v => 
-                v.lang.includes('es') && 
-                (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female'))
-            );
-            
-            if (femaleVoice) {
-                u.voice = femaleVoice;
-            }
-
-            window.speechSynthesis.speak(u);
+            const femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female')));
+            if (femaleVoice) u.voice = femaleVoice; window.speechSynthesis.speak(u);
         }
     }
 
-    // --- FUNCIONES DE EFECTO ESCANEO (OVERLAY) ---
     function startScanningEffect() {
-        const overlay = document.getElementById('ai-scan-overlay');
-        overlay.innerHTML = '';
-        overlay.style.display = 'block';
-        
+        const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'block';
         scanInterval = setInterval(() => {
-            const box = document.createElement('div');
-            box.className = 'scan-box';
-            
-            const size = Math.floor(Math.random() * 80) + 40;
-            const x = Math.floor(Math.random() * (window.innerWidth - size));
-            const y = Math.floor(Math.random() * (window.innerHeight - size));
-            
-            box.style.width = `${size}px`;
-            box.style.height = `${size}px`;
-            box.style.left = `${x}px`;
-            box.style.top = `${y}px`;
-            
-            overlay.appendChild(box);
-            setTimeout(() => box.remove(), 800);
+            const box = document.createElement('div'); box.className = 'scan-box'; const size = Math.floor(Math.random() * 80) + 40;
+            const x = Math.floor(Math.random() * (window.innerWidth - size)), y = Math.floor(Math.random() * (window.innerHeight - size));
+            box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
+            overlay.appendChild(box); setTimeout(() => box.remove(), 800);
         }, 150); 
     }
 
-    function stopScanningEffect() {
-        clearInterval(scanInterval);
-        const overlay = document.getElementById('ai-scan-overlay');
-        overlay.innerHTML = '';
-        overlay.style.display = 'none';
-    }
+    function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; }
 
-    // --- TRIGGER PRINCIPAL ---
     async function triggerPareidolia() {
-        const video = el.video; 
-        if(!GEMINI_API_KEY) return;
-        if(isAIProcessing || window.speechSynthesis.speaking) return;
-
-        // --- LIMITADOR DE VELOCIDAD IA (5 por minuto = 12 segundos) ---
-        const now = Date.now();
-        if (now - lastPareidoliaCall < 12000) {
-            console.log("IA Vision: Enfriando motores...");
-            return;
-        }
-        lastPareidoliaCall = now;
-        
-        isAIProcessing = true;
-        
-        document.getElementById('ai-mini-text').innerText = "ANALIZANDO...";
-        
-        startScanningEffect();
-
-        const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
-        canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
+        const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
+        const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
+        isAIProcessing = true; document.getElementById('ai-mini-text').innerText = "ANALIZANDO..."; startScanningEffect();
+        const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         try {
-            let attempts = 0; let success = false; let data = null;
+            let attempts = 0, success = false, data = null;
             while(attempts < 3 && !success) {
                 try {
                     const modelToUse = CURRENT_AI_MODEL || "gemini-2.5-flash-preview-09-2025";
                     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }) });
-                    data = await resp.json();
-                    if (data.candidates && data.candidates[0].content) { success = true; } else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
+                    data = await resp.json(); if (data.candidates && data.candidates[0].content) success = true; else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
                 } catch(err) { attempts++; }
             }
-            
-            let text = "REINTENTANDO..."; 
-            if (success) {
-                 text = (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim();
-                 if(text.length < 3) text = "PRESENCIA DEBIL...";
-            } else {
-                 text = "SEÑAL DEBIL..."; 
-            }
-
-            const aiText = document.getElementById('ai-mini-text');
-            const aiImg = document.getElementById('ai-mini-img');
-            const aiBox = document.getElementById('ai-container-box');
-            
-            aiImg.src = canvas.toDataURL(); 
-            aiText.innerText = text.toUpperCase(); 
-
-            // Activa animación de entrada suave
-            aiBox.classList.add('has-data');
-            
-            // PROGRAMAR CIERRE AUTOMÁTICO PARA LIMPIAR PANTALLA
-            // Se muestra la imagen 6 segundos y luego se pliega
-            clearTimeout(imageCollapseTimeout);
-            imageCollapseTimeout = setTimeout(() => {
-                aiBox.classList.remove('has-data');
-            }, 6000);
-
-            speakText(text);
-        } catch(e) { console.log(e); isAIProcessing = false; }
-        
-        stopScanningEffect(); 
-        isAIProcessing = false; 
+            let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SEÑAL DEBIL...";
+            const aiText = document.getElementById('ai-mini-text'), aiImg = document.getElementById('ai-mini-img'), aiBox = document.getElementById('ai-container-box');
+            aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiBox.classList.add('has-data');
+            clearTimeout(imageCollapseTimeout); imageCollapseTimeout = setTimeout(() => aiBox.classList.remove('has-data'), 6000); speakText(text);
+        } catch(e) { isAIProcessing = false; }
+        stopScanningEffect(); isAIProcessing = false; 
     }
 
     function togglePareidolia(btnElement) {
         if(!GEMINI_API_KEY) { alert("NO API KEY"); return; }
-        const btn = btnElement || document.getElementById('btn-ia');
-        isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
-        
-        const aiHeader = document.getElementById('ai-vision-header');
-        const aiImg = document.getElementById('ai-mini-img');
-        const aiText = document.getElementById('ai-mini-text');
-        const aiBox = document.getElementById('ai-container-box');
-        const hudLayer = document.getElementById('hud-layer');
-
+        const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
+        const aiHeader = document.getElementById('ai-vision-header'), aiImg = document.getElementById('ai-mini-img'), aiText = document.getElementById('ai-mini-text'), aiBox = document.getElementById('ai-container-box'), hudLayer = document.getElementById('hud-layer');
         if(isPareidoliaActive) {
-            if(btn) btn.classList.add('active-state');
-            document.body.classList.add('filter-pareidolia');
-            speakText("VISIÓN ACTIVADA"); 
-            
-            hudLayer.classList.add('hud-hidden');
-            
-            aiText.innerText = "INICIANDO ESCANEO...";
-            // Limpieza inicial
-            aiImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-            aiBox.classList.remove('has-data');
-            
-            aiHeader.classList.add('active'); 
-            triggerPareidolia(); 
-            pareidoliaInterval = setInterval(triggerPareidolia, 12000);
+            if(btn) btn.classList.add('active-state'); document.body.classList.add('filter-pareidolia'); speakText("VISIÓN ACTIVADA"); 
+            hudLayer.classList.add('hud-hidden'); aiText.innerText = "INICIANDO ESCANEO...";
+            aiImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; aiBox.classList.remove('has-data');
+            aiHeader.classList.add('active'); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
         } else {
-            if(btn) btn.classList.remove('active-state');
-            document.body.classList.remove('filter-pareidolia');
-            speakText("VISIÓN DESACTIVADA"); 
-            clearInterval(pareidoliaInterval);
-            isAIProcessing = false;
-            
-            hudLayer.classList.remove('hud-hidden');
-            
-            stopScanningEffect(); 
-            
-            aiHeader.classList.remove('active'); 
-            // Reset completo al cerrar
-            aiBox.classList.remove('has-data');
-            aiText.innerText = "";
-            clearTimeout(imageCollapseTimeout);
+            if(btn) btn.classList.remove('active-state'); document.body.classList.remove('filter-pareidolia'); speakText("VISIÓN DESACTIVADA"); 
+            clearInterval(pareidoliaInterval); isAIProcessing = false; hudLayer.classList.remove('hud-hidden'); stopScanningEffect(); 
+            aiHeader.classList.remove('active'); aiBox.classList.remove('has-data'); aiText.innerText = ""; clearTimeout(imageCollapseTimeout);
         }
         showMenus();
     }
 
     async function validateAndSaveKey() {
-        const input = document.getElementById('api-key-internal');
-        const btn = document.getElementById('btn-validate-api');
-        const status = document.getElementById('api-status-msg');
-        const k = input.value.trim();
+        const input = document.getElementById('api-key-internal'), btn = document.getElementById('btn-validate-api'), status = document.getElementById('api-status-msg'), k = input.value.trim();
         if(!k) { status.innerText = "❌ CAMPO VACIO"; return; }
-        input.disabled = true; btn.disabled = true;
-        const modelsToTry = ["gemini-2.5-flash-preview-09-2025", "gemini-1.5-flash", "gemini-1.5-pro"];
-        let workingModel = null;
+        input.disabled = true; btn.disabled = true; const modelsToTry = ["gemini-2.5-flash-preview-09-2025", "gemini-1.5-flash", "gemini-1.5-pro"]; let workingModel = null;
         for(const step of ["CONECTANDO...", "ENVIANDO PING...", "VERIFICANDO..."]) { status.innerText = step; await new Promise(r => setTimeout(r, 400)); }
-        for (const model of modelsToTry) {
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }) });
-                if(response.ok) { workingModel = model; break; }
-            } catch(e) {}
-        }
+        for (const model of modelsToTry) { try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }) }); if(response.ok) { workingModel = model; break; } } catch(e) {} }
         if(workingModel) {
             status.innerText = "✅ ACTIVA (" + workingModel.replace("gemini-","").split("-")[0] + ")"; status.style.color = "#00ff41";
             GEMINI_API_KEY = k; CURRENT_AI_MODEL = workingModel; state.apiKey = k; state.aiModel = workingModel;
             localStorage.setItem('obr_gemini_key', k); localStorage.setItem('obr_ai_model', workingModel);
         } else { status.innerText = "❌ ERROR: LLAVE INVALIDA"; status.style.color = "red"; }
-        input.disabled = false; btn.disabled = false; btn.innerText = "VALIDAR";
+        input.disabled = false; btn.disabled = false;
     }
 
-    function saveSettings() { state.mtxIp = document.getElementById('mtx-host').value; localStorage.setItem('obr_mtx_ip', state.mtxIp); showToast("Config Guardada"); }
+    function saveSettings() { 
+        state.mtxIp = document.getElementById('mtx-host').value; 
+        state.studioId = document.getElementById('studio-id').value;
+        localStorage.setItem('obr_mtx_ip', state.mtxIp); 
+        localStorage.setItem('obr_studio_id', state.studioId);
+        showToast("Config Guardada"); 
+    }
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
     
     let menuTimeout; const menus = [document.getElementById('menu-left'), document.getElementById('menu-right')];
@@ -878,7 +641,7 @@ function drawLidarEffect(c, width, height) {
     function showMenus() { menus.forEach(m => m.classList.add('visible')); clearTimeout(menuTimeout); menuTimeout = setTimeout(() => menus.forEach(m => m.classList.remove('visible')), 4000); }
     function showToast(msg, isError = false) { const t = document.createElement('div'); t.className = `toast ${isError ? 'error' : ''}`; t.innerText = msg; document.getElementById('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000); }
     let pressTimer; const touchSurface = document.getElementById('touch-surface');
-    touchSurface.addEventListener('pointerdown', (e) => { pressTimer = setTimeout(() => { state.zoom = state.zoom === 1 ? 2.5 : 1; const w = window.innerWidth, h = window.innerHeight; const xPct = (e.clientX / w) * 100; const yPct = (e.clientY / h) * 100; el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; el.zoom.style.transform = `scale(${state.zoom})`; const ind = document.getElementById('zoom-target-indicator'); ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; ind.classList.add('active'); setTimeout(()=>ind.classList.remove('active'),500); if(navigator.vibrate) navigator.vibrate(50); }, 500); });
+    touchSurface.addEventListener('pointerdown', (e) => { pressTimer = setTimeout(() => { state.zoom = state.zoom === 1 ? 2.5 : 1; const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; el.zoom.style.transform = `scale(${state.zoom})`; const ind = document.getElementById('zoom-target-indicator'); ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; ind.classList.add('active'); setTimeout(()=>ind.classList.remove('active'),500); if(navigator.vibrate) navigator.vibrate(50); }, 500); });
     touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer)); touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
     function resetZoom(btn) { state.zoom = 1; el.zoom.style.transform = `scale(1)`; if(btn) btn.classList.add('active-state'); setTimeout(()=>btn?.classList.remove('active-state'), 200); }
 </script>
