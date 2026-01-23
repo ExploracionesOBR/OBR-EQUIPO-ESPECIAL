@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.1.26</title> 
+    <title>CAMARA OBR PRO v5.1.29 (FEMALE VOICE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -126,7 +126,7 @@
             100% { transform: translate(0,0); filter: none; }
         }
 
-        /* --- IA VISION HEADER --- */
+        /* --- IA VISION HEADER UPDATED --- */
         #ai-vision-header { 
             position: absolute; 
             top: 20px; 
@@ -137,8 +137,8 @@
             z-index: 71; 
             pointer-events: none; 
             display: flex;
-            flex-direction: column;
-            gap: 6px; 
+            flex-direction: column; 
+            gap: 0px; 
             animation: independentGlitch 5s infinite reverse; 
         }
         
@@ -146,42 +146,43 @@
             opacity: 1; 
         }
 
+        /* CONTENEDOR IMAGEN: Arriba */
         .ai-image-container {
             position: relative;
             width: 100%;
-            display: none; 
-            border: 0px solid transparent; 
             background: transparent;
             overflow: hidden;
+            display: flex;
             align-items: center;
             justify-content: center;
+            
+            /* Estado Inicial: Oculto y colapsado */
+            height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            border: 0px solid transparent;
+
+            transition: height 0.6s cubic-bezier(0.25, 1, 0.5, 1), 
+                        opacity 0.6s ease-in,
+                        margin 0.6s ease;
         }
         
+        /* Estado Activo: Se expande y empuja al texto */
         .ai-image-container.has-data {
-            display: flex;
+            height: 96px; 
+            opacity: 1;
+            margin-bottom: 6px;
             border: 2px solid #ff3333;
             background: rgba(0,0,0,0.5);
-            min-height: 96px;
-            animation: expandDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        @keyframes expandDown {
-            from { min-height: 0; opacity: 0; transform: translateY(-10px); }
-            to { min-height: 96px; opacity: 1; transform: translateY(0); }
         }
 
         #ai-mini-img { 
             width: 100%; 
             display: block;
             filter: invert(1) hue-rotate(180deg) contrast(1.5); 
-            opacity: 0; 
-            transition: opacity 0.8s ease-in-out; 
-        }
-        
-        #ai-mini-img.visible {
-            opacity: 1;
         }
 
+        /* TEXTO: Abajo */
         #ai-mini-text { 
             background: rgba(10, 0, 0, 0.90); 
             border-left: 4px solid #ff3333; 
@@ -198,6 +199,8 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: normal;
+            
+            transition: transform 0.3s ease;
         }
 
         /* --- SCAN OVERLAY --- */
@@ -301,7 +304,7 @@
     <div id="ui-layer">
         <!-- HUD INDEPENDIENTE -->
         <div id="hud-layer">
-            <img src="obr-logo.png" id="hud-logo" alt="">
+            <img src="obr-logo.png" id="hud-logo" alt="OBR">
             <div id="hud-text-container">
                 <div id="hud-title">EXPLORACIONES OBR</div>
                 <div id="hud-time">--/--/-- - --:--:--</div>
@@ -337,11 +340,13 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
 
-        <!-- HEADER IA -->
+        <!-- HEADER IA ORDENADO: IMAGEN ARRIBA, TEXTO ABAJO -->
         <div id="ai-vision-header">
+            <!-- 1. Contenedor de Imagen (Empuja al texto) -->
             <div class="ai-image-container" id="ai-container-box">
                 <img id="ai-mini-img" alt="Scan">
             </div>
+            <!-- 2. Texto (Será empujado) -->
             <div id="ai-mini-text">ESPERANDO DATOS...</div>
         </div>
     </div>
@@ -349,7 +354,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.1.26 (SLS CLASSIC CORE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.1.29 (FEMALE VOICE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -393,6 +398,7 @@
     let pareidoliaInterval = null;
     let scanInterval = null;
     let lastPareidoliaCall = 0; // Limiter timestamp
+    let imageCollapseTimeout = null;
 
     const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
 
@@ -473,8 +479,7 @@
     }
 
     function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
-
-    function drawLidarEffect(c, width, height) {
+function drawLidarEffect(c, width, height) {
         const maskToUse = lidarMask || lastLidarMask; 
         if (!maskToUse) return; 
         
@@ -542,7 +547,6 @@
             }
         }
     }
-
     function drawSLS() {
         if (!window.drawCoords) return;
         const { dW, dH, dX, dY } = window.drawCoords;
@@ -672,8 +676,28 @@
     function speakText(text) {
         if('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'es-ES'; u.rate = 1.1; u.pitch = 0.8;
+            
+            // Limpieza básica (manteniendo la fluidez)
+            const cleanText = text.replace(/[\.,;:-]{2,}/g, '. ').replace(/[\n\r]/g, ' ');
+            
+            const u = new SpeechSynthesisUtterance(cleanText);
+            u.lang = 'es-MX'; // Prioridad Español Latino
+            u.rate = 1.0; 
+            u.pitch = 1.1; // Tono ligeramente más alto para favorecer voz femenina/clara
+
+            // Intentar buscar voz de mujer específica (opcional, pero ayuda)
+            const voices = window.speechSynthesis.getVoices();
+            // Buscamos voces que suenen femeninas o default (Paulina, Sabina, Google Español)
+            // Evitamos las explícitamente masculinas si es posible
+            const femaleVoice = voices.find(v => 
+                v.lang.includes('es') && 
+                (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female'))
+            );
+            
+            if (femaleVoice) {
+                u.voice = femaleVoice;
+            }
+
             window.speechSynthesis.speak(u);
         }
     }
@@ -754,9 +778,21 @@
 
             const aiText = document.getElementById('ai-mini-text');
             const aiImg = document.getElementById('ai-mini-img');
+            const aiBox = document.getElementById('ai-container-box');
             
             aiImg.src = canvas.toDataURL(); 
             aiText.innerText = text.toUpperCase(); 
+
+            // Activa animación de entrada suave
+            aiBox.classList.add('has-data');
+            
+            // PROGRAMAR CIERRE AUTOMÁTICO PARA LIMPIAR PANTALLA
+            // Se muestra la imagen 6 segundos y luego se pliega
+            clearTimeout(imageCollapseTimeout);
+            imageCollapseTimeout = setTimeout(() => {
+                aiBox.classList.remove('has-data');
+            }, 6000);
+
             speakText(text);
         } catch(e) { console.log(e); isAIProcessing = false; }
         
@@ -772,6 +808,7 @@
         const aiHeader = document.getElementById('ai-vision-header');
         const aiImg = document.getElementById('ai-mini-img');
         const aiText = document.getElementById('ai-mini-text');
+        const aiBox = document.getElementById('ai-container-box');
         const hudLayer = document.getElementById('hud-layer');
 
         if(isPareidoliaActive) {
@@ -782,7 +819,9 @@
             hudLayer.classList.add('hud-hidden');
             
             aiText.innerText = "INICIANDO ESCANEO...";
+            // Limpieza inicial
             aiImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            aiBox.classList.remove('has-data');
             
             aiHeader.classList.add('active'); 
             triggerPareidolia(); 
@@ -799,7 +838,10 @@
             stopScanningEffect(); 
             
             aiHeader.classList.remove('active'); 
+            // Reset completo al cerrar
+            aiBox.classList.remove('has-data');
             aiText.innerText = "";
+            clearTimeout(imageCollapseTimeout);
         }
         showMenus();
     }
