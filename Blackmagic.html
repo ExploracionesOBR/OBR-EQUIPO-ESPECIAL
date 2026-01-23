@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EXPLORACIONES OBR | STUDIO v4.14</title>
+    <title>EXPLORACIONES OBR | STUDIO v4.18</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -29,7 +29,9 @@
 
     <style>
         body { background-color: #000; color: white; overflow: hidden; touch-action: manipulation; }
-        @keyframes fade-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Notificaciones: Entran desde abajo (20px) hacia arriba */
+        @keyframes fade-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
         
         @keyframes film-transition {
@@ -39,14 +41,12 @@
         }
         .film-effect { animation: film-transition 0.8s ease-in-out forwards; }
 
-        /* Scroll suave para móviles */
         .director-scroll { -webkit-overflow-scrolling: touch; overflow-y: auto; scroll-behavior: smooth; }
 
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
         
-        /* Efecto de selección */
         .preview-selected { box-shadow: 0 0 0 2px #22c55e; background-color: rgba(22, 163, 74, 0.2); }
     </style>
 </head>
@@ -93,7 +93,6 @@
           return loaded;
         };
 
-        // --- MOTOR WHEP ---
         const WHEPPlayer = ({ host, streamName, className, muted = true, id, onError }) => {
             const videoRef = useRef(null);
             const pcRef = useRef(null);
@@ -153,8 +152,9 @@
             return <video id={id} ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
         };
 
+        // NOTIFICACIONES: BOTTOM-LEFT
         const ToastContainer = ({ notifications }) => (
-            <div className="absolute top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none w-64 items-end">
+            <div className="absolute bottom-4 left-4 z-[100] flex flex-col gap-2 pointer-events-none w-64 items-start">
                 {notifications.map(n => (
                     <div key={n.id} className={`flex items-center gap-2 px-3 py-2 rounded shadow-lg border-l-4 pointer-events-auto animate-fade-in backdrop-blur-md mb-2 w-full justify-between ${n.type === 'error' ? 'bg-red-950/90 border-red-500 text-white' : n.type === 'warning' ? 'bg-yellow-900/90 border-yellow-500 text-white' : 'bg-green-900/90 border-green-500 text-white'}`}>
                         <div className="flex items-center gap-2 overflow-hidden">
@@ -181,7 +181,11 @@
                         setInterval(() => {
                             const videos = document.querySelectorAll('video');
                             videos.forEach(v => {
-                                if(v.paused) { v.muted = true; v.play().catch(e => {}); }
+                                if(v.paused) { 
+                                    v.play().catch(e => {
+                                        console.log("Autoplay blocked (try interacting with window):", e);
+                                    }); 
+                                }
                             });
                         }, 1000);
                     ${closeScript}
@@ -241,7 +245,7 @@
 
             if (isBanner) {
                 containerStyle = "absolute bottom-0 left-0 w-full h-[150px] z-40 flex items-center justify-center pointer-events-none pb-0 bg-transparent";
-                videoStyle = "h-full w-auto max-w-full object-contain opacity-95";
+                videoStyle = "w-full h-full object-cover opacity-95";
             } else if (isTransicion) {
                 containerStyle = "absolute inset-0 z-[60] flex items-center justify-center pointer-events-none bg-transparent";
                 videoStyle = "w-full h-full object-cover"; 
@@ -267,7 +271,6 @@
             );
         };
 
-        // --- COMPONENTE MODAL DE COMPARTIR ---
         const ShareModal = ({ onClose, mtxHost, dockId }) => {
             const [phone, setPhone] = useState('');
             
@@ -315,10 +318,8 @@
             );
         };
 
-        // --- DIRECTOR PANEL (SOLO PARA PC SIDEBAR) ---
         const DirectorPanel = ({ activeCam, conn, onCommand, onPlayLocal, isOffline, timers, activeMedia, currentFilter }) => {
             const handleFilterToggle = (filterName) => {
-                // Si el filtro ya está activo, enviamos 'normal' para desactivarlo. Si no, enviamos el filtro.
                 const targetFilter = currentFilter === filterName ? 'normal' : filterName;
                 onCommand('cmd', 'filter', targetFilter);
             };
@@ -385,7 +386,6 @@
             const [obsState, setObsState] = useState({ streaming: false, recording: false, audioMode: 'mix' });
             const [notifications, setNotifications] = useState([]);
             const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, standby: 0 });
-            // New State for active Media and Filter from Dock
             const [activeMedia, setActiveMedia] = useState(null);
             
             const [mtxHost, setMtxHost] = useState(localStorage.getItem('obr_dir_mtx_host') || '');
@@ -394,6 +394,11 @@
             
             const peerRef = useRef(null);
             const connRef = useRef(null);
+            
+            // CORRECCIÓN: Definir variables derivadas ANTES de usarlas en funciones
+            const activeProgramCam = cameraList.find(c => c.tally === 'program');
+            const currentFilter = activeProgramCam ? activeProgramCam.filter : null;
+            const canUseAI = activeProgramCam ? activeProgramCam.hasAI : false;
 
             const notify = (msg, type = 'success') => {
                 const id = Date.now();
@@ -455,7 +460,6 @@
                 }
                 
                 if (category === 'obs') {
-                    // Feedback inmediato en director
                     if(action.includes('start')) notify("SOLICITUD: INICIAR...", 'warning');
                     if(action.includes('stop')) notify("SOLICITUD: DETENER...", 'warning');
                 }
@@ -479,13 +483,7 @@
                 
                 if (type === 'mixer' && value.action === 'smart-auto') send('mixer', 'smart-auto', value.camId);
             };
-            const handleCamCommand = (cat, act, val) => { send('cam', act, val); };
-            
-            const activeProgramCam = cameraList.find(c => c.tally === 'program');
-            const currentFilter = activeProgramCam ? activeProgramCam.filter : null;
-            const canUseAI = activeProgramCam ? activeProgramCam.hasAI : false;
 
-            // Función de Toggle para Director
             const toggleFilter = (filterName) => {
                 const target = currentFilter === filterName ? 'normal' : filterName;
                 send('cam', 'filter', target);
@@ -514,7 +512,6 @@
                 <div className="h-screen bg-black flex flex-col font-sans relative overflow-hidden">
                     <ToastContainer notifications={notifications} />
                     
-                    {/* Settings Modal */}
                     {showSettings && (
                         <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6 backdrop-blur">
                             <div className="bg-[#1a1a1a] p-6 rounded-xl w-full max-w-sm border border-gray-800">
@@ -531,7 +528,6 @@
                         </div>
                     )}
 
-                    {/* Live View Modal */}
                     {viewingCamId && (
                         <div className="fixed inset-0 bg-black z-[90] flex flex-col">
                              <div className="absolute top-4 right-4 z-[100]">
@@ -564,7 +560,6 @@
                                 <button onClick={() => send('obs', 'stop-stream', null)} className={`bg-red-700 border-b-4 border-red-900 text-white py-6 rounded-lg font-bold text-lg active:border-b-0 active:translate-y-1 ${!obsState.streaming ? 'opacity-50' : ''}`}>CORTAR LIVE</button>
                             </div>
 
-                            {/* REC CONTROLS */}
                             <div className="grid grid-cols-2 gap-3 mt-4">
                                  <button onClick={() => send('obs', 'start-rec', null)} className={`bg-blue-700 border-b-4 border-blue-900 text-white py-4 rounded-lg font-bold text-sm active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2 ${obsState.recording ? 'opacity-50' : ''}`}><Disc size={16}/> GRABAR</button>
                                  <button onClick={() => send('obs', 'stop-rec', null)} className={`bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold text-sm active:border-b-0 active:translate-y-1 ${!obsState.recording ? 'opacity-50' : ''}`}>DETENER REC</button>
@@ -608,18 +603,13 @@
                         </div>
                         <div className="space-y-2">
                             <h3 className="text-xs text-gray-400 font-bold tracking-widest border-b border-gray-800 pb-1">FILTROS (CAM EN VIVO)</h3>
-                             
-                             {/* Botones de Filtro Modificados */}
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => toggleFilter('night')} className={`text-xs py-3 rounded border flex justify-center gap-2 transition-colors ${currentFilter === 'night' ? 'bg-green-600 text-white border-green-500' : 'bg-green-900/20 text-green-500 border-green-900/50'}`}><Moon size={12}/> NOCTURNO</button>
                                 <button onClick={() => toggleFilter('thermal')} className={`text-xs py-3 rounded border flex justify-center gap-2 transition-colors ${currentFilter === 'thermal' ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-900/20 text-blue-500 border-blue-900/50'}`}><Flame size={12}/> TÉRMICO</button>
                                 <button onClick={() => toggleFilter('urbex')} className={`text-xs py-3 rounded border transition-colors ${currentFilter === 'urbex' ? 'bg-orange-600 text-white border-orange-500' : 'bg-orange-900/20 text-orange-500 border-orange-900/50'}`}>URBEX</button>
                                 <button onClick={() => toggleFilter('lidar')} className={`text-xs py-3 rounded border flex justify-center gap-2 transition-colors ${currentFilter === 'lidar' ? 'bg-teal-600 text-white border-teal-500' : 'bg-teal-900/20 text-teal-400 border-teal-900/50'}`}><ScanLine size={12}/> LIDAR</button>
-                                
                                 <button onClick={() => toggleFilter('sls')} className={`col-span-1 text-xs py-3 rounded border flex justify-center gap-2 font-bold transition-colors ${currentFilter === 'sls' ? 'bg-purple-600 text-white border-purple-500' : 'bg-purple-900/20 text-purple-400 border-purple-900/50'}`}><Ghost size={14}/> {currentFilter === 'sls' ? 'SLS ACTIVO' : 'SLS'}</button>
-                                
                                 <button onClick={() => send('cam', 'toggle', 'pareidolia')} disabled={!canUseAI} className={`col-span-1 text-xs py-3 rounded border flex justify-center gap-2 ${canUseAI ? 'bg-red-900/20 hover:bg-red-600 text-red-500 border-red-900/50' : 'bg-gray-800 text-gray-500 border-gray-700 opacity-50 cursor-not-allowed'}`}><Eye size={14}/> {canUseAI ? 'VISIÓN IA' : 'IA NO DISPO'}</button>
-                                
                                 <button onClick={() => send('cam', 'reset', '')} className="col-span-2 w-full bg-black hover:bg-neutral-800 text-neutral-500 text-[10px] py-2 rounded border border-neutral-800 mt-1 flex justify-center gap-2"><RefreshCw size={10}/> RESETEAR CÁMARA</button>
                             </div>
                         </div>
@@ -643,7 +633,6 @@
             );
         };
 
-        // --- COMPONENTE LOBBY RESTAURADO ---
         const Lobby = ({ onCreate, onRemote }) => {
           const [customId, setCustomId] = useState("");
           
@@ -671,13 +660,12 @@
                 <button onClick={() => onCreate(customId)} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform"><Monitor size={20} /> CREAR ESTUDIO (PC)</button>
                 <div className="h-px bg-[#333] w-full"></div>
                 <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors"><Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)</button>
-                <p className="text-[9px] text-center text-gray-600 mt-2">v4.14 - CUSTOM ID & SETTINGS</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v4.18 - FIX</p>
               </div>
             </div>
           );
         };
 
-        // --- PRELOADER (INVISIBLE) ---
         const VideoPreloader = () => (
             <div style={{display: 'none'}}>
                 {Object.values(STUDIO_ASSETS).map(src => (
@@ -701,8 +689,6 @@
           const [mtxHost, setMtxHost] = useState(localStorage.getItem('obr_mtx_host') || '192.168.1.70:8889');
           const [forceCam1Audio, setForceCam1Audio] = useState(false);
           const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, standby: 0 });
-          
-          // ESTADO PARA EL MODAL
           const [isShareModalOpen, setIsShareModalOpen] = useState(false);
           
           const [obsConnected, setObsConnected] = useState(false);
@@ -749,7 +735,6 @@
               
               if (activeMedia === 'intro' || activeMedia === 'outro' || activeMedia === 'standby') setHeaderHidden(true);
               
-              // Broadcast dock status (including media)
               if (directorConnRef.current && directorConnRef.current.open) {
                  directorConnRef.current.send({ type: 'dock-status', activeMedia: activeMedia });
               }
@@ -759,7 +744,6 @@
               const interval = setInterval(() => {
                   if (directorConnRef.current && directorConnRef.current.open) {
                       directorConnRef.current.send({ type: 'obs-state-update', state: { streaming: obsStreaming, recording: obsRecording, audioMode: forceCam1Audio ? 'prio' : 'mix' } });
-                      // SEND DOCK STATUS for visual feedback sync
                       directorConnRef.current.send({ type: 'dock-status', activeMedia: activeMedia });
 
                       const list = Object.values(camerasRef.current).map(c => {
@@ -772,7 +756,6 @@
                               ctx.drawImage(videoEl, 0, 0, 100, 56);
                               previewData = previewCanvasRef.current.toDataURL('image/jpeg', 0.3);
                           }
-                          // Include filter state
                           return { id: c.id, name: c.name, tally: c.tally, hasAI: c.hasAI || false, preview: previewData, ping: Math.floor(Math.random() * 50 + 20), netQuality: 'BUENA', filter: c.filter };
                       });
                       directorConnRef.current.send({ type: 'camera-list-update', cameras: list });
@@ -818,7 +801,6 @@
                     notify("ID PERSONALIZADO YA EN USO. GENERANDO UNO NUEVO...", "error");
                     const retryPeer = new window.Peer(null, PEER_CONFIG);
                     retryPeer.on('open', (id) => setMyId(id));
-                    // re-attach listeners... simplified for brevity
                 } else {
                     console.error(err);
                 }
@@ -851,14 +833,13 @@
               if (cmd.category === 'cam') {
                   if (programId && camerasRef.current[programId]?.conn) {
                       camerasRef.current[programId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
-                      // Save local state for filter
                       if(cmd.action === 'filter') updateCameraState(programId, { filter: cmd.value });
                       if (cmd.action === 'toggle' && cmd.value === 'pareidolia') setHeaderHidden(prev => !prev);
                   } else { notify("❌ NO HAY CÁMARA AL AIRE PARA COMANDO", "error"); }
               }
               if (cmd.category === 'media') {
                    handlePlayLocal(cmd.value);
-                   notify(`MEDIA: ${cmd.value.toUpperCase()}`, 'success'); // Local notify
+                   notify(`MEDIA: ${cmd.value.toUpperCase()}`, 'success'); 
               }
               if (cmd.category === 'mixer') window.dispatchEvent(new CustomEvent('remote-mix', { detail: cmd }));
               if (cmd.category === 'cam-rename') setCameras(prev => ({ ...prev, [cmd.value.id]: { ...prev[cmd.value.id], name: cmd.value.name } }));
@@ -902,7 +883,6 @@
              if (programId && cameras[programId]?.conn) cameras[programId].conn.send({ type: 'cmd', action: 'reset' });
              if (newId && cameras[newId]?.conn) cameras[newId].conn.send({ type: 'cmd', action: 'reset' });
              setProgramId(newId); setPreviewId(null); sendTallyUpdate(newId, null); setActiveMedia(null); 
-             // Also reset filter status conceptually for UI if needed, or keep it per camera
              setHeaderHidden(false);
           };
 
@@ -975,7 +955,6 @@
                 <VideoPreloader />
                 <ToastContainer notifications={notifications} />
                 
-                {/* MODAL DE COMPARTIR */}
                 {isShareModalOpen && (
                     <ShareModal 
                         onClose={() => setIsShareModalOpen(false)} 
@@ -1081,7 +1060,6 @@
                                 <Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1 (PRIO)' : 'AUDIO: MEZCLA AUTO'}
                              </button>
                         </div>
-                        {/* Se pasa currentFilter y activeMedia al Panel Lateral del PC */}
                         <DirectorPanel activeCam={previewCam} conn={previewCam?.conn} onCommand={sendCommand} onPlayLocal={handlePlayLocal} timers={mediaTimers} isOffline={false} activeMedia={activeMedia} currentFilter={camList.find(c => c.tally === 'program')?.filter} />
                     </div>
                 </div>
@@ -1093,7 +1071,7 @@
                             ) : <div className="text-black bg-black w-full h-full flex items-center justify-center text-4xl font-mono text-neutral-800 absolute inset-0">BLACK</div>}
                         </div>
                         {activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby' && <BroadcastHUD hidden={headerHidden} />}
-                        <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
+                        <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} onTimeUpdate={handleTimeUpdate} />
                     </div>
                 </OBSWindow>)}
             </div>
