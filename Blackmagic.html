@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EXPLORACIONES OBR | STUDIO v4.18</title>
+    <title>EXPLORACIONES OBR | STUDIO v4.19</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -68,7 +68,7 @@
             outro: './FIN_DIRECTO.mp4',
             banner: './BANNER_1.mp4',
             standby: './VIDEO-ESPERA.mp4',
-            transicion: './transicion.mp4' 
+            transicion: './transicion.webm' 
         };
 
         const PEER_CONFIG = {
@@ -339,7 +339,13 @@
                                 {timers && timers.outro > 0 && <div className="absolute inset-0 bg-red-600/50 z-0" style={{width: '100%'}}></div>}
                                 <span className="z-10 relative flex items-center gap-1">{timers && timers.outro > 0 ? `OUTRO (${Math.ceil(timers.outro)}s)` : <><Play size={10}/> OUTRO</>}</span>
                             </button>
-                            <button onClick={() => onPlayLocal('banner')} className={`col-span-2 text-xs py-2 rounded border flex items-center justify-center gap-1 transition-colors ${activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-neutral-800 text-neutral-300 border-neutral-600'}`}><Layers size={10}/> {activeMedia === 'banner' ? 'BANNER ACTIVO' : 'MOSTRAR BANNER'}</button>
+                            {/* BOTON BANNER ACTUALIZADO CON TIMER Y TOGGLE */}
+                            <button onClick={() => onPlayLocal('banner')} className={`col-span-2 relative text-xs py-2 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors ${activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-neutral-800 text-neutral-300 border-neutral-600'}`}>
+                                {timers && timers.banner > 0 && <div className="absolute inset-0 bg-blue-600/50 z-0" style={{width: '100%'}}></div>}
+                                <span className="z-10 relative flex items-center gap-1">
+                                    <Layers size={10}/> {activeMedia === 'banner' && timers?.banner > 0 ? `BANNER ACTIVO (${Math.ceil(timers.banner)}s)` : activeMedia === 'banner' ? 'BANNER ACTIVO' : 'MOSTRAR BANNER'}
+                                </span>
+                            </button>
                         </div>
                     </div>
                      <div className="flex-1 director-scroll p-4 space-y-6">
@@ -385,7 +391,7 @@
             const [cameraList, setCameraList] = useState([]); 
             const [obsState, setObsState] = useState({ streaming: false, recording: false, audioMode: 'mix' });
             const [notifications, setNotifications] = useState([]);
-            const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, standby: 0 });
+            const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, banner: 0, standby: 0 }); // Added banner
             const [activeMedia, setActiveMedia] = useState(null);
             
             const [mtxHost, setMtxHost] = useState(localStorage.getItem('obr_dir_mtx_host') || '');
@@ -395,7 +401,7 @@
             const peerRef = useRef(null);
             const connRef = useRef(null);
             
-            // CORRECCIÓN: Definir variables derivadas ANTES de usarlas en funciones
+            // Variables derivadas
             const activeProgramCam = cameraList.find(c => c.tally === 'program');
             const currentFilter = activeProgramCam ? activeProgramCam.filter : null;
             const canUseAI = activeProgramCam ? activeProgramCam.hasAI : false;
@@ -412,8 +418,11 @@
                 const peer = new window.Peer(null, PEER_CONFIG);
                 peerRef.current = peer;
                 
+                // Sanitizar ID remoto también si se usa IP (reemplazar puntos por guiones)
+                const targetId = dockId.trim().replace(/\./g, '-');
+
                 peer.on('open', () => {
-                    const conn = peer.connect(dockId.trim());
+                    const conn = peer.connect(targetId);
                     connRef.current = conn;
                     conn.on('open', () => {
                         setStatus('CONECTADO A ESTUDIO');
@@ -622,7 +631,11 @@
                                 {mediaTimers.standby > 0 && <span className="absolute top-0 right-1 text-[8px] animate-pulse">●</span>}
                                 ESPERA
                             </button>
-                             <button onClick={() => send('media', 'play', 'banner')} className={`col-span-1 text-xs py-3 rounded border font-bold transition-colors ${activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 border-gray-500 text-white'}`}>BANNER</button>
+                             {/* BANNER EN DIRECTOR REMOTO ACTUALIZADO */}
+                             <button onClick={() => send('media', 'play', 'banner')} className={`col-span-1 relative text-xs py-3 rounded border font-bold overflow-hidden transition-colors ${activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-gray-800 border-gray-500 text-white'}`}>
+                                {mediaTimers.banner > 0 && <div className="absolute inset-0 bg-blue-600/50 z-0" style={{width: '100%'}}></div>}
+                                <span className="z-10 relative">{mediaTimers.banner > 0 ? `${Math.ceil(mediaTimers.banner)}s` : 'BANNER'}</span>
+                             </button>
                             <button onClick={() => send('media', 'play', 'outro')} className={`col-span-1 relative text-xs py-3 rounded border font-bold overflow-hidden transition-colors ${activeMedia === 'outro' ? 'bg-red-600 text-white border-red-400' : 'bg-pink-900/40 border-pink-600 text-pink-300'}`}>
                                 {mediaTimers.outro > 0 && <div className="absolute inset-0 bg-pink-600/50 z-0" style={{width: '100%'}}></div>}
                                 <span className="z-10 relative">{mediaTimers.outro > 0 ? `${Math.ceil(mediaTimers.outro)}s` : 'OUTRO'}</span>
@@ -654,13 +667,13 @@
                         placeholder="Ej: TU.IP.TAILSCALE" 
                         className="w-full bg-transparent text-white font-mono text-center outline-none border-b border-gray-700 focus:border-red-500 text-sm py-1"
                     />
-                    <p className="text-[9px] text-gray-600 mt-1">Si lo dejas vacío se genera uno al azar.</p>
+                    <p className="text-[9px] text-gray-600 mt-1">Si usas una IP, los puntos se convertirán en guiones automáticamente.</p>
                 </div>
 
                 <button onClick={() => onCreate(customId)} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-105 transition-transform"><Monitor size={20} /> CREAR ESTUDIO (PC)</button>
                 <div className="h-px bg-[#333] w-full"></div>
                 <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-colors"><Smartphone size={20} /> CONECTAR DIRECTOR (MÓVIL)</button>
-                <p className="text-[9px] text-center text-gray-600 mt-2">v4.18 - FIX</p>
+                <p className="text-[9px] text-center text-gray-600 mt-2">v4.19 - TAILSCALE ID FIX</p>
               </div>
             </div>
           );
@@ -688,7 +701,7 @@
           const [notifications, setNotifications] = useState([]);
           const [mtxHost, setMtxHost] = useState(localStorage.getItem('obr_mtx_host') || '192.168.1.70:8889');
           const [forceCam1Audio, setForceCam1Audio] = useState(false);
-          const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, standby: 0 });
+          const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, banner: 0, standby: 0 }); // Added banner
           const [isShareModalOpen, setIsShareModalOpen] = useState(false);
           
           const [obsConnected, setObsConnected] = useState(false);
@@ -716,11 +729,13 @@
               setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
           };
 
+          // LÓGICA DE TIEMPO ACTUALIZADA PARA BANNER
           const handleTimeUpdate = (duration, currentTime) => {
               const remaining = duration - currentTime;
               const newTimers = { 
                   intro: activeMedia === 'intro' ? remaining : 0,
                   outro: activeMedia === 'outro' ? remaining : 0,
+                  banner: activeMedia === 'banner' ? remaining : 0, // Timer banner
                   standby: activeMedia === 'standby' ? 1 : 0
               };
               setMediaTimers(newTimers);
@@ -730,6 +745,7 @@
           };
 
           useEffect(() => {
+              // Ajuste visibilidad HUD
               if (activeMedia === 'banner' || activeMedia === 'transicion') setHeaderHidden(true);
               else if (activeMedia !== 'banner' && activeMedia !== 'intro' && activeMedia !== 'outro' && activeMedia !== 'standby') setHeaderHidden(false);
               
@@ -792,7 +808,10 @@
 
           useEffect(() => {
             const config = preferredId ? { ...PEER_CONFIG } : PEER_CONFIG;
-            const peer = preferredId ? new window.Peer(preferredId, config) : new window.Peer(null, config);
+            // FIX CRÍTICO: Sanitizar ID para IPs de Tailscale (reemplazar puntos por guiones)
+            const cleanId = preferredId ? preferredId.replace(/\./g, '-') : null;
+            
+            const peer = cleanId ? new window.Peer(cleanId, config) : new window.Peer(null, config);
             
             peerRef.current = peer;
             peer.on('open', (id) => setMyId(id));
@@ -901,20 +920,32 @@
               }
           };
           
+          // FIX TOGGLE BANNER
           const handlePlayLocal = (type) => { 
+              // Si presionas BANNER y ya está activo, lo quita
+              if (activeMedia === type && type === 'banner') {
+                  setActiveMedia(null);
+                  return;
+              }
               setActiveMedia(type); 
               setTimeout(() => { const v = document.getElementById('studio-media-player'); if (v) { v.currentTime = 0; v.play(); } }, 50);
           };
           
           const handleMediaFinish = () => {
-              setMediaTimers({ intro: 0, outro: 0, standby: 0 });
+              setMediaTimers({ intro: 0, outro: 0, banner: 0, standby: 0 }); // Reset banner timer
               if (directorConnRef.current && directorConnRef.current.open) {
-                 directorConnRef.current.send({ type: 'media-time', timers: { intro: 0, outro: 0, standby: 0 } });
+                 directorConnRef.current.send({ type: 'media-time', timers: { intro: 0, outro: 0, banner: 0, standby: 0 } });
               }
 
               if (activeMedia === 'transicion') {
                   setActiveMedia(null); 
                   setHeaderHidden(false); 
+                  return;
+              }
+              
+              // FIX: Auto-cierre para banner al terminar
+              if (activeMedia === 'banner') {
+                  setActiveMedia(null);
                   return;
               }
 
