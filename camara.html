@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.1.29 (FEMALE VOICE)</title> 
+    <title>CAMARA OBR PRO v5.2.1 (SLS FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -342,7 +342,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.1.29 (FEMALE VOICE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.2.1 (PEER FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -350,9 +350,9 @@
 
     <div id="connect-modal" class="modal-bg">
         <div class="bg-neutral-900 border border-cyan-500 p-8 rounded-lg w-80 text-center shadow-[0_0_30px_rgba(0,255,255,0.1)]">
-            <h3 class="text-cyan-400 mb-4 text-xl tracking-widest font-bold">TRANSMISIÓN HÍBRIDA</h3>
+            <h3 class="text-cyan-400 mb-4 text-xl tracking-widest font-bold">CONECTAR A ESTUDIO</h3>
             <input type="text" id="stream-name" placeholder="NOMBRE (EJ: cam1)" class="w-full bg-black border border-gray-700 text-white p-3 text-center uppercase mb-4 text-lg outline-none focus:border-cyan-400 rounded" value="cam1">
-            <button onclick="startHybridTransmission()" class="w-full bg-cyan-900 text-white font-bold py-3 hover:bg-cyan-700 mb-3 rounded font-orbitron">EN VIVO</button>
+            <button onclick="startHybridTransmission()" class="w-full bg-cyan-900 text-white font-bold py-3 hover:bg-cyan-700 mb-3 rounded font-orbitron">ENLAZAR</button>
             <button onclick="document.getElementById('connect-modal').classList.remove('active')" class="text-gray-500 text-xs hover:text-white">CANCELAR</button>
         </div>
     </div>
@@ -363,9 +363,9 @@
             <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest">Ajustes de Red</h2>
             
             <div class="mb-6">
-                <label class="text-[10px] text-gray-400 font-mono mb-1 block uppercase">IP Tailscale / Host</label>
-                <input type="text" id="mtx-host" placeholder="EJ: 100.108.137.38" class="w-full bg-black border border-gray-700 p-3 text-white text-sm rounded font-mono outline-none focus:border-red-500 text-center">
-                <p class="text-[9px] text-gray-600 mt-2 font-mono uppercase text-center">EL SISTEMA GENERARÁ EL PUERTO Y EL ID AUTOMÁTICAMENTE</p>
+                <label class="text-[10px] text-gray-400 font-mono mb-1 block uppercase">IP ESTUDIO (DOCK ID)</label>
+                <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-3 text-white text-sm rounded font-mono outline-none focus:border-red-500 text-center">
+                <p class="text-[9px] text-gray-600 mt-2 font-mono uppercase text-center">PUEDES PEGAR EL ID COMPLETO, EL SISTEMA LO DIVIDIRÁ</p>
             </div>
 
             <div class="h-px bg-gray-800 w-full mb-6"></div>
@@ -392,9 +392,6 @@
     const state = { 
         apiKey: localStorage.getItem("obr_gemini_key") || "", 
         aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", 
-        // Recuperar IP base para mostrar en el input
-        baseIp: localStorage.getItem("obr_base_ip") || "",
-        mtxIp: localStorage.getItem("obr_mtx_ip") || "192.168.1.70:8889",
         studioId: localStorage.getItem("obr_studio_id") || "",
         filter: 'normal', 
         isSLS: false, 
@@ -433,17 +430,16 @@
     let lidarBusy = false; 
     let lastLidarMask = null; 
     
-    let videoStream, peerCommand = null, pcVideo = null, conn = null;
+    let videoStream, peerCommand = null, peerVideoSender = null, conn = null;
     let frameCount = 0, lastTime = performance.now(), currentFps = 0;
 
     let logoImg = new Image(); logoImg.src = 'obr-logo.png';
 
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; 
-        document.getElementById('mtx-host').value = state.baseIp; // Mostrar IP base sin puerto ni guiones
+        document.getElementById('mtx-host').value = state.studioId; 
     };
-
-    async function initApp() {
+async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
         try {
             updateProgress(10, "INICIANDO SENSOR...");
@@ -608,59 +604,79 @@ function drawLidarEffect(c, width, height) {
         const now = performance.now(); const elapsed = now - lastTime;
         if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
         updateClock(); 
-        let signal = 0; if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++; if(conn && conn.open) signal++; if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) signal++;
+        let signal = 0; if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++; if(conn && conn.open) signal++; if(peerVideoSender && !peerVideoSender.disconnected) signal++;
         const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
         document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
         const statusEl = document.getElementById('status-text'), dotEl = document.getElementById('status-dot'), tallyEl = document.getElementById('tally-border');
-        if(pcVideo && (pcVideo.iceConnectionState === 'connected' || pcVideo.iceConnectionState === 'completed')) {
+        if(conn && conn.open) {
              statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; tallyEl.className = "online";
         } else {
              statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-red-900"; tallyEl.className = "preview";
         }
-        if(conn && conn.open) conn.send({ type: 'stats', fps: currentFps, res: `${vW}x${vH}`, signal });
     }
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
 
+    // --- MIGRACIÓN A PEERJS (DUAL CHANNEL) ---
     async function startHybridTransmission() {
         const name = document.getElementById('stream-name').value.trim(); if(!name) return;
-        let host = state.mtxIp; if(!host) { showToast("ERROR IP", true); return; }
-        document.getElementById('connect-modal').classList.remove('active'); showToast("Sincronizando...", false);
+        const fullId = state.studioId; 
+        if(!fullId) { showToast("ID ESTUDIO VACIO", true); return; }
         
-        try {
-            pcVideo = new RTCPeerConnection(); const stream = el.canvas.captureStream(30); const audio = videoStream.getAudioTracks()[0];
-            if(audio) stream.addTrack(audio); stream.getTracks().forEach(t => pcVideo.addTrack(t, stream));
-            const offer = await pcVideo.createOffer(); await pcVideo.setLocalDescription(offer);
-            const controller = new AbortController(); const id = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(`http://${host}/${name}/whip`, { method: 'POST', body: offer.sdp, headers: {'Content-Type':'application/sdp'}, signal: controller.signal });
-            clearTimeout(id); if(res.ok) { const answer = await res.text(); await pcVideo.setRemoteDescription({type:'answer', sdp:answer}); showToast("Vídeo Publicado", false); }
-        } catch(e) { showToast("Error Video: " + e.message, true); }
+        document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
         
-        try { 
-            if(peerCommand) peerCommand.destroy(); 
-            peerCommand = new Peer(null, PEER_CONFIG);
+        // 1. ANALIZAR ID DE DESTINO
+        let baseId = fullId;
+        if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
+        if (baseId.includes('.')) { baseId = baseId.replace(/\./g, '-'); }
+        
+        const commandTarget = baseId;
+        const videoTarget = baseId + "-8889";
+        
+        console.log("CMD Target:", commandTarget);
+        console.log("VID Target:", videoTarget);
+
+        // 2. CANAL DE COMANDOS (PEER 1)
+        if(peerCommand) peerCommand.destroy();
+        peerCommand = new Peer(null, PEER_CONFIG);
+        
+        peerCommand.on('open', () => {
+            const connection = peerCommand.connect(commandTarget);
             
-            peerCommand.on('open', () => {
-                const targetId = state.studioId; 
-                const connection = peerCommand.connect(targetId);
-                
-                connection.on('open', () => {
-                    conn = connection;
-                    conn.send({ type: 'register', name: name, hasAI: true });
-                    showToast("Enlazado con Estudio", false);
-                });
-                
-                connection.on('data', handleCommand);
-                connection.on('close', () => { showToast("Conexión con Estudio perdida", true); conn = null; });
+            connection.on('open', () => {
+                conn = connection;
+                conn.send({ type: 'register', name: name, hasAI: true });
+                showToast("Enlace Comandos OK", false);
             });
             
-            peerCommand.on('error', (err) => {
-                console.error("Peer Error:", err);
-                showToast("Error de Enlace: " + err.type, true);
-            });
+            connection.on('data', handleCommand);
+            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; });
+            connection.on('error', (e) => { console.error("Data error", e); });
+        });
+        
+        peerCommand.on('error', (err) => { console.error("PeerCMD Error:", err); showToast("Err CMD: " + err.type, true); });
+
+        // 3. CANAL DE VIDEO (PEER 2)
+        if(peerVideoSender) peerVideoSender.destroy();
+        peerVideoSender = new Peer(null, PEER_CONFIG);
+        
+        peerVideoSender.on('open', () => {
+            // Capturar stream con efectos (canvas)
+            const stream = el.canvas.captureStream(30); 
+            // Añadir audio si existe
+            const audioTracks = videoStream.getAudioTracks();
+            if(audioTracks.length > 0) stream.addTrack(audioTracks[0]);
             
-        } catch(e) { console.error(e); }
+            // Llamar al ID de video (-8889)
+            const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
+            
+            call.on('close', () => { console.log("Video call ended"); });
+            call.on('error', (e) => { console.error("Video call error", e); });
+            showToast("Transmitiendo Video...", false);
+        });
+
+        peerVideoSender.on('error', (err) => { console.error("PeerVID Error:", err); showToast("Err VID: " + err.type, true); });
     }
 
     function handleCommand(cmd) {
@@ -675,6 +691,12 @@ function drawLidarEffect(c, width, height) {
             else if(action === 'flash') toggleTorch(value); 
             else if(action === 'toggle' && value === 'pareidolia') togglePareidolia();
             else if(action === 'reset') setFilter('normal', null);
+        }
+        else if (cmd.type === 'tally') {
+            const tallyEl = document.getElementById('tally-border');
+            if (cmd.state === 'program') { tallyEl.className = 'online'; }
+            else if (cmd.state === 'preview') { tallyEl.className = 'preview'; }
+            else { tallyEl.className = ''; }
         }
     }
 
@@ -766,15 +788,10 @@ function drawLidarEffect(c, width, height) {
 
     function saveSettings() { 
         const rawIp = document.getElementById('mtx-host').value.trim();
-        if(!rawIp) { showToast("Ingresa una IP válida", true); return; }
-        const cleanIp = rawIp.replace("http://","").replace("https://","").split(":")[0];
-        state.baseIp = cleanIp;
-        state.mtxIp = cleanIp + ":8889";
-        state.studioId = cleanIp.replace(/\./g, '-'); 
-        localStorage.setItem('obr_base_ip', state.baseIp); 
-        localStorage.setItem('obr_mtx_ip', state.mtxIp); 
+        if(!rawIp) { showToast("Ingresa un ID válido", true); return; }
+        state.studioId = rawIp; 
         localStorage.setItem('obr_studio_id', state.studioId);
-        showToast("Config Unificada Guardada"); 
+        showToast("Config Guardada"); 
         document.getElementById('settings-modal').classList.remove('active');
     }
 
