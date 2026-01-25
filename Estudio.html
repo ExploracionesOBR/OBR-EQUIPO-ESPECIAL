@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v4.25</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v4.26 (OBS FIX)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -52,7 +52,6 @@
         @keyframes pop-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .animate-pop-in { animation: pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
 
-        /* Banner Suave (Difuminado OBR) */
         .soft-mask {
             mask-image: 
                 linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%),
@@ -80,7 +79,7 @@
         import { 
             Monitor, Wifi, Mic, MicOff, Activity, Maximize, X, 
             Settings, Eye, Moon, Flame, Ghost, Play, Volume2, VolumeX,
-            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe, Box, Link2, Info, Share2, Music, UserPlus, RefreshCw, ScanLine, RotateCcw, Database
+            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe, Box, Link2, Info, Share2, Music, UserPlus, RefreshCw, ScanLine, RotateCcw, Database, Copy
         } from 'lucide-react';
         
         const STUDIO_ASSETS = {
@@ -94,11 +93,34 @@
         const PEER_CONFIG = {
             config: {
                 iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
-                ]
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ],
+                sdpSemantics: 'unified-plan'
             }
         };
+
+        const ShareModal = ({ onClose, dockId }) => (
+            <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-[#111] p-6 rounded-2xl border border-red-900/30 max-w-sm w-full text-center relative shadow-2xl">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-neutral-500 hover:text-white"><X size={20}/></button>
+                    <h3 className="text-white font-bold text-lg mb-6 uppercase tracking-widest text-red-500">Compartir Estudio</h3>
+                    
+                    <div className="bg-white/5 p-4 rounded-lg mb-6 border border-white/10">
+                         <div className="text-3xl font-mono font-bold text-white mb-2 tracking-widest">{dockId}</div>
+                         <div className="text-[10px] text-gray-500 uppercase tracking-widest">ID Único de Sesión</div>
+                    </div>
+                    
+                    <button onClick={() => { navigator.clipboard.writeText(dockId); onClose(); }} className="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-4 rounded-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+                        <Copy size={16}/> Copiar ID
+                    </button>
+                    <p className="text-[9px] text-gray-600 mt-4 uppercase tracking-widest">Comparte este ID con el Director Remoto</p>
+                </div>
+            </div>
+        );
 
         const usePeerJS = () => {
           const [loaded, setLoaded] = useState(false);
@@ -116,7 +138,12 @@
         const VideoPeer = ({ stream, className, muted = true, id }) => {
             const videoRef = useRef(null);
             useEffect(() => { if (videoRef.current) videoRef.current.muted = muted; }, [muted]);
-            useEffect(() => { if (videoRef.current && stream) { videoRef.current.srcObject = stream; videoRef.current.play().catch(e => {}); } }, [stream]);
+            useEffect(() => { 
+                if (videoRef.current && stream) { 
+                    videoRef.current.srcObject = stream; 
+                    videoRef.current.play().catch(e => console.log("Autoplay prevent", e)); 
+                } 
+            }, [stream]);
             return <video id={id} ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
         };
 
@@ -258,12 +285,15 @@
             
             const [peekStream, setPeekStream] = useState(null);
             const [peekName, setPeekName] = useState("");
-            const peekTimeoutRef = useRef(null);
+            const [selectedControlId, setSelectedControlId] = useState(null);
 
+            const peekTimeoutRef = useRef(null);
             const peerRef = useRef(null);
             const connRef = useRef(null);
             const activeProgramCam = cameraList.find(c => c.tally === 'program');
-            const currentFilter = activeProgramCam ? activeProgramCam.filter : null;
+            
+            const controlTargetCam = cameraList.find(c => c.id === selectedControlId) || activeProgramCam;
+            const currentFilter = controlTargetCam ? controlTargetCam.filter : null;
 
             const notify = (msg, type = 'success') => {
                 const id = Date.now();
@@ -284,7 +314,7 @@
 
             const connect = () => {
                 if(!dockId) return;
-                const peer = new window.Peer(null, PEER_CONFIG);
+                const peer = new window.Peer(null, { ...PEER_CONFIG, debug: 1 });
                 peerRef.current = peer;
                 
                 let targetId = dockId.trim();
@@ -293,7 +323,7 @@
                 targetId = targetId + "-8889";
                 
                 peer.on('open', (id) => {
-                    const conn = peer.connect(targetId);
+                    const conn = peer.connect(targetId, { reliable: true });
                     connRef.current = conn;
                     conn.on('open', () => { setIsConnected(true); conn.send({ type: 'register-director' }); notify("CONEXIÓN CON ESTUDIO EXITOSA"); });
                     conn.on('data', (data) => {
@@ -304,6 +334,12 @@
                         if (data.type === 'toast') notify(data.msg, data.toastType);
                     });
                     conn.on('close', () => { setIsConnected(false); notify("CONEXIÓN PERDIDA", "error"); });
+                    conn.on('error', (err) => { notify("Error de enlace móvil", "error"); console.error(err); });
+                });
+
+                peer.on('error', (err) => {
+                  if(err.type === 'network') notify("Error de red: Reintenta", "warning");
+                  console.error(err);
                 });
                 
                 peer.on('call', (call) => {
@@ -321,6 +357,7 @@
                      if(category === 'mixer') {
                          if(action === 'program') setCameraList(prev => prev.map(c => ({...c, tally: c.id === value ? 'program' : 'idle'})));
                          if(action === 'preview') setCameraList(prev => prev.map(c => { if(c.tally === 'program') return c; return {...c, tally: c.id === value ? 'preview' : 'idle'}; }));
+                         if(action === 'filter') setCameraList(prev => prev.map(c => { if(c.id === (selectedControlId || activeProgramCam?.id)) return {...c, filter: value}; return c; }));
                      }
                      return;
                 }
@@ -402,7 +439,10 @@
                                      className={`flex items-center border rounded-lg p-2 gap-3 transition-all active:scale-[0.98] ${cam.tally === 'program' ? 'bg-red-900/20 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'bg-[#151515] border-gray-800'}`} 
                                      onPointerDown={() => handlePointerDown(cam.id, cam.name)}
                                      onPointerUp={handlePointerUp}
-                                     onClick={() => send('mixer', 'preview', cam.id)}>
+                                     onClick={() => {
+                                        send('mixer', 'preview', cam.id);
+                                        setSelectedControlId(cam.id);
+                                     }}>
                                     
                                     <div className="w-14 aspect-video bg-black rounded border border-neutral-800 flex items-center justify-center overflow-hidden shrink-0 pointer-events-none">
                                         <Monitor size={12} className="opacity-20 text-white"/>
@@ -426,7 +466,7 @@
                         </div>
 
                         <div className="bg-[#111] p-2 rounded border border-gray-800">
-                            <DirectorPanel activeCam={activeProgramCam} onCommand={send} isOffline={isOffline} currentFilter={currentFilter} />
+                            <DirectorPanel activeCam={controlTargetCam} onCommand={send} isOffline={isOffline} currentFilter={currentFilter || 'normal'} />
                         </div>
                     </div>
                     <MediaPanel onPlay={(type) => send('media', 'play', type)} timers={mediaTimers} activeMedia={activeMedia} />
@@ -443,7 +483,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v4.25</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v4.26</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest uppercase tracking-widest">ID (Tailscale IP)</label>
@@ -477,6 +517,10 @@
           const peerRef = useRef(null);
           const camerasRef = useRef({});
           const directorConnRef = useRef(null);
+          
+          // --- FIX: ESTADOS PARA VENTANA EXTERNA OBS ---
+          const [obsMountNode, setObsMountNode] = useState(null);
+          const obsWindowRef = useRef(null);
 
           const isGlobalMuted = useMemo(() => ['intro', 'outro', 'standby'].includes(activeMedia), [activeMedia]);
           const camList = Object.values(cameras);
@@ -505,6 +549,68 @@
           };
 
           useEffect(() => {
+              try {
+                  const AudioContext = window.AudioContext || window.webkitAudioContext;
+                  if (AudioContext) {
+                      const audioCtx = new AudioContext();
+                      const osc = audioCtx.createOscillator();
+                      const gain = audioCtx.createGain();
+                      osc.connect(gain);
+                      gain.connect(audioCtx.destination);
+                      gain.gain.value = 0.0001; 
+                      osc.start();
+                  }
+              } catch(e) { console.log("Audio hack failed", e); }
+          }, []);
+          
+          // --- FIX: EFECTO PARA GESTIONAR LA VENTANA OBS E INYECTAR ESTILOS ---
+          useEffect(() => {
+            if (obsWindowOpen) {
+                if (!obsWindowRef.current || obsWindowRef.current.closed) {
+                    const win = window.open('', 'OBS_OUTPUT', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no');
+                    if (win) {
+                        obsWindowRef.current = win;
+                        
+                        // 1. Inyectar Tailwind desde CDN
+                        const script = win.document.createElement('script');
+                        script.src = "https://cdn.tailwindcss.com";
+                        win.document.head.appendChild(script);
+
+                        // 2. Copiar estilos locales (<style>) definidos en el head principal
+                        Array.from(document.querySelectorAll('style')).forEach(style => {
+                            win.document.head.appendChild(style.cloneNode(true));
+                        });
+
+                        // 3. Configurar body para full screen black
+                        win.document.body.style.margin = '0';
+                        win.document.body.style.backgroundColor = 'black';
+                        win.document.body.style.overflow = 'hidden';
+                        win.document.title = "SALIDA OBS | PRODOCK (CLEAN FEED)";
+
+                        // 4. Crear contenedor root para React Portal
+                        const container = win.document.createElement('div');
+                        container.style.height = '100%';
+                        container.style.width = '100%';
+                        win.document.body.appendChild(container);
+                        setObsMountNode(container);
+
+                        // Manejar cierre externo
+                        win.onbeforeunload = () => {
+                            setObsWindowOpen(false);
+                            setObsMountNode(null);
+                        };
+                    }
+                }
+            } else {
+                if (obsWindowRef.current) {
+                    obsWindowRef.current.close();
+                    obsWindowRef.current = null;
+                    setObsMountNode(null);
+                }
+            }
+          }, [obsWindowOpen]);
+
+          useEffect(() => {
               const isFullMedia = ['intro', 'outro', 'standby'].includes(activeMedia);
               if (activeMedia === 'banner' || activeMedia === 'transicion' || isFullMedia) setHeaderHidden(true);
               else setHeaderHidden(false);
@@ -518,7 +624,7 @@
             if (cleanId?.endsWith("-8889")) cleanId = cleanId.slice(0, -5);
             cleanId = cleanId ? cleanId.replace(/\./g, '-') + "-8889" : null;
             
-            const peer = new window.Peer(cleanId, PEER_CONFIG);
+            const peer = new window.Peer(cleanId, { ...PEER_CONFIG, debug: 1 });
             peerRef.current = peer;
             peer.on('open', setMyId);
             peer.on('connection', (conn) => {
@@ -528,7 +634,15 @@
                     if (data.type === 'director-cmd') handleDirectorCommand(data);
                     if (data.type === 'ai-speech') speakText(data.text);
                 });
+                conn.on('error', () => notify("Error de enlace", "error"));
             });
+
+            peer.on('error', (err) => {
+              if(err.type === 'unavailable-id') notify("ID ocupado. Reintenta.", "error");
+              if(err.type === 'network') notify("Error de red: Check datos", "warning");
+              console.error(err);
+            });
+
             peer.on('call', (call) => { call.answer(); call.on('stream', (stream) => { const name = call.metadata?.name || "CAM"; updateCameraState(name, { id: name, stream, name }); notify(`RECIBIENDO VIDEO DE ${name.toUpperCase()}`); }); });
             
             const interval = setInterval(() => { 
@@ -586,7 +700,14 @@
           };
 
           const switchProgram = (id) => { setProgramId(id); setPreviewId(null); sendTallyUpdate(id, null); setActiveMedia(null); setHeaderHidden(false); };
-          const handleAuto = () => { handlePlayLocal('transicion'); setTimeout(() => switchProgram(previewId), 1000); };
+          
+          const handleAuto = () => { 
+              handlePlayLocal('transicion'); 
+              setTimeout(() => {
+                  if(previewId) switchProgram(previewId);
+              }, 1500); 
+          };
+          
           const handlePlayLocal = (type) => { if(activeMedia === type && type === 'banner') { setActiveMedia(null); return; } setActiveMedia(type); };
           const handleMediaFinish = () => {
               if (activeMedia === 'transicion' || activeMedia === 'banner') { setActiveMedia(null); setHeaderHidden(false); return; }
@@ -610,7 +731,7 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-between px-4 shrink-0">
                     <div className="flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase">Exploraciones OBR | Studio v4.25</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase">Exploraciones OBR | Studio v4.26</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} />
                     </div>
                     <div className="flex items-center gap-4">
@@ -668,16 +789,28 @@
                             <button onClick={() => setForceCam1Audio(!forceCam1Audio)} className={`w-full text-xs py-2 rounded border flex items-center justify-center gap-2 transition-colors font-bold font-bold tracking-widest uppercase ${forceCam1Audio ? 'bg-blue-900 text-white border-blue-500' : 'bg-neutral-800 text-gray-400 border-neutral-700'}`}><Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: MEZCLA AUTO'}</button>
                         </div>
                         <MediaPanel onPlay={handlePlayLocal} timers={mediaTimers} activeMedia={activeMedia} />
-                        <DirectorPanel activeCam={previewCam} onCommand={handleDirectorCommand} isOffline={false} currentFilter={previewCam?.filter || 'normal'} />
+                        <DirectorPanel activeCam={previewCam || cameras[programId]} onCommand={handleDirectorCommand} isOffline={false} currentFilter={previewCam?.filter || cameras[programId]?.filter || 'normal'} />
                     </div>
                 </div>
-                {obsWindowOpen && createPortal(
-                    <div className="fixed inset-0 bg-black overflow-hidden">
-                        {programId && cameras[programId]?.stream ? <VideoPeer key={`obs-prog-${programId}`} stream={cameras[programId].stream} className="w-full h-full object-cover" muted={isGlobalMuted} /> : <div className="w-full h-full bg-black"/>}
-                        <BroadcastHUD hidden={headerHidden} />
-                        <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
+                
+                {/* FIX: PORTAL ROBUSTO CON ESTILOS INYECTADOS */}
+                {obsMountNode && createPortal(
+                    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+                        <div className="relative w-full h-full">
+                            {/* CLON EXACTO DE PROGRAMA */}
+                            {programId && cameras[programId]?.stream ? (
+                                <VideoPeer key={`obs-prog-${programId}`} stream={cameras[programId].stream} className="w-full h-full object-cover" muted={isGlobalMuted} />
+                            ) : (
+                                <div className="w-full h-full bg-black flex items-center justify-center">
+                                    <img src="./obr-logo.png" className="w-32 opacity-20" />
+                                </div>
+                            )}
+                            {/* HUD y Media Overlay sobre el video */}
+                            <BroadcastHUD hidden={headerHidden} />
+                            <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
+                        </div>
                     </div>,
-                    window.open('', 'OBS', 'width=1280,height=720').document.body
+                    obsMountNode
                 )}
             </div>
           );
@@ -687,7 +820,7 @@
           const loaded = usePeerJS();
           const [mode, setMode] = useState('lobby');
           const [id, setId] = useState("");
-          if(!loaded) return <div className="h-screen bg-black flex items-center justify-center text-xs font-bold tracking-[0.5em] animate-pulse text-red-600 uppercase uppercase tracking-widest">Iniciando v4.25...</div>;
+          if(!loaded) return <div className="h-screen bg-black flex items-center justify-center text-xs font-bold tracking-[0.5em] animate-pulse text-red-600 uppercase uppercase tracking-widest">Iniciando v4.26...</div>;
           return (
             <>
               {mode === 'lobby' && <Lobby onCreate={(val) => { setId(val); setMode('dock'); }} onRemote={() => setMode('remote-director')} />}
