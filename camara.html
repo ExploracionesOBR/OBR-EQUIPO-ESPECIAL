@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.4.1 (TACTICAL SCAN)</title> 
+    <title>CAMARA OBR PRO v5.4.3 (TALLY FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -54,12 +54,12 @@
         .hud-burn-hidden { display: none !important; }
 
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
-        #tally-border.preview { border: 4px solid #800000; opacity: 0.6; }
-        #tally-border.online { border: 6px solid #00ff00; box-shadow: inset 0 0 20px rgba(0,255,0,0.5), 0 0 15px rgba(0,255,0,0.5); opacity: 1; }
+        /* Clases CSS de respaldo, controladas ahora por JS para mayor precisión */
+        #tally-border.preview { border: 4px solid #00ff00; opacity: 0.6; }
+        #tally-border.online { border: 6px solid #ff0000; box-shadow: inset 0 0 20px rgba(255,0,0,0.5), 0 0 15px rgba(255,0,0,0.5); opacity: 1; }
 
         #ai-scan-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 55; display: none; overflow: hidden; }
         
-        /* AUMENTADA LA PRESENCIA DE LOS CUADROS DE ESCANEO */
         .scan-box { 
             position: absolute; 
             border: 2px solid rgba(255, 0, 0, 0.9); 
@@ -129,7 +129,6 @@
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        <!-- HUD OCULTO (BURN-IN) -->
         <div id="hud-layer" class="hud-burn-hidden">
             <img src="obr-logo.png" id="hud-logo" alt="OBR">
             <div id="hud-text-container">
@@ -144,7 +143,7 @@
         
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800 flex items-center gap-2">
             <div id="status-dot" class="w-2 h-2 rounded-full bg-red-900"></div>
-            <span id="status-text">PREVIEW</span>
+            <span id="status-text">LOCAL</span>
         </div>
 
         <div class="absolute top-4 right-4 interactive text-gray-500 p-2 bg-black/30 rounded-full hover:text-white" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
@@ -171,7 +170,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.1 (TACTICAL SCAN)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.3 (TALLY FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -186,45 +185,33 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONFIGURACIÓN UNIFICADO (2 COLUMNAS) -->
     <div id="settings-modal" class="modal-bg">
         <div class="relative bg-neutral-900 border border-red-900 p-6 rounded w-[480px] max-w-[95%] shadow-[0_0_30px_rgba(255,0,0,0.1)]">
-            <!-- BOTÓN X DE CIERRE -->
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
-
             <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest text-lg">CONFIGURACIÓN SISTEMA</h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <!-- COLUMNA 1: RED -->
                 <div class="bg-black/50 p-3 rounded border border-gray-800">
                     <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">RED ESTUDIO</h3>
                     <label class="text-[9px] text-gray-500 font-mono mb-1 block uppercase">DOCK ID / IP</label>
                     <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono outline-none focus:border-red-500 text-center mb-2">
                     <p class="text-[8px] text-gray-600 font-mono uppercase text-center leading-tight">IP SE CONVIERTE A ID AUTO</p>
                 </div>
-
-                <!-- COLUMNA 2: IA -->
                 <div class="bg-black/50 p-3 rounded border border-gray-800">
                     <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">IA ANALYZER</h3>
                     <label class="text-[9px] text-gray-500 font-mono mb-1 block">API KEY</label>
-                    
-                    <!-- INPUT CON BOTÓN EMBEBIDO -->
                     <div class="relative w-full mb-2">
                         <input type="password" id="api-key-internal" placeholder="GEMINI KEY" class="w-full bg-black border border-gray-700 p-2 pr-10 text-white text-xs rounded outline-none focus:border-red-500">
                         <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="absolute right-2 top-1/2 -translate-y-1/2 text-base hover:scale-110 transition-transform leading-none" title="Crear API Key">
                             📲
                         </button>
                     </div>
-
                     <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-800 text-green-500 hover:bg-green-900/30 py-1 rounded text-[10px] font-bold">VALIDAR KEY</button>
                     <div id="api-status-msg" class="text-[9px] font-mono mt-1 text-center text-yellow-500 h-3"></div>
                 </div>
             </div>
-
             <div class="h-px bg-gray-800 w-full mb-4"></div>
-            
             <button onclick="saveSettings()" class="w-full bg-red-900/20 border border-red-600 text-red-500 hover:bg-red-900/50 hover:text-white py-3 rounded text-sm font-bold uppercase tracking-widest transition-colors font-orbitron">GUARDAR Y CERRAR</button>
         </div>
     </div>
@@ -251,7 +238,6 @@
         }
     };
     
-    // Globals
     let GEMINI_API_KEY = state.apiKey;
     let CURRENT_AI_MODEL = state.aiModel;
     let isAIProcessing = false;
@@ -261,18 +247,18 @@
     let lastPareidoliaCall = 0; 
     let imageCollapseTimeout = null;
 
-    // VARIABLES BURN-IN IA
     let currentAiText = "";
-    let currentAiImage = null; // NUEVO: Imagen IA
+    let currentAiImage = null; 
     let aiTextTimer = null;
-    let radarAngle = 0; // Para animación de radar
-    let canvasScanBoxes = []; // <--- NUEVO ARRAY PARA CANVAS
+    let radarAngle = 0; 
+    let canvasScanBoxes = []; 
 
-    // ESTADO PARA TEXTO CICLICO
-    let aiScannerState = 0; // 0=SEARCH, 1=RAW, 2=SENSORS
+    let aiScannerState = 0; 
     let aiScannerTimer = 0;
+    
+    // --- ESTADO TALLY GLOBAL ---
+    let tallyState = 'idle'; // 'idle', 'preview', 'program'
 
-    // SISTEMA DE ANIMACIÓN FÍSICA (Spring Physics)
     const animState = {
         hudScale: 1.0,
         hudTarget: 1.0,
@@ -319,37 +305,10 @@
         showToast("Cargando Motores IA...", false);
         setTimeout(async () => {
             try {
-                if(window.tf) { 
-                    try { 
-                        await tf.setBackend('webgl'); 
-                    } catch(e) { await tf.setBackend('cpu'); } 
-                }
-                
-                if(window.poseDetection) { 
-                    try { 
-                        aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
-                            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING 
-                        }); 
-                    } catch(e) {} 
-                }
-                
+                if(window.tf) { try { await tf.setBackend('webgl'); } catch(e) { await tf.setBackend('cpu'); } }
+                if(window.poseDetection) { try { aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }); } catch(e) {} }
                 if(window.FaceMesh) { try { faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`}); faceMesh.setOptions({ maxNumFaces: 3, minDetectionConfidence: AI_SENSITIVITY }); faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; }); await faceMesh.initialize(); } catch(e) {} }
-                
-                if(window.SelfieSegmentation) { 
-                    try { 
-                        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); 
-                        selfieSegmentation.setOptions({ modelSelection: 1 }); // 1 = Landscape
-                        selfieSegmentation.onResults(res => { 
-                            if(res && res.segmentationMask) {
-                                lidarMask = res.segmentationMask; 
-                                lastLidarMask = res.segmentationMask; 
-                            }
-                            lidarBusy = false;
-                        }); 
-                        segmenter = selfieSegmentation; 
-                    } catch(e) {} 
-                }
-                
+                if(window.SelfieSegmentation) { try { const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); selfieSegmentation.setOptions({ modelSelection: 1 }); selfieSegmentation.onResults(res => { if(res && res.segmentationMask) { lidarMask = res.segmentationMask; lastLidarMask = res.segmentationMask; } lidarBusy = false; }); segmenter = selfieSegmentation; } catch(e) {} }
                 showToast("SISTEMAS IA ACTIVOS", false);
                 setInterval(aiLoop, 80); 
             } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
@@ -361,7 +320,6 @@
     function drawLidarEffect(c, width, height) {
         const maskToUse = lidarMask || lastLidarMask; 
         if (!maskToUse) return; 
-        
         lidarCtx.clearRect(0, 0, width, height);
         lidarCtx.save();
         lidarCtx.drawImage(maskToUse, 0, 0, width, height);
@@ -378,14 +336,9 @@
 
     function drawBurnInHUD(ctx, width, height, scale) {
         if(scale <= 0.01) return;
-
         ctx.save();
-        const centerX = 20 + 80; 
-        const centerY = 20 + 20; 
-        ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-        ctx.translate(-centerX, -centerY);
-
+        const centerX = 20 + 80; const centerY = 20 + 20; 
+        ctx.translate(centerX, centerY); ctx.scale(scale, scale); ctx.translate(-centerX, -centerY);
         ctx.shadowColor = "black"; ctx.shadowBlur = 4;
         if(logoImg.complete) ctx.drawImage(logoImg, 20, 20, 40, 40);
         ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif";
@@ -393,7 +346,6 @@
         const now = new Date();
         ctx.fillStyle = "#ff3333"; ctx.font = "12px 'Share Tech Mono', monospace";
         ctx.fillText(now.toLocaleDateString() + " - " + now.toLocaleTimeString(), 70, 58);
-        
         if(state.isSLS) {
             const bx = width/2 - 40;
             ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, 20, 80, 20);
@@ -403,228 +355,104 @@
         ctx.restore();
     }
 
-    // FUNCIÓN AUXILIAR PARA TEXTO GLITCH
     function drawGlitchText(c, text, x, y, size = 12) {
         const glitchOffset = Math.random() * 4 - 2;
         c.font = `bold ${size}px 'Share Tech Mono'`;
-        c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
-        c.fillText(text, x + glitchOffset, y);
-        c.fillStyle = "rgba(0, 255, 255, 0.7)"; 
-        c.fillText(text, x - glitchOffset, y);
-        c.fillStyle = "#ffffff"; 
-        c.fillText(text, x, y);
+        c.fillStyle = "rgba(255, 0, 0, 0.7)"; c.fillText(text, x + glitchOffset, y);
+        c.fillStyle = "rgba(0, 255, 255, 0.7)"; c.fillText(text, x - glitchOffset, y);
+        c.fillStyle = "#ffffff"; c.fillText(text, x, y);
     }
     
-    // --- NUEVA FUNCIÓN PARA DIBUJAR CUADROS DE ESCANEO EN CANVAS ---
     function drawCanvasScanBoxes(c, w, h) {
         const now = Date.now();
         canvasScanBoxes = canvasScanBoxes.filter(box => now - box.startTime < 800);
         canvasScanBoxes.forEach(box => {
-            const age = now - box.startTime;
-            const alpha = 1 - (age / 800);
-            const scale = 1.3 - (age / 800) * 0.5;
-            c.save();
-            c.translate(box.x + box.size/2, box.y + box.size/2);
-            c.scale(scale, scale);
-            c.translate(-(box.x + box.size/2), -(box.y + box.size/2));
-            c.strokeStyle = `rgba(255, 0, 0, ${alpha * 0.9})`;
-            c.lineWidth = 2;
-            c.strokeRect(box.x, box.y, box.size, box.size);
-            c.shadowBlur = 10; c.shadowColor = `rgba(255, 0, 0, ${alpha * 0.6})`;
-            c.strokeRect(box.x, box.y, box.size, box.size);
+            const age = now - box.startTime; const alpha = 1 - (age / 800); const scale = 1.3 - (age / 800) * 0.5;
+            c.save(); c.translate(box.x + box.size/2, box.y + box.size/2); c.scale(scale, scale); c.translate(-(box.x + box.size/2), -(box.y + box.size/2));
+            c.strokeStyle = `rgba(255, 0, 0, ${alpha * 0.9})`; c.lineWidth = 2; c.strokeRect(box.x, box.y, box.size, box.size);
+            c.shadowBlur = 10; c.shadowColor = `rgba(255, 0, 0, ${alpha * 0.6})`; c.strokeRect(box.x, box.y, box.size, box.size);
             c.restore();
         });
     }
 
     function drawAIBurnIn(c, w, h, scale) {
         if(scale <= 0.01) return;
-
         c.save();
-        
-        const bx = 20, by = 20; 
-        const panelW = 220; 
-        
+        const bx = 20, by = 20; const panelW = 220; 
         let displayTxt = currentAiText;
-        let isScanning = !currentAiImage; // Si no hay imagen, estamos escaneando
+        let isScanning = !currentAiImage; 
         
-        // --- LÓGICA DE ESTADO CÍCLICO PARA EL TEXTO ---
         if (isScanning && !displayTxt) {
              aiScannerTimer++;
-             if(aiScannerTimer > 150) { // Cambia cada ~2.5 segundos (60fps)
-                 aiScannerState = (aiScannerState + 1) % 3;
-                 aiScannerTimer = 0;
-             }
-             
+             if(aiScannerTimer > 150) { aiScannerState = (aiScannerState + 1) % 3; aiScannerTimer = 0; }
              if(aiScannerState === 0) displayTxt = "Analizando Entorno...";
              else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`;
              else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%";
         }
         
         let borderColor = isScanning ? "#ff0000" : "#ff3333";
-        // REGLA: SI ESCANEA, FONDO TRANSPARENTE. SI HAY RESULTADO, FONDO OPACO.
         let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)"; 
-        
-        // Calcular altura imagen (o altura del escáner simulado)
         let imgH = 0;
-        if (isScanning) {
-            imgH = 150; 
-        } else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) {
-             imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth);
-        }
+        if (isScanning) { imgH = 150; } else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) { imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth); }
 
-        // ANIMACIÓN POP
-        const centerX = bx + panelW/2;
-        const centerY = by + imgH/2 + 20; 
-        c.translate(centerX, centerY);
-        c.scale(scale, scale);
-        c.translate(-centerX, -centerY);
+        const centerX = bx + panelW/2; const centerY = by + imgH/2 + 20; 
+        c.translate(centerX, centerY); c.scale(scale, scale); c.translate(-centerX, -centerY);
 
-        // REGLA: SI ESCANEA, NO DIBUJAR CAJA PRINCIPAL
         if (!isScanning) {
-            let txtH = 40; // Approx
-            const totalH = imgH + txtH;
-            
-            c.fillStyle = bgColor; 
-            c.fillRect(bx, by, panelW, totalH);
-            c.fillStyle = borderColor;
-            c.fillRect(bx, by, 4, totalH);
+            let txtH = 40; const totalH = imgH + txtH;
+            c.fillStyle = bgColor; c.fillRect(bx, by, panelW, totalH);
+            c.fillStyle = borderColor; c.fillRect(bx, by, 4, totalH);
         }
 
-        // DIBUJAR VISUALIZACIÓN (IMAGEN O RADAR)
         if(imgH > 0) {
             if (isScanning) {
-                // --- NUEVO RADAR "TACTICAL PULSE" (2 Aspas + Respiración) ---
                 c.save();
-                
-                const radarRadiusBase = 50;
-                const radarCx = bx + radarRadiusBase + 10;
-                const radarCy = by + radarRadiusBase + 10;
-                
+                const radarRadiusBase = 50; const radarCx = bx + radarRadiusBase + 10; const radarCy = by + radarRadiusBase + 10;
                 c.translate(radarCx, radarCy);
-                
-                // 1. FONDO MALLA CIRCULAR (ESTÁTICA/WIREFRAME)
-                // Usamos un cian/verde muy transparente para simular pantalla
-                c.strokeStyle = "rgba(0, 255, 100, 0.15)"; 
-                c.lineWidth = 1;
-                
-                // Anillos concéntricos
-                for(let r=10; r<=radarRadiusBase; r+=10) {
-                    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke();
-                }
-                // Mira en cruz
+                c.strokeStyle = "rgba(0, 255, 100, 0.15)"; c.lineWidth = 1;
+                for(let r=10; r<=radarRadiusBase; r+=10) { c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke(); }
                 c.beginPath(); c.moveTo(-radarRadiusBase, 0); c.lineTo(radarRadiusBase, 0); c.stroke();
                 c.beginPath(); c.moveTo(0, -radarRadiusBase); c.lineTo(0, radarRadiusBase); c.stroke();
-
-                // 2. DINÁMICA DE RESPIRACIÓN (PULSE)
-                // Usamos el tiempo para crear una onda senoidal suave
-                const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2; // Va de 0 a 1 suavemente
-                const currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4)); // Radio oscila entre 60% y 100%
-
-                // 3. ASPAS GIRATORIAS (HELICE DE 2 HOJAS)
-                radarAngle += 0.04; 
-                c.rotate(radarAngle);
-
+                const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2; 
+                const currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4)); 
+                radarAngle += 0.04; c.rotate(radarAngle);
                 const drawBlade = (angleOffset) => {
-                    c.save();
-                    c.rotate(angleOffset);
-                    
-                    c.beginPath();
-                    c.moveTo(0,0);
-                    c.arc(0, 0, currentRadius, -0.4, 0.4); // Cono de ~45 grados
-                    c.lineTo(0,0);
-                    
-                    // GRADIENTE DINÁMICO (CAMBIA SEGÚN EL TAMAÑO)
+                    c.save(); c.rotate(angleOffset); c.beginPath(); c.moveTo(0,0); c.arc(0, 0, currentRadius, -0.4, 0.4); c.lineTo(0,0);
                     const grad = c.createRadialGradient(0, 0, 0, 0, 0, currentRadius);
-                    grad.addColorStop(0, "rgba(0,0,0,0)"); // Centro transparente
-                    
-                    if (pulse > 0.7) {
-                        // GRANDE = PELIGRO (ROJO)
-                        grad.addColorStop(0.5, "rgba(255, 100, 0, 0.3)"); // Naranja
-                        grad.addColorStop(1, "rgba(255, 0, 0, 0.6)"); // Rojo
-                    } else {
-                        // PEQUEÑO = SEGURO (VERDE/AMARILLO)
-                        grad.addColorStop(0.5, "rgba(0, 150, 0, 0.3)"); // Verde
-                        grad.addColorStop(1, "rgba(200, 200, 0, 0.5)"); // Amarillo
-                    }
-                    
-                    c.fillStyle = grad;
-                    c.fill();
-                    c.restore();
+                    grad.addColorStop(0, "rgba(0,0,0,0)"); 
+                    if (pulse > 0.7) { grad.addColorStop(0.5, "rgba(255, 100, 0, 0.3)"); grad.addColorStop(1, "rgba(255, 0, 0, 0.6)"); } 
+                    else { grad.addColorStop(0.5, "rgba(0, 150, 0, 0.3)"); grad.addColorStop(1, "rgba(200, 200, 0, 0.5)"); }
+                    c.fillStyle = grad; c.fill(); c.restore();
                 };
-
-                // DIBUJAR LAS 2 ASPAS "ENCONTRADAS" (OPUESTAS 180 GRADOS)
-                drawBlade(0);          // Aspa 1
-                drawBlade(Math.PI);    // Aspa 2 (Opuesta)
-
-                c.restore();
-
-                // TEXTO DE ESTADO AL LADO DERECHO DEL RADAR (ASIMÉTRICO)
-                const txtX = radarCx + radarRadiusBase + 15;
-                const txtY = radarCy; 
-
-                if (displayTxt.includes('\n')) {
-                    const lines = displayTxt.split('\n');
-                    let lineY = txtY - 15;
-                    lines.forEach((l, idx) => {
-                        drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11);
-                    });
-                } else {
-                    drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12);
-                }
-
+                drawBlade(0); drawBlade(Math.PI); c.restore();
+                const txtX = radarCx + radarRadiusBase + 15; const txtY = radarCy; 
+                if (displayTxt.includes('\n')) { const lines = displayTxt.split('\n'); let lineY = txtY - 15; lines.forEach((l, idx) => { drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11); }); } 
+                else { drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12); }
             } else {
-                // --- IMAGEN REAL RESULTANTE ---
-                c.save();
-                c.filter = "invert(100%) grayscale(100%) contrast(1.5)";
-                c.drawImage(currentAiImage, bx, by, panelW, imgH);
-                c.restore(); 
-                c.strokeStyle = borderColor;
-                c.lineWidth = 1;
-                c.strokeRect(bx, by, panelW, imgH);
-                
-                // Texto de resultado
-                c.fillStyle = "#ffcccc";
-                c.font = "10px 'Share Tech Mono'";
-                let line = '';
-                let ly = by + imgH + 20;
-                
+                c.save(); c.filter = "invert(100%) grayscale(100%) contrast(1.5)"; c.drawImage(currentAiImage, bx, by, panelW, imgH); c.restore(); 
+                c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH);
+                c.fillStyle = "#ffcccc"; c.font = "10px 'Share Tech Mono'";
+                let line = ''; let ly = by + imgH + 20;
                 const resWords = currentAiText ? currentAiText.split(' ') : [];
                  for(let n = 0; n < resWords.length; n++) {
                     let testLine = line + resWords[n] + ' ';
-                    if (c.measureText(testLine).width > (panelW - 20) && n > 0) {
-                        c.fillText(line.toLowerCase(), bx + 10, ly); 
-                        line = resWords[n] + ' ';
-                        ly += 14;
-                    } else {
-                        line = testLine;
-                    }
+                    if (c.measureText(testLine).width > (panelW - 20) && n > 0) { c.fillText(line.toLowerCase(), bx + 10, ly); line = resWords[n] + ' '; ly += 14; } else { line = testLine; }
                 }
                 c.fillText(line.toLowerCase(), bx + 10, ly);
             }
         }
-
         c.restore();
     }
 
     function renderLoop() {
         frameCount++;
-        
         const vW = el.video.videoWidth, vH = el.video.videoHeight;
         const cW = el.canvas.width, cH = el.canvas.height;
+        ctx.save(); ctx.clearRect(0, 0, cW, cH);
         
-        ctx.save();
-        ctx.clearRect(0, 0, cW, cH);
-        
-        if(state.filter === 'night') {
-            ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2)';
-        } else if(state.filter === 'thermal') {
-            // --- MODIFICACIÓN SOLICITADA: NEGATIVO DE ALTO CONTRASTE ---
-            // Invierte colores (Personaje iluminado -> Negro, Fondo oscuro -> Blanco)
-            // Aumenta el contraste y brillo para "forzar" ver más en el "blanco" (oscuridad invertida)
-            ctx.filter = 'grayscale(100%) invert(100%) contrast(1.4) brightness(0.7)';
-        } else if(state.filter === 'urbex') {
-            ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.8)';
-        }
+        if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2)'; } 
+        else if(state.filter === 'thermal') { ctx.filter = 'grayscale(100%) invert(100%) contrast(1.4) brightness(0.7)'; } 
+        else if(state.filter === 'urbex') { ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.8)'; }
         
         if (vW && vH) {
             const vRatio = vW / vH, cRatio = cW / cH;
@@ -633,62 +461,31 @@
             else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
-            
             ctx.filter = 'none'; 
-            if(state.filter === 'night') {
-                ctx.fillStyle = 'rgba(0, 50, 0, 0.2)'; for(let i=0; i<cH; i+=4) ctx.fillRect(0, i, cW, 1);
-            }
+            if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 50, 0, 0.2)'; for(let i=0; i<cH; i+=4) ctx.fillRect(0, i, cW, 1); }
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
-        
         ctx.restore(); 
 
         if (state.isSLS && !state.isLidar) drawSLS();
-        
-        // --- LOGICA DE ANIMACIÓN (WATER POP) ---
         const speed = 0.4;
         animState.hudScale += (animState.hudTarget - animState.hudScale) * speed;
         animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
-
         drawBurnInHUD(ctx, cW, cH, animState.hudScale);
-
-        // QUEMADO DE CUADROS ROJOS EN CANVAS
         if (state.isPareidolia) drawCanvasScanBoxes(ctx, cW, cH);
-        
-        // SOLO DIBUJAR IA SI EL TARGET ES > 0 (Está activo)
-        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) {
-            drawAIBurnIn(ctx, cW, cH, animState.aiScale);
-        }
-
+        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) { drawAIBurnIn(ctx, cW, cH, animState.aiScale); }
         requestAnimationFrame(renderLoop);
     }
 
     async function aiLoop() {
         if (isAIProcessing) return; 
-        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { 
-            poses = []; faces = []; lidarMask = null; return; 
-        }
-
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { poses = []; faces = []; lidarMask = null; return; }
         if (state.isLidar && segmenter) { 
-            if(!lidarBusy) { 
-                lidarBusy = true; 
-                try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } 
-            } 
+            if(!lidarBusy) { lidarBusy = true; try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } } 
         } else {
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
-            
-            if (aiDetector && state.isSLS) { 
-                try { 
-                    poses = await aiDetector.estimatePoses(aiCanvas, {
-                        maxPoses: 5, 
-                        flipHorizontal: false,
-                        scoreThreshold: 0.25 
-                    }); 
-                } catch(e){} 
-            }
-            if (faceMesh && state.isSLS) { 
-                try { await faceMesh.send({image: el.video}); } catch(e){} 
-            }
+            if (aiDetector && state.isSLS) { try { poses = await aiDetector.estimatePoses(aiCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25 }); } catch(e){} }
+            if (faceMesh && state.isSLS) { try { await faceMesh.send({image: el.video}); } catch(e){} }
         }
     }
 
@@ -697,7 +494,6 @@
         const { dW, dH, dX, dY } = window.drawCoords;
         const mapX = (x) => (x / aiCanvas.width) * dW + dX; const mapY = (y) => (y / aiCanvas.height) * dH + dY;
         ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.fillStyle = '#a855f7';
-        
         poses.forEach(pose => {
             const k = pose.keypoints;
             const bodyPairs = [[5,7],[7,9],[6,8],[8,10],[11,12],[11,13],[13,15],[12,14],[14,16],[5,11],[6,12]];
@@ -728,6 +524,49 @@
         const clockEl = document.getElementById('hud-time'); if (clockEl) clockEl.innerText = `${dateStr} - ${timeStr}`;
     }
 
+    function updateStatusDisplay() {
+        const statusEl = document.getElementById('status-text');
+        const dotEl = document.getElementById('status-dot');
+        const tallyEl = document.getElementById('tally-border');
+        
+        // 1. Verificación de Conexión
+        if(conn && conn.open) {
+            // Conectado. Verificar Tally.
+            if(tallyState === 'program') {
+                statusEl.innerText = "AL AIRE";
+                statusEl.className = "text-red-500 font-bold font-mono animate-pulse";
+                dotEl.className = "w-2 h-2 rounded-full bg-red-600 shadow-[0_0_10px_red]";
+                // Forzar estilos de PROGRAMA (Rojo)
+                tallyEl.className = "online"; 
+                tallyEl.style.border = "6px solid #ff0000";
+                tallyEl.style.boxShadow = "inset 0 0 20px rgba(255,0,0,0.5)";
+                tallyEl.style.opacity = "1";
+            } else if (tallyState === 'preview') {
+                statusEl.innerText = "PREVIO";
+                statusEl.className = "text-green-500 font-bold font-mono";
+                dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]";
+                // Forzar estilos de PREVIO (Verde)
+                tallyEl.className = "preview"; 
+                tallyEl.style.border = "4px solid #00ff00";
+                tallyEl.style.boxShadow = "none";
+                tallyEl.style.opacity = "0.6";
+            } else {
+                statusEl.innerText = "LISTO";
+                statusEl.className = "text-gray-300 font-mono";
+                dotEl.className = "w-2 h-2 rounded-full bg-gray-500";
+                tallyEl.className = "";
+                tallyEl.style.border = "none";
+            }
+        } else {
+            // Desconectado
+            statusEl.innerText = "LOCAL"; // Cambiado de PREVIEW a LOCAL para evitar confusión
+            statusEl.className = "text-gray-500 font-mono";
+            dotEl.className = "w-2 h-2 rounded-full bg-red-900";
+            tallyEl.className = "";
+            tallyEl.style.border = "none";
+        }
+    }
+
     function telemetryLoop() {
         const now = performance.now(); const elapsed = now - lastTime;
         if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
@@ -736,12 +575,9 @@
         const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
         document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
-        const statusEl = document.getElementById('status-text'), dotEl = document.getElementById('status-dot'), tallyEl = document.getElementById('tally-border');
-        if(conn && conn.open) {
-             statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; tallyEl.className = "online";
-        } else {
-             statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-red-900"; tallyEl.className = "preview";
-        }
+        
+        // Llamada a la nueva función centralizada de estado
+        updateStatusDisplay();
     }
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
@@ -757,7 +593,7 @@
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
         if (baseId.includes('.')) { baseId = baseId.replace(/\./g, '-'); }
         
-        const commandTarget = baseId;
+        const commandTarget = baseId + "-8889"; 
         const videoTarget = baseId + "-8889";
         
         if(peerCommand) peerCommand.destroy();
@@ -783,7 +619,6 @@
         peerVideoSender = new Peer(null, PEER_CONFIG);
         
         peerVideoSender.on('open', () => {
-            // TRANSMISIÓN: Se usa el stream del canvas procesado
             const stream = el.canvas.captureStream(30); 
             const audioTracks = videoStream.getAudioTracks();
             if(audioTracks.length > 0) stream.addTrack(audioTracks[0]);
@@ -812,10 +647,9 @@
             else if(action === 'reset') setFilter('normal', null);
         }
         else if (cmd.type === 'tally') {
-            const tallyEl = document.getElementById('tally-border');
-            if (cmd.state === 'program') { tallyEl.className = 'online'; }
-            else if (cmd.state === 'preview') { tallyEl.className = 'preview'; }
-            else { tallyEl.className = ''; }
+            // Actualización de estado global en lugar de manipulación directa
+            tallyState = cmd.state; 
+            updateStatusDisplay(); // Forzar actualización visual inmediata
         }
     }
 
@@ -823,10 +657,7 @@
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
         document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
-        
-        // --- MODIFICACIÓN SOLICITADA: FLASH AUTOMÁTICO EN MODO NEGATIVO (THERMAL) ---
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
-        
         document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
     }
 
@@ -844,56 +675,24 @@
 
     function startScanningEffect() {
         const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'block';
-        
-        // Limpiar intervalo previo si existe
         if (scanInterval) clearInterval(scanInterval);
-
         scanInterval = setInterval(() => {
             const box = document.createElement('div'); box.className = 'scan-box'; const size = Math.floor(Math.random() * 80) + 40;
-            // REGLA: EXCLUIR LA ZONA SUPERIOR IZQUIERDA (DONDE ESTÁ EL RADAR)
-            // El radar ocupa aprox. 250x200 px desde la esquina (bx=20, by=20, w=220, h=varía)
-            let x, y;
-            do {
-                x = Math.floor(Math.random() * (window.innerWidth - size));
-                y = Math.floor(Math.random() * (window.innerHeight - size));
-            } while (x < 250 && y < 200); // Repetir si cae en la zona prohibida
-            
-            // --- NUEVO: GUARDAR COORDENADAS PARA CANVAS BURN-IN ---
+            let x, y; do { x = Math.floor(Math.random() * (window.innerWidth - size)); y = Math.floor(Math.random() * (window.innerHeight - size)); } while (x < 250 && y < 200); 
             canvasScanBoxes.push({ x, y, size, startTime: Date.now() });
-
             box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
             overlay.appendChild(box); setTimeout(() => box.remove(), 800);
         }, 150); 
     }
 
-    function stopScanningEffect() { 
-        clearInterval(scanInterval); 
-        const overlay = document.getElementById('ai-scan-overlay'); 
-        overlay.innerHTML = ''; 
-        overlay.style.display = 'none';
-        canvasScanBoxes = []; // --- NUEVO: LIMPIAR CANVAS BURN-IN ---
-    }
+    function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; canvasScanBoxes = []; }
 
     async function triggerPareidolia() {
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
-        
-        isAIProcessing = true; 
-        
-        // FEEDBACK INMEDIATO: MANTENER ESCÁNER VISUAL
-        currentAiText = "búsqueda de señal..."; // Texto temporal en modo escáner
-        currentAiImage = null; // Nos aseguramos de que no hay imagen para que el HUD dibuje el radar
-        
-        // Los cuadros ya deberían estar activos si isPareidoliaActive es true, 
-        // pero por seguridad los reiniciamos/aseguramos aquí
-        startScanningEffect();
-
+        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; startScanningEffect();
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
-        
-        // CAPTURAR IMAGEN (Pero solo mostrarla tras recibir respuesta para evitar "movimiento")
-        const snapshot = new Image();
-        snapshot.src = canvas.toDataURL('image/jpeg', 0.8);
-        
+        const snapshot = new Image(); snapshot.src = canvas.toDataURL('image/jpeg', 0.8);
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         try {
@@ -906,42 +705,11 @@
                 } catch(err) { attempts++; }
             }
             let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SEÑAL DEBIL...";
-            
-            // --- RESULTADO OBTENIDO ---
-            // Detenemos los cuadros rojos de la pantalla principal
-            stopScanningEffect();
-            
-            // ACTUALIZACIÓN IA: Mostrar imagen y texto
-            currentAiText = text;
-            currentAiImage = snapshot; // Ahora sí mostramos la imagen estática en el HUD
-            
-            clearTimeout(aiTextTimer);
-            // TIEMPO EXTENDIDO: 9 SEGUNDOS DE VISIBILIDAD
-            aiTextTimer = setTimeout(() => { 
-                currentAiText = ""; 
-                currentAiImage = null;
-                
-                // CRUCIAL: AL TERMINAR, SI LA IA SIGUE ACTIVA, VOLVER A ESCANEAR
-                if (state.isPareidolia) {
-                    startScanningEffect();
-                }
-            }, 9000);
-            
-            // NUEVO: Enviar texto al Estudio
+            stopScanningEffect(); currentAiText = text; currentAiImage = snapshot; 
+            clearTimeout(aiTextTimer); aiTextTimer = setTimeout(() => { currentAiText = ""; currentAiImage = null; if (state.isPareidolia) { startScanningEffect(); } }, 9000);
             if (conn && conn.open) { conn.send({ type: 'ai-speech', text: text }); }
-            
             speakText(text);
-        } catch(e) { 
-            isAIProcessing = false; 
-            currentAiText = "error de señal"; 
-            setTimeout(() => { 
-                if(currentAiText === "error de señal") {
-                    currentAiText = ""; 
-                    // Si falla, volver a escanear también
-                    if (state.isPareidolia) startScanningEffect();
-                }
-            }, 3000);
-        }
+        } catch(e) { isAIProcessing = false; currentAiText = "error de señal"; setTimeout(() => { if(currentAiText === "error de señal") { currentAiText = ""; if (state.isPareidolia) startScanningEffect(); } }, 3000); }
         isAIProcessing = false; 
     }
 
@@ -949,35 +717,14 @@
         if(!GEMINI_API_KEY) { alert("NO API KEY: CONFIGURA EN AJUSTES"); return; }
         const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
         const aiHeader = document.getElementById('ai-vision-header');
-        
         if(isPareidoliaActive) {
-            if(btn) btn.classList.add('active-state'); 
-            document.body.classList.add('filter-pareidolia'); 
-            speakText("VISIÓN ACTIVADA"); 
-            
-            // CONTROL DE ANIMACIÓN: SWAP HUD -> IA
-            animState.hudTarget = 0.0;
-            animState.aiTarget = 1.0;
-            
-            // LIMPIAR Y ACTIVAR ESCÁNER INMEDIATO
-            currentAiText = "";
-            currentAiImage = null;
-            startScanningEffect(); // Activar visuales inmediatamente
-            
-            triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
+            if(btn) btn.classList.add('active-state'); document.body.classList.add('filter-pareidolia'); speakText("VISIÓN ACTIVADA"); 
+            animState.hudTarget = 0.0; animState.aiTarget = 1.0;
+            currentAiText = ""; currentAiImage = null; startScanningEffect(); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
         } else {
-            if(btn) btn.classList.remove('active-state'); 
-            document.body.classList.remove('filter-pareidolia'); 
-            speakText("VISIÓN DESACTIVADA"); 
-            
-            // CONTROL DE ANIMACIÓN: SWAP IA -> HUD
-            animState.hudTarget = 1.0;
-            animState.aiTarget = 0.0;
-
-            clearInterval(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); 
-            // NUEVO: Limpiar texto IA
-            currentAiText = "";
-            currentAiImage = null;
+            if(btn) btn.classList.remove('active-state'); document.body.classList.remove('filter-pareidolia'); speakText("VISIÓN DESACTIVADA"); 
+            animState.hudTarget = 1.0; animState.aiTarget = 0.0;
+            clearInterval(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); currentAiText = ""; currentAiImage = null;
         }
         showMenus();
     }
@@ -1006,7 +753,6 @@
     }
 
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
-    
     let menuTimeout; const menus = [document.getElementById('menu-left'), document.getElementById('menu-right')];
     document.getElementById('touch-surface').addEventListener('click', showMenus);
     function showMenus() { menus.forEach(m => m.classList.add('visible')); clearTimeout(menuTimeout); menuTimeout = setTimeout(() => menus.forEach(m => m.classList.remove('visible')), 4000); }
