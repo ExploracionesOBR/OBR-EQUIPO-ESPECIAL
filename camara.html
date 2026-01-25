@@ -3,25 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.4.3 (TALLY FIX)</title> 
+    <title>CAMARA OBR PRO v5.4.8 (ANTI-FLICKER)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
     
+    <!-- PWA MANIFEST -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- LIBRERÍAS -->
+    <!-- LIBRERÍAS: Carga Local Prioritaria -->
     <script src="js/tf.min.js"></script>
     <script src="js/pose-detection.min.js"></script>
     <script src="js/face_mesh.js"></script>
     <script src="js/selfie_segmentation.js"></script> 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
+    <!-- Fallbacks CDN -->
     <script>
         if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3"><\/script>');
@@ -37,7 +39,7 @@
         :root { --hud-primary: #ff3333; }
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
-        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
+        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; transition: filter 0.3s ease; }
         #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
         
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
@@ -51,11 +53,16 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
+        /* OPTIMIZACIÓN FILTROS GPU */
+        body.filter-night-vision #main-view-area { filter: contrast(1.2) brightness(1.2) sepia(100%) hue-rotate(90deg); }
+        body.filter-thermal #main-view-area { filter: contrast(1.4) brightness(0.7) invert(1) grayscale(1); }
+        body.filter-urbex #main-view-area { filter: contrast(1.3) saturate(1.8) sepia(0.8) hue-rotate(-15deg); }
+        body.filter-pareidolia #main-view-area { filter: contrast(1.1) brightness(0.8) grayscale(0.8); }
+
         .hud-burn-hidden { display: none !important; }
 
-        #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
-        /* Clases CSS de respaldo, controladas ahora por JS para mayor precisión */
-        #tally-border.preview { border: 4px solid #00ff00; opacity: 0.6; }
+        #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.2s ease-out; z-index: 50; pointer-events: none; }
+        #tally-border.preview { border: 4px solid #00ff00; opacity: 0.8; }
         #tally-border.online { border: 6px solid #ff0000; box-shadow: inset 0 0 20px rgba(255,0,0,0.5), 0 0 15px rgba(255,0,0,0.5); opacity: 1; }
 
         #ai-scan-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 55; display: none; overflow: hidden; }
@@ -142,7 +149,7 @@
         <div id="sls-pip" class="absolute top-4 left-1/2 -translate-x-1/2 text-purple-500 font-mono text-xs hidden bg-black/50 px-2 rounded border border-purple-500 hud-burn-hidden">● SLS ACTIVO</div>
         
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800 flex items-center gap-2">
-            <div id="status-dot" class="w-2 h-2 rounded-full bg-red-900"></div>
+            <div id="status-dot" class="w-2 h-2 rounded-full bg-neutral-600"></div>
             <span id="status-text">LOCAL</span>
         </div>
 
@@ -170,7 +177,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.3 (TALLY FIX)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.8 (ANTI-FLICKER)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -226,7 +233,8 @@
         isSLS: false, 
         isLidar: false, 
         isPareidolia: false, 
-        zoom: 1 
+        zoom: 1,
+        isStreaming: false
     };
     
     const PEER_CONFIG = {
@@ -256,6 +264,18 @@
     let aiScannerState = 0; 
     let aiScannerTimer = 0;
     
+    // --- SCHEDULER DE IA (Throttle) ---
+    let lastAI = 0;
+    const AI_INTERVAL = 350; // ~2.8 FPS
+    
+    function aiScheduler(time) {
+        if (time - lastAI > AI_INTERVAL) {
+            aiLoop();
+            lastAI = time;
+        }
+        requestAnimationFrame(aiScheduler);
+    }
+
     // --- ESTADO TALLY GLOBAL ---
     let tallyState = 'idle'; // 'idle', 'preview', 'program'
 
@@ -268,14 +288,23 @@
 
     const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
 
-    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    // OPTIMIZACIÓN CANVAS: Desincronizado y sin lectura frecuente
+    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true, willReadFrequently: false });
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
-    const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
+    
+    // OPTIMIZACIÓN IA: Resolución de entrada 224x224 (MoveNet Standard)
+    const aiCanvas = document.createElement('canvas'); 
+    aiCanvas.width = 224; 
+    aiCanvas.height = 224;
     const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
     let aiDetector = null, faceMesh = null, segmenter = null, poses = [], faces = [], lidarMask = null;
     let lidarBusy = false; 
-    let lastLidarMask = null; 
+    let lastLidarMask = null;
+    
+    // VARIABLE INTERPOLACIÓN LIDAR Y CONFIDENCE GATE
+    let lidarBlend = 0;
+    let lidarHoldFrames = 0;
     
     let videoStream, peerCommand = null, peerVideoSender = null, conn = null;
     let frameCount = 0, lastTime = performance.now(), currentFps = 0;
@@ -291,7 +320,16 @@
         document.querySelector('.load-btn').style.display = 'none';
         try {
             updateProgress(10, "INICIANDO SENSOR...");
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
+            // OPTIMIZACIÓN CÁMARA: Alta fluidez, resolución ideal 1080p
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true }, 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30, max: 60 }
+                } 
+            });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
         } catch(e) {
             alert("Error Crítico Cámara: " + e.message);
@@ -303,32 +341,79 @@
         requestAnimationFrame(renderLoop);
         setInterval(telemetryLoop, 1000);
         showToast("Cargando Motores IA...", false);
+        
+        // HEARTBEAT LIDAR DESACOPLADO (3 FPS ESTABLES)
+        setInterval(() => {
+            if (state.isLidar && segmenter && !lidarBusy) {
+                lidarBusy = true;
+                segmenter.send({ image: el.video })
+                  .finally(() => lidarBusy = false);
+            }
+        }, 333); // AUMENTADO A 333ms PARA EVITAR FLICKER
+
         setTimeout(async () => {
             try {
+                // OPTIMIZACIÓN: Carga inicial de librerías para caché (Precarga)
                 if(window.tf) { try { await tf.setBackend('webgl'); } catch(e) { await tf.setBackend('cpu'); } }
                 if(window.poseDetection) { try { aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING }); } catch(e) {} }
                 if(window.FaceMesh) { try { faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`}); faceMesh.setOptions({ maxNumFaces: 3, minDetectionConfidence: AI_SENSITIVITY }); faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; }); await faceMesh.initialize(); } catch(e) {} }
-                if(window.SelfieSegmentation) { try { const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); selfieSegmentation.setOptions({ modelSelection: 1 }); selfieSegmentation.onResults(res => { if(res && res.segmentationMask) { lidarMask = res.segmentationMask; lastLidarMask = res.segmentationMask; } lidarBusy = false; }); segmenter = selfieSegmentation; } catch(e) {} }
-                showToast("SISTEMAS IA ACTIVOS", false);
-                setInterval(aiLoop, 80); 
+                
+                // OPTIMIZACIÓN SEGMENTER: ANTI-FLICKER MODE
+                if(window.SelfieSegmentation) { 
+                    try { 
+                        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); 
+                        // CRITICO: smoothSegmentation: false elimina recalibración
+                        selfieSegmentation.setOptions({ modelSelection: 1, smoothSegmentation: false }); 
+                        selfieSegmentation.onResults(res => { 
+                            // MEJORA PRO: CONFIDENCE GATE + NO BLEND RESET
+                            if(res && res.segmentationMask) { 
+                                lidarMask = res.segmentationMask; 
+                                lastLidarMask = res.segmentationMask; 
+                                lidarHoldFrames = 5; // Reset hold
+                                // lidarBlend = 0; // ELIMINADO para evitar flashes
+                            } else if (lidarHoldFrames > 0) {
+                                lidarHoldFrames--;
+                                lidarMask = lastLidarMask; // Usar anterior si hay fallo
+                            }
+                            lidarBusy = false; 
+                        }); 
+                        segmenter = selfieSegmentation; 
+                    } catch(e) {} 
+                }
+                showToast("SISTEMAS IA LISTOS", false);
+                // OPTIMIZACIÓN: Inicio de loop IA controlado por Scheduler
+                requestAnimationFrame(aiScheduler);
             } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
         }, 500); 
     }
 
     function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
     
+    // MEJORA VISUAL: INTERPOLACIÓN DE MÁSCARA
     function drawLidarEffect(c, width, height) {
-        const maskToUse = lidarMask || lastLidarMask; 
-        if (!maskToUse) return; 
+        const mask = lidarMask || lastLidarMask;
+        if (!mask) return;
+
+        // VELOCIDAD DE MEZCLA AJUSTADA A 0.08
+        lidarBlend = Math.min(lidarBlend + 0.08, 1); 
+
         lidarCtx.clearRect(0, 0, width, height);
-        lidarCtx.save();
-        lidarCtx.drawImage(maskToUse, 0, 0, width, height);
+        lidarCtx.globalAlpha = lidarBlend;
+        lidarCtx.drawImage(mask, 0, 0, width, height);
+        lidarCtx.globalAlpha = 1;
+
         lidarCtx.globalCompositeOperation = 'source-in';
         const grad = lidarCtx.createLinearGradient(0, 0, 0, height);
-        grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
-        lidarCtx.fillStyle = grad; lidarCtx.fillRect(0, 0, width, height);
-        lidarCtx.restore();
-        c.globalCompositeOperation = 'screen'; c.drawImage(el.lidarCanvas, 0, 0, width, height); c.globalCompositeOperation = 'source-over';
+        grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); 
+        grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); 
+        grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
+        lidarCtx.fillStyle = grad; 
+        lidarCtx.fillRect(0, 0, width, height);
+        lidarCtx.globalCompositeOperation = 'source-over';
+        
+        c.globalCompositeOperation = 'screen'; 
+        c.drawImage(el.lidarCanvas, 0, 0, width, height); 
+        c.globalCompositeOperation = 'source-over';
     }
 
     function resize() { el.canvas.width = window.innerWidth; el.canvas.height = window.innerHeight; el.lidarCanvas.width = window.innerWidth; el.lidarCanvas.height = window.innerHeight; }
@@ -448,11 +533,15 @@
         frameCount++;
         const vW = el.video.videoWidth, vH = el.video.videoHeight;
         const cW = el.canvas.width, cH = el.canvas.height;
-        ctx.save(); ctx.clearRect(0, 0, cW, cH);
+        ctx.save();
         
-        if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2)'; } 
-        else if(state.filter === 'thermal') { ctx.filter = 'grayscale(100%) invert(100%) contrast(1.4) brightness(0.7)'; } 
-        else if(state.filter === 'urbex') { ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.8)'; }
+        // TRUCO VISUAL: MOTION DECAY EN LUGAR DE CLEARRECT
+        // Esto crea un arrastre sutil que conecta frames
+        ctx.fillStyle = 'rgba(0,0,0,0.08)';
+        ctx.fillRect(0,0,cW,cH);
+        
+        // OPTIMIZACIÓN: ELIMINADO EL PROCESADO DE FILTROS POR CPU/CANVAS
+        // if(state.filter === 'night') { ... } // DESACTIVADO
         
         if (vW && vH) {
             const vRatio = vW / vH, cRatio = cW / cH;
@@ -462,6 +551,7 @@
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
             ctx.filter = 'none'; 
+            // Las capas extras se dibujan en el canvas pero el filtro visual es externo
             if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 50, 0, 0.2)'; for(let i=0; i<cH; i+=4) ctx.fillRect(0, i, cW, 1); }
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
@@ -478,11 +568,16 @@
     }
 
     async function aiLoop() {
+        // OPTIMIZACIÓN: CORTAFUEGOS DE IA
+        // Si no hay ninguna función de IA activa, terminamos inmediatamente para ahorrar batería y datos.
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) return;
         if (isAIProcessing) return; 
-        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { poses = []; faces = []; lidarMask = null; return; }
-        if (state.isLidar && segmenter) { 
-            if(!lidarBusy) { lidarBusy = true; try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } } 
+
+        if (state.isLidar) { 
+            // LIDAR AHORA TIENE SU PROPIO LOOP DESACOPLADO
+            return; 
         } else {
+            // OPTIMIZACIÓN IA: Canvas reducido 224x224
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
             if (aiDetector && state.isSLS) { try { poses = await aiDetector.estimatePoses(aiCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25 }); } catch(e){} }
             if (faceMesh && state.isSLS) { try { await faceMesh.send({image: el.video}); } catch(e){} }
@@ -529,41 +624,54 @@
         const dotEl = document.getElementById('status-dot');
         const tallyEl = document.getElementById('tally-border');
         
-        // 1. Verificación de Conexión
-        if(conn && conn.open) {
-            // Conectado. Verificar Tally.
-            if(tallyState === 'program') {
-                statusEl.innerText = "AL AIRE";
-                statusEl.className = "text-red-500 font-bold font-mono animate-pulse";
-                dotEl.className = "w-2 h-2 rounded-full bg-red-600 shadow-[0_0_10px_red]";
-                // Forzar estilos de PROGRAMA (Rojo)
-                tallyEl.className = "online"; 
-                tallyEl.style.border = "6px solid #ff0000";
-                tallyEl.style.boxShadow = "inset 0 0 20px rgba(255,0,0,0.5)";
-                tallyEl.style.opacity = "1";
-            } else if (tallyState === 'preview') {
-                statusEl.innerText = "PREVIO";
-                statusEl.className = "text-green-500 font-bold font-mono";
-                dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]";
-                // Forzar estilos de PREVIO (Verde)
-                tallyEl.className = "preview"; 
-                tallyEl.style.border = "4px solid #00ff00";
-                tallyEl.style.boxShadow = "none";
-                tallyEl.style.opacity = "0.6";
-            } else {
-                statusEl.innerText = "LISTO";
-                statusEl.className = "text-gray-300 font-mono";
-                dotEl.className = "w-2 h-2 rounded-full bg-gray-500";
-                tallyEl.className = "";
-                tallyEl.style.border = "none";
-            }
-        } else {
-            // Desconectado
-            statusEl.innerText = "LOCAL"; // Cambiado de PREVIEW a LOCAL para evitar confusión
-            statusEl.className = "text-gray-500 font-mono";
-            dotEl.className = "w-2 h-2 rounded-full bg-red-900";
+        // Determinar estado de conexión
+        const isConnected = (conn && conn.open);
+        
+        if (!isConnected) {
+            // ESTADO: DESCONECTADO (LOCAL)
+            statusEl.innerText = "LOCAL";
+            statusEl.className = "text-gray-500 font-mono font-bold tracking-widest";
+            dotEl.className = "w-2 h-2 rounded-full bg-neutral-600";
+            
+            // Reset Tally
             tallyEl.className = "";
             tallyEl.style.border = "none";
+            tallyEl.style.boxShadow = "none";
+            return;
+        }
+
+        // ESTADO: CONECTADO - Revisar Tally
+        if (tallyState === 'program') {
+            // AL AIRE
+            statusEl.innerText = "AL AIRE";
+            statusEl.className = "text-white bg-red-600 px-1 rounded font-bold font-mono animate-pulse tracking-widest";
+            dotEl.className = "w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red]";
+            
+            tallyEl.className = "online";
+            tallyEl.style.border = "6px solid #ff0000";
+            tallyEl.style.boxShadow = "inset 0 0 20px rgba(255,0,0,0.5)";
+            tallyEl.style.opacity = "1";
+        } 
+        else if (tallyState === 'preview') {
+            // PREVIO
+            statusEl.innerText = "PREVIO";
+            statusEl.className = "text-black bg-green-500 px-1 rounded font-bold font-mono tracking-widest";
+            dotEl.className = "w-2 h-2 rounded-full bg-green-400 shadow-[0_0_10px_lime]";
+            
+            tallyEl.className = "preview";
+            tallyEl.style.border = "4px solid #00ff00";
+            tallyEl.style.boxShadow = "none";
+            tallyEl.style.opacity = "0.8";
+        } 
+        else {
+            // LISTO (IDLE)
+            statusEl.innerText = "LISTO";
+            statusEl.className = "text-cyan-500 font-mono font-bold tracking-widest";
+            dotEl.className = "w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_cyan]";
+            
+            tallyEl.className = "";
+            tallyEl.style.border = "none";
+            tallyEl.style.boxShadow = "none";
         }
     }
 
@@ -576,7 +684,7 @@
         document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
         
-        // Llamada a la nueva función centralizada de estado
+        // Llamada a la nueva función centralizada de estado (Única fuente de verdad)
         updateStatusDisplay();
     }
 
@@ -588,6 +696,7 @@
         if(!fullId) { showToast("ID ESTUDIO VACIO", true); return; }
         
         document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
+        state.isStreaming = true; // Flag de Streaming
         
         let baseId = fullId;
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
@@ -609,7 +718,7 @@
             });
             
             connection.on('data', handleCommand);
-            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; });
+            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; state.isStreaming = false; });
             connection.on('error', (e) => { console.error("Data error", e); });
         });
         
@@ -625,6 +734,17 @@
             
             const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
             
+            // OPTIMIZACIÓN WEBRTC: Limitador de Bitrate (900 kbps)
+            const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                const params = sender.getParameters();
+                if (!params.encodings) params.encodings = [{}];
+                params.encodings[0].maxBitrate = 900000; // 900 kbps
+                params.encodings[0].maxFramerate = 30;
+                params.encodings[0].scaleResolutionDownBy = 1;
+                sender.setParameters(params).catch(e => console.warn("Bitrate cap failed", e));
+            }
+
             call.on('close', () => { console.log("Video call ended"); });
             call.on('error', (e) => { console.error("Video call error", e); });
             showToast("Transmitiendo Video...", false);
@@ -656,7 +776,20 @@
     function setFilter(f, btn) {
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
-        document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
+        
+        // GESTIÓN DE CLASES CSS (OPTIMIZADO)
+        // Removemos todas las clases de filtro y aplicamos solo la activa
+        document.body.classList.remove('filter-night-vision', 'filter-thermal', 'filter-urbex', 'filter-pareidolia');
+        
+        if(f !== 'normal') { 
+            if(f === 'night') document.body.classList.add('filter-night-vision'); 
+            else if(f === 'thermal') document.body.classList.add('filter-thermal'); 
+            else if(f === 'urbex') document.body.classList.add('filter-urbex'); 
+            // CORRECCIÓN VISUAL: SLS YA NO USA FILTRO GRIS
+            else if(f === 'sls') { /* Sin filtro CSS, imagen limpia */ }
+            else if(f === 'pareidolia') document.body.classList.add('filter-pareidolia'); 
+        }
+        
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
         document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
     }
@@ -688,6 +821,7 @@
     function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; canvasScanBoxes = []; }
 
     async function triggerPareidolia() {
+        if(!state.isPareidolia) return; // OPTIMIZACIÓN: Check estricto
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
         isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; startScanningEffect();
