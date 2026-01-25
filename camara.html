@@ -3,29 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.2.1 (SLS FIX)</title> 
+    <title>CAMARA OBR PRO v5.4.0 (TACTICAL PULSE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
     
-    <!-- PWA MANIFEST -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- LIBRERÍAS: Carga Local Prioritaria -->
+    <!-- LIBRERÍAS -->
     <script src="js/tf.min.js"></script>
     <script src="js/pose-detection.min.js"></script>
     <script src="js/face_mesh.js"></script>
     <script src="js/selfie_segmentation.js"></script> 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
-    <!-- FALLBACKS BLINDADOS -->
     <script>
-        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tf@4.10.0"><\/script>');
+        if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3"><\/script>');
         if(!window.FaceMesh) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"><\/script>');
         if(!window.SelfieSegmentation) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"><\/script>');
@@ -53,189 +51,28 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        /* FILTROS */
-        .filter-night-vision #sls-canvas { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2); }
-        .filter-night-vision #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(50, 255, 50, 0.1) 40%, rgba(0,20,0,0.8) 100%); background-size: 4px 4px; z-index: 5; mix-blend-mode: overlay; }
-        
-        .filter-thermal #sls-canvas { filter: invert(100%) grayscale(100%) contrast(1.5); }
-        
-        /* URBEX */
-        .filter-urbex #sls-canvas { filter: sepia(100%) hue-rotate(-15deg) contrast(1.1) brightness(0.9) saturate(1.2); }
-        .filter-urbex #main-view-area::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 150px rgba(0,0,0,0.95); z-index: 5; }
-        
-        .filter-pareidolia #sls-canvas { filter: contrast(1.1); }
-        .filter-pareidolia #main-view-area { border: 2px solid var(--hud-primary); }
+        .hud-burn-hidden { display: none !important; }
 
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
         #tally-border.preview { border: 4px solid #800000; opacity: 0.6; }
         #tally-border.online { border: 6px solid #00ff00; box-shadow: inset 0 0 20px rgba(0,255,0,0.5), 0 0 15px rgba(0,255,0,0.5); opacity: 1; }
 
-        /* --- HUD INDEPENDIENTE --- */
-        #hud-layer {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 70; 
-            pointer-events: none;
-            animation: independentGlitch 6s infinite; 
-            transition: opacity 0.5s ease;
-        }
+        #ai-scan-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 55; display: none; overflow: hidden; }
         
-        #hud-layer.hud-hidden {
-            opacity: 0;
-        }
-
-        #hud-logo {
-            width: 40px;
-            height: 40px;
-            filter: drop-shadow(0px 0px 4px black);
-        }
-
-        #hud-text-container {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        #hud-title {
-            color: white;
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 800;
-            font-size: 16px;
-            text-shadow: 2px 2px 0px black;
-            line-height: 1;
-            margin-bottom: 2px;
-        }
-
-        #hud-time {
-            color: #ff3333;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 12px;
-            text-shadow: 1px 1px 0px black;
-        }
-
-        @keyframes independentGlitch {
-            0% { transform: translate(0,0); filter: none; }
-            95% { transform: translate(0,0); filter: none; }
-            96% { transform: translate(-2px, 1px); filter: hue-rotate(90deg) contrast(1.2); }
-            97% { transform: translate(1px, -1px); filter: none; }
-            98% { transform: translate(0, 2px); filter: hue-rotate(-45deg); }
-            100% { transform: translate(0,0); filter: none; }
-        }
-
-        /* --- IA VISION HEADER --- */
-        #ai-vision-header { 
+        /* AUMENTADA LA PRESENCIA DE LOS CUADROS DE ESCANEO */
+        .scan-box { 
             position: absolute; 
-            top: 20px; 
-            left: 20px; 
-            width: 170px; 
+            border: 2px solid rgba(255, 0, 0, 0.9); 
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.6), inset 0 0 10px rgba(255, 0, 0, 0.3); 
+            background: rgba(255, 0, 0, 0.1); 
             opacity: 0; 
-            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); 
-            z-index: 71; 
-            pointer-events: none; 
-            display: flex;
-            flex-direction: column; 
-            gap: 0px; 
-            animation: independentGlitch 5s infinite reverse; 
+            animation: targetScan 0.6s ease-out forwards; 
         }
-        
-        #ai-vision-header.active { 
-            opacity: 1; 
-        }
-
-        .ai-image-container {
-            position: relative;
-            width: 100%;
-            background: transparent;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 0;
-            opacity: 0;
-            margin-bottom: 0;
-            border: 0px solid transparent;
-            transition: height 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease-in, margin 0.6s ease;
-        }
-        
-        .ai-image-container.has-data {
-            height: 96px; 
-            opacity: 1;
-            margin-bottom: 6px;
-            border: 2px solid #ff3333;
-            background: rgba(0,0,0,0.5);
-        }
-
-        #ai-mini-img { 
-            width: 100%; 
-            display: block;
-            filter: invert(1) hue-rotate(180deg) contrast(1.5); 
-        }
-
-        #ai-mini-text { 
-            background: rgba(10, 0, 0, 0.90); 
-            border-left: 4px solid #ff3333; 
-            color: #ffcccc; 
-            font-family: 'Share Tech Mono'; 
-            font-size: 0.65rem; 
-            padding: 6px; 
-            line-height: 1.2; 
-            backdrop-filter: blur(2px);
-            min-height: 40px; 
-            display: -webkit-box;
-            -webkit-line-clamp: 4; 
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: normal;
-            transition: transform 0.3s ease;
-        }
-
-        /* --- SCAN OVERLAY --- */
-        #ai-scan-overlay {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 55; 
-            display: none; 
-            overflow: hidden;
-        }
-
-        .scan-box {
-            position: absolute;
-            border: 1px solid rgba(255, 0, 0, 0.8);
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
-            background: rgba(255, 0, 0, 0.05);
-            opacity: 0;
-            animation: targetScan 0.6s ease-out forwards;
-        }
-
-        .scan-box::after {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border: 1px solid transparent;
-            background: 
-                linear-gradient(to right, red 2px, transparent 2px) 0 0,
-                linear-gradient(to bottom, red 2px, transparent 2px) 0 0,
-                linear-gradient(to left, red 2px, transparent 2px) 100% 0,
-                linear-gradient(to bottom, red 2px, transparent 2px) 100% 0,
-                linear-gradient(to right, red 2px, transparent 2px) 0 100%,
-                linear-gradient(to top, red 2px, transparent 2px) 0 100%,
-                linear-gradient(to left, red 2px, transparent 2px) 100% 100%,
-                linear-gradient(to top, red 2px, transparent 2px) 100% 100%;
-            background-repeat: no-repeat;
-            background-size: 6px 6px;
-        }
-
-        @keyframes targetScan {
-            0% { transform: scale(1.2); opacity: 0; border-color: white; }
-            10% { opacity: 1; border-color: red; }
-            80% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(0.9); opacity: 0; }
+        @keyframes targetScan { 
+            0% { transform: scale(1.3); opacity: 0; border-color: white; } 
+            10% { opacity: 1; border-color: red; } 
+            80% { transform: scale(1); opacity: 1; } 
+            100% { transform: scale(0.8); opacity: 0; } 
         }
 
         #toast-container { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 200; pointer-events: none; width: 80%; align-items: center; }
@@ -292,8 +129,8 @@
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        <!-- HUD INDEPENDIENTE -->
-        <div id="hud-layer">
+        <!-- HUD OCULTO (BURN-IN) -->
+        <div id="hud-layer" class="hud-burn-hidden">
             <img src="obr-logo.png" id="hud-logo" alt="OBR">
             <div id="hud-text-container">
                 <div id="hud-title">EXPLORACIONES OBR</div>
@@ -303,7 +140,7 @@
 
         <div id="toast-container"></div>
         <div id="tally-border" class="preview"></div>
-        <div id="sls-pip" class="absolute top-4 left-1/2 -translate-x-1/2 text-purple-500 font-mono text-xs hidden bg-black/50 px-2 rounded border border-purple-500">● SLS ACTIVO</div>
+        <div id="sls-pip" class="absolute top-4 left-1/2 -translate-x-1/2 text-purple-500 font-mono text-xs hidden bg-black/50 px-2 rounded border border-purple-500 hud-burn-hidden">● SLS ACTIVO</div>
         
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800 flex items-center gap-2">
             <div id="status-dot" class="w-2 h-2 rounded-full bg-red-900"></div>
@@ -329,20 +166,12 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="openConnect()"><i class="fas fa-link"></i></div><div class="menu-label">LINK</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
-
-        <!-- HEADER IA ORDENADO -->
-        <div id="ai-vision-header">
-            <div class="ai-image-container" id="ai-container-box">
-                <img id="ai-mini-img" alt="Scan">
-            </div>
-            <div id="ai-mini-text">ESPERANDO DATOS...</div>
-        </div>
     </div>
 
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.2.1 (PEER FIX)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.0 (TACTICAL PULSE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -357,33 +186,46 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONFIGURACIÓN UNIFICADO -->
+    <!-- MODAL DE CONFIGURACIÓN UNIFICADO (2 COLUMNAS) -->
     <div id="settings-modal" class="modal-bg">
-        <div class="bg-neutral-900 border border-red-900 p-6 rounded w-80 shadow-[0_0_30px_rgba(255,0,0,0.1)]">
-            <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest">Ajustes de Red</h2>
-            
-            <div class="mb-6">
-                <label class="text-[10px] text-gray-400 font-mono mb-1 block uppercase">IP ESTUDIO (DOCK ID)</label>
-                <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-3 text-white text-sm rounded font-mono outline-none focus:border-red-500 text-center">
-                <p class="text-[9px] text-gray-600 mt-2 font-mono uppercase text-center">PUEDES PEGAR EL ID COMPLETO, EL SISTEMA LO DIVIDIRÁ</p>
-            </div>
-
-            <div class="h-px bg-gray-800 w-full mb-6"></div>
-
-            <div class="mb-2">
-                <label class="text-[10px] text-gray-400 font-mono mb-1 block">IA ANALYZER KEY</label>
-                <input type="password" id="api-key-internal" placeholder="GEMINI API KEY" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded outline-none focus:border-red-500">
-            </div>
-            
-            <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="w-full mb-3 py-1 text-[9px] border border-blue-900/50 rounded text-blue-400 hover:text-white hover:border-blue-400 hover:bg-blue-900/30 bg-black/40 font-mono transition-colors">
-                <i class="fas fa-external-link-alt mr-1"></i> OBTENER API KEY GRATIS
+        <div class="relative bg-neutral-900 border border-red-900 p-6 rounded w-[480px] max-w-[95%] shadow-[0_0_30px_rgba(255,0,0,0.1)]">
+            <!-- BOTÓN X DE CIERRE -->
+            <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition-colors">
+                <i class="fas fa-times text-xl"></i>
             </button>
 
-            <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-700 text-green-500 py-2 rounded hover:bg-green-900/20 font-bold mb-4 text-xs">VALIDAR API</button>
-            <div id="api-status-msg" class="text-[10px] font-mono mb-4 text-center text-yellow-500"></div>
+            <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest text-lg">CONFIGURACIÓN SISTEMA</h2>
             
-            <button onclick="saveSettings()" class="w-full border border-cyan-800 text-cyan-500 py-2 rounded hover:bg-cyan-900/20 text-xs font-bold uppercase tracking-widest">Guardar Cambios</button>
-            <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="w-full mt-3 text-gray-500 text-xs hover:text-white uppercase font-mono">Cerrar</button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <!-- COLUMNA 1: RED -->
+                <div class="bg-black/50 p-3 rounded border border-gray-800">
+                    <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">RED ESTUDIO</h3>
+                    <label class="text-[9px] text-gray-500 font-mono mb-1 block uppercase">DOCK ID / IP</label>
+                    <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono outline-none focus:border-red-500 text-center mb-2">
+                    <p class="text-[8px] text-gray-600 font-mono uppercase text-center leading-tight">IP SE CONVIERTE A ID AUTO</p>
+                </div>
+
+                <!-- COLUMNA 2: IA -->
+                <div class="bg-black/50 p-3 rounded border border-gray-800">
+                    <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">IA ANALYZER</h3>
+                    <label class="text-[9px] text-gray-500 font-mono mb-1 block">API KEY</label>
+                    
+                    <!-- INPUT CON BOTÓN EMBEBIDO -->
+                    <div class="relative w-full mb-2">
+                        <input type="password" id="api-key-internal" placeholder="GEMINI KEY" class="w-full bg-black border border-gray-700 p-2 pr-10 text-white text-xs rounded outline-none focus:border-red-500">
+                        <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="absolute right-2 top-1/2 -translate-y-1/2 text-base hover:scale-110 transition-transform leading-none" title="Crear API Key">
+                            📲
+                        </button>
+                    </div>
+
+                    <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-800 text-green-500 hover:bg-green-900/30 py-1 rounded text-[10px] font-bold">VALIDAR KEY</button>
+                    <div id="api-status-msg" class="text-[9px] font-mono mt-1 text-center text-yellow-500 h-3"></div>
+                </div>
+            </div>
+
+            <div class="h-px bg-gray-800 w-full mb-4"></div>
+            
+            <button onclick="saveSettings()" class="w-full bg-red-900/20 border border-red-600 text-red-500 hover:bg-red-900/50 hover:text-white py-3 rounded text-sm font-bold uppercase tracking-widest transition-colors font-orbitron">GUARDAR Y CERRAR</button>
         </div>
     </div>
 
@@ -419,6 +261,24 @@
     let lastPareidoliaCall = 0; 
     let imageCollapseTimeout = null;
 
+    // VARIABLES BURN-IN IA
+    let currentAiText = "";
+    let currentAiImage = null; // NUEVO: Imagen IA
+    let aiTextTimer = null;
+    let radarAngle = 0; // Para animación de radar
+    
+    // ESTADO PARA TEXTO CICLICO
+    let aiScannerState = 0; // 0=SEARCH, 1=RAW, 2=SENSORS
+    let aiScannerTimer = 0;
+
+    // SISTEMA DE ANIMACIÓN FÍSICA (Spring Physics)
+    const animState = {
+        hudScale: 1.0,
+        hudTarget: 1.0,
+        aiScale: 0.0,
+        aiTarget: 0.0
+    };
+
     const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
 
     const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
@@ -439,7 +299,8 @@
         document.getElementById('api-key-internal').value = state.apiKey; 
         document.getElementById('mtx-host').value = state.studioId; 
     };
-async function initApp() {
+
+    async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
         try {
             updateProgress(10, "INICIANDO SENSOR...");
@@ -489,14 +350,14 @@ async function initApp() {
                 }
                 
                 showToast("SISTEMAS IA ACTIVOS", false);
-                // BUCLE SIMPLE (v5.1.15 Style)
                 setInterval(aiLoop, 80); 
             } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
         }, 500); 
     }
 
     function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
-function drawLidarEffect(c, width, height) {
+    
+    function drawLidarEffect(c, width, height) {
         const maskToUse = lidarMask || lastLidarMask; 
         if (!maskToUse) return; 
         
@@ -514,11 +375,232 @@ function drawLidarEffect(c, width, height) {
     function resize() { el.canvas.width = window.innerWidth; el.canvas.height = window.innerHeight; el.lidarCanvas.width = window.innerWidth; el.lidarCanvas.height = window.innerHeight; }
     function updateProgress(p, t) { document.getElementById('progress-bar').style.width = p + '%'; document.getElementById('progress-text').innerText = t; }
 
+    function drawBurnInHUD(ctx, width, height, scale) {
+        if(scale <= 0.01) return;
+
+        ctx.save();
+        const centerX = 20 + 80; 
+        const centerY = 20 + 20; 
+        ctx.translate(centerX, centerY);
+        ctx.scale(scale, scale);
+        ctx.translate(-centerX, -centerY);
+
+        ctx.shadowColor = "black"; ctx.shadowBlur = 4;
+        if(logoImg.complete) ctx.drawImage(logoImg, 20, 20, 40, 40);
+        ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif";
+        ctx.fillText("EXPLORACIONES OBR", 70, 40);
+        const now = new Date();
+        ctx.fillStyle = "#ff3333"; ctx.font = "12px 'Share Tech Mono', monospace";
+        ctx.fillText(now.toLocaleDateString() + " - " + now.toLocaleTimeString(), 70, 58);
+        
+        if(state.isSLS) {
+            const bx = width/2 - 40;
+            ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, 20, 80, 20);
+            ctx.strokeStyle = "#d946ef"; ctx.lineWidth = 1; ctx.strokeRect(bx, 20, 80, 20);
+            ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace"; ctx.fillText("● SLS ACTIVO", bx + 5, 33);
+        }
+        ctx.restore();
+    }
+
+    // FUNCIÓN AUXILIAR PARA TEXTO GLITCH
+    function drawGlitchText(c, text, x, y, size = 12) {
+        const glitchOffset = Math.random() * 4 - 2;
+        c.font = `bold ${size}px 'Share Tech Mono'`;
+        c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
+        c.fillText(text, x + glitchOffset, y);
+        c.fillStyle = "rgba(0, 255, 255, 0.7)"; 
+        c.fillText(text, x - glitchOffset, y);
+        c.fillStyle = "#ffffff"; 
+        c.fillText(text, x, y);
+    }
+
+    function drawAIBurnIn(c, w, h, scale) {
+        if(scale <= 0.01) return;
+
+        c.save();
+        
+        const bx = 20, by = 20; 
+        const panelW = 220; 
+        
+        let displayTxt = currentAiText;
+        let isScanning = !currentAiImage; // Si no hay imagen, estamos escaneando
+        
+        // --- LÓGICA DE ESTADO CÍCLICO PARA EL TEXTO ---
+        if (isScanning && !displayTxt) {
+             aiScannerTimer++;
+             if(aiScannerTimer > 150) { // Cambia cada ~2.5 segundos (60fps)
+                 aiScannerState = (aiScannerState + 1) % 3;
+                 aiScannerTimer = 0;
+             }
+             
+             if(aiScannerState === 0) displayTxt = "búsqueda de señal...";
+             else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`;
+             else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 24c\n  prox: 98%";
+        }
+        
+        let borderColor = isScanning ? "#ff0000" : "#ff3333";
+        // REGLA: SI ESCANEA, FONDO TRANSPARENTE. SI HAY RESULTADO, FONDO OPACO.
+        let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)"; 
+        
+        // Calcular altura imagen (o altura del escáner simulado)
+        let imgH = 0;
+        if (isScanning) {
+            imgH = 150; 
+        } else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) {
+             imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth);
+        }
+
+        // ANIMACIÓN POP
+        const centerX = bx + panelW/2;
+        const centerY = by + imgH/2 + 20; 
+        c.translate(centerX, centerY);
+        c.scale(scale, scale);
+        c.translate(-centerX, -centerY);
+
+        // REGLA: SI ESCANEA, NO DIBUJAR CAJA PRINCIPAL
+        if (!isScanning) {
+            let txtH = 40; // Approx
+            const totalH = imgH + txtH;
+            
+            c.fillStyle = bgColor; 
+            c.fillRect(bx, by, panelW, totalH);
+            c.fillStyle = borderColor;
+            c.fillRect(bx, by, 4, totalH);
+        }
+
+        // DIBUJAR VISUALIZACIÓN (IMAGEN O RADAR)
+        if(imgH > 0) {
+            if (isScanning) {
+                // --- NUEVO RADAR "TACTICAL PULSE" (2 Aspas + Respiración) ---
+                c.save();
+                
+                const radarRadiusBase = 50;
+                const radarCx = bx + radarRadiusBase + 10;
+                const radarCy = by + radarRadiusBase + 10;
+                
+                c.translate(radarCx, radarCy);
+                
+                // 1. FONDO MALLA CIRCULAR (ESTÁTICA/WIREFRAME)
+                // Usamos un cian/verde muy transparente para simular pantalla
+                c.strokeStyle = "rgba(0, 255, 100, 0.15)"; 
+                c.lineWidth = 1;
+                
+                // Anillos concéntricos
+                for(let r=10; r<=radarRadiusBase; r+=10) {
+                    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke();
+                }
+                // Mira en cruz
+                c.beginPath(); c.moveTo(-radarRadiusBase, 0); c.lineTo(radarRadiusBase, 0); c.stroke();
+                c.beginPath(); c.moveTo(0, -radarRadiusBase); c.lineTo(0, radarRadiusBase); c.stroke();
+
+                // 2. DINÁMICA DE RESPIRACIÓN (PULSE)
+                // Usamos el tiempo para crear una onda senoidal suave
+                const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2; // Va de 0 a 1 suavemente
+                const currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4)); // Radio oscila entre 60% y 100%
+
+                // 3. ASPAS GIRATORIAS (HELICE DE 2 HOJAS)
+                radarAngle += 0.04; 
+                c.rotate(radarAngle);
+
+                const drawBlade = (angleOffset) => {
+                    c.save();
+                    c.rotate(angleOffset);
+                    
+                    c.beginPath();
+                    c.moveTo(0,0);
+                    c.arc(0, 0, currentRadius, -0.4, 0.4); // Cono de ~45 grados
+                    c.lineTo(0,0);
+                    
+                    // GRADIENTE DINÁMICO (CAMBIA SEGÚN EL TAMAÑO)
+                    const grad = c.createRadialGradient(0, 0, 0, 0, 0, currentRadius);
+                    grad.addColorStop(0, "rgba(0,0,0,0)"); // Centro transparente
+                    
+                    if (pulse > 0.7) {
+                        // GRANDE = PELIGRO (ROJO)
+                        grad.addColorStop(0.5, "rgba(255, 100, 0, 0.3)"); // Naranja
+                        grad.addColorStop(1, "rgba(255, 0, 0, 0.6)"); // Rojo
+                    } else {
+                        // PEQUEÑO = SEGURO (VERDE/AMARILLO)
+                        grad.addColorStop(0.5, "rgba(0, 150, 0, 0.3)"); // Verde
+                        grad.addColorStop(1, "rgba(200, 200, 0, 0.5)"); // Amarillo
+                    }
+                    
+                    c.fillStyle = grad;
+                    c.fill();
+                    c.restore();
+                };
+
+                // DIBUJAR LAS 2 ASPAS "ENCONTRADAS" (OPUESTAS 180 GRADOS)
+                drawBlade(0);          // Aspa 1
+                drawBlade(Math.PI);    // Aspa 2 (Opuesta)
+
+                c.restore();
+
+                // TEXTO DE ESTADO AL LADO DERECHO DEL RADAR (ASIMÉTRICO)
+                const txtX = radarCx + radarRadiusBase + 15;
+                const txtY = radarCy; 
+
+                if (displayTxt.includes('\n')) {
+                    const lines = displayTxt.split('\n');
+                    let lineY = txtY - 15;
+                    lines.forEach((l, idx) => {
+                        drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11);
+                    });
+                } else {
+                    drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12);
+                }
+
+            } else {
+                // --- IMAGEN REAL RESULTANTE ---
+                c.save();
+                c.filter = "invert(100%) grayscale(100%) contrast(1.5)";
+                c.drawImage(currentAiImage, bx, by, panelW, imgH);
+                c.restore(); 
+                c.strokeStyle = borderColor;
+                c.lineWidth = 1;
+                c.strokeRect(bx, by, panelW, imgH);
+                
+                // Texto de resultado
+                c.fillStyle = "#ffcccc";
+                c.font = "10px 'Share Tech Mono'";
+                let line = '';
+                let ly = by + imgH + 20;
+                
+                const resWords = currentAiText ? currentAiText.split(' ') : [];
+                 for(let n = 0; n < resWords.length; n++) {
+                    let testLine = line + resWords[n] + ' ';
+                    if (c.measureText(testLine).width > (panelW - 20) && n > 0) {
+                        c.fillText(line.toLowerCase(), bx + 10, ly); 
+                        line = resWords[n] + ' ';
+                        ly += 14;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                c.fillText(line.toLowerCase(), bx + 10, ly);
+            }
+        }
+
+        c.restore();
+    }
+
     function renderLoop() {
         frameCount++;
-        ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+        
         const vW = el.video.videoWidth, vH = el.video.videoHeight;
         const cW = el.canvas.width, cH = el.canvas.height;
+        
+        ctx.save();
+        ctx.clearRect(0, 0, cW, cH);
+        
+        if(state.filter === 'night') {
+            ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2)';
+        } else if(state.filter === 'thermal') {
+            ctx.filter = 'invert(100%) grayscale(100%) contrast(1.5)';
+        } else if(state.filter === 'urbex') {
+            ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.4)';
+        }
+        
         if (vW && vH) {
             const vRatio = vW / vH, cRatio = cW / cH;
             let dW, dH, dX, dY;
@@ -526,14 +608,33 @@ function drawLidarEffect(c, width, height) {
             else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            
+            ctx.filter = 'none'; 
+            if(state.filter === 'night') {
+                ctx.fillStyle = 'rgba(0, 50, 0, 0.2)'; for(let i=0; i<cH; i+=4) ctx.fillRect(0, i, cW, 1);
+            }
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
+        
+        ctx.restore(); 
+
         if (state.isSLS && !state.isLidar) drawSLS();
+        
+        // --- LOGICA DE ANIMACIÓN (WATER POP) ---
+        const speed = 0.4;
+        animState.hudScale += (animState.hudTarget - animState.hudScale) * speed;
+        animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
+
+        drawBurnInHUD(ctx, cW, cH, animState.hudScale);
+        
+        // SOLO DIBUJAR IA SI EL TARGET ES > 0 (Está activo)
+        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) {
+            drawAIBurnIn(ctx, cW, cH, animState.aiScale);
+        }
+
         requestAnimationFrame(renderLoop);
     }
 
-    // --- BUCLE IA V5.1.15 (PURO) ---
-    // Eliminada toda la lógica de persistencia/sticky que causaba parpadeos
     async function aiLoop() {
         if (isAIProcessing) return; 
         if (!state.isSLS && !state.isLidar && !state.isPareidolia) { 
@@ -546,14 +647,12 @@ function drawLidarEffect(c, width, height) {
                 try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } 
             } 
         } else {
-            // SLS Directo
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
             
             if (aiDetector && state.isSLS) { 
                 try { 
-                    // Detección directa y cruda -> Sin buffers que se limpien a destiempo
                     poses = await aiDetector.estimatePoses(aiCanvas, {
-                        maxPoses: 5, // AJUSTE PARA MULTIPLES CUERPOS
+                        maxPoses: 5, 
                         flipHorizontal: false,
                         scoreThreshold: 0.25 
                     }); 
@@ -564,6 +663,7 @@ function drawLidarEffect(c, width, height) {
             }
         }
     }
+
     function drawSLS() {
         if (!window.drawCoords) return;
         const { dW, dH, dX, dY } = window.drawCoords;
@@ -618,7 +718,6 @@ function drawLidarEffect(c, width, height) {
 
     function openConnect() { document.getElementById('connect-modal').classList.add('active'); }
 
-    // --- MIGRACIÓN A PEERJS (DUAL CHANNEL) ---
     async function startHybridTransmission() {
         const name = document.getElementById('stream-name').value.trim(); if(!name) return;
         const fullId = state.studioId; 
@@ -626,7 +725,6 @@ function drawLidarEffect(c, width, height) {
         
         document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
         
-        // 1. ANALIZAR ID DE DESTINO
         let baseId = fullId;
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
         if (baseId.includes('.')) { baseId = baseId.replace(/\./g, '-'); }
@@ -634,10 +732,6 @@ function drawLidarEffect(c, width, height) {
         const commandTarget = baseId;
         const videoTarget = baseId + "-8889";
         
-        console.log("CMD Target:", commandTarget);
-        console.log("VID Target:", videoTarget);
-
-        // 2. CANAL DE COMANDOS (PEER 1)
         if(peerCommand) peerCommand.destroy();
         peerCommand = new Peer(null, PEER_CONFIG);
         
@@ -657,18 +751,15 @@ function drawLidarEffect(c, width, height) {
         
         peerCommand.on('error', (err) => { console.error("PeerCMD Error:", err); showToast("Err CMD: " + err.type, true); });
 
-        // 3. CANAL DE VIDEO (PEER 2)
         if(peerVideoSender) peerVideoSender.destroy();
         peerVideoSender = new Peer(null, PEER_CONFIG);
         
         peerVideoSender.on('open', () => {
-            // Capturar stream con efectos (canvas)
+            // TRANSMISIÓN: Se usa el stream del canvas procesado
             const stream = el.canvas.captureStream(30); 
-            // Añadir audio si existe
             const audioTracks = videoStream.getAudioTracks();
             if(audioTracks.length > 0) stream.addTrack(audioTracks[0]);
             
-            // Llamar al ID de video (-8889)
             const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
             
             call.on('close', () => { console.log("Video call ended"); });
@@ -721,9 +812,20 @@ function drawLidarEffect(c, width, height) {
 
     function startScanningEffect() {
         const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'block';
+        
+        // Limpiar intervalo previo si existe
+        if (scanInterval) clearInterval(scanInterval);
+
         scanInterval = setInterval(() => {
             const box = document.createElement('div'); box.className = 'scan-box'; const size = Math.floor(Math.random() * 80) + 40;
-            const x = Math.floor(Math.random() * (window.innerWidth - size)), y = Math.floor(Math.random() * (window.innerHeight - size));
+            // REGLA: EXCLUIR LA ZONA SUPERIOR IZQUIERDA (DONDE ESTÁ EL RADAR)
+            // El radar ocupa aprox. 250x200 px desde la esquina (bx=20, by=20, w=220, h=varía)
+            let x, y;
+            do {
+                x = Math.floor(Math.random() * (window.innerWidth - size));
+                y = Math.floor(Math.random() * (window.innerHeight - size));
+            } while (x < 250 && y < 200); // Repetir si cae en la zona prohibida
+
             box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
             overlay.appendChild(box); setTimeout(() => box.remove(), 800);
         }, 150); 
@@ -734,8 +836,23 @@ function drawLidarEffect(c, width, height) {
     async function triggerPareidolia() {
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
-        isAIProcessing = true; document.getElementById('ai-mini-text').innerText = "ANALIZANDO..."; startScanningEffect();
+        
+        isAIProcessing = true; 
+        
+        // FEEDBACK INMEDIATO: MANTENER ESCÁNER VISUAL
+        currentAiText = "búsqueda de señal..."; // Texto temporal en modo escáner
+        currentAiImage = null; // Nos aseguramos de que no hay imagen para que el HUD dibuje el radar
+        
+        // Los cuadros ya deberían estar activos si isPareidoliaActive es true, 
+        // pero por seguridad los reiniciamos/aseguramos aquí
+        startScanningEffect();
+
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
+        
+        // CAPTURAR IMAGEN (Pero solo mostrarla tras recibir respuesta para evitar "movimiento")
+        const snapshot = new Image();
+        snapshot.src = canvas.toDataURL('image/jpeg', 0.8);
+        
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         try {
@@ -748,26 +865,78 @@ function drawLidarEffect(c, width, height) {
                 } catch(err) { attempts++; }
             }
             let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SEÑAL DEBIL...";
-            const aiText = document.getElementById('ai-mini-text'), aiImg = document.getElementById('ai-mini-img'), aiBox = document.getElementById('ai-container-box');
-            aiImg.src = canvas.toDataURL(); aiText.innerText = text.toUpperCase(); aiBox.classList.add('has-data');
-            clearTimeout(imageCollapseTimeout); imageCollapseTimeout = setTimeout(() => aiBox.classList.remove('has-data'), 6000); speakText(text);
-        } catch(e) { isAIProcessing = false; }
-        stopScanningEffect(); isAIProcessing = false; 
+            
+            // --- RESULTADO OBTENIDO ---
+            // Detenemos los cuadros rojos de la pantalla principal
+            stopScanningEffect();
+            
+            // ACTUALIZACIÓN IA: Mostrar imagen y texto
+            currentAiText = text;
+            currentAiImage = snapshot; // Ahora sí mostramos la imagen estática en el HUD
+            
+            clearTimeout(aiTextTimer);
+            // TIEMPO EXTENDIDO: 9 SEGUNDOS DE VISIBILIDAD
+            aiTextTimer = setTimeout(() => { 
+                currentAiText = ""; 
+                currentAiImage = null;
+                
+                // CRUCIAL: AL TERMINAR, SI LA IA SIGUE ACTIVA, VOLVER A ESCANEAR
+                if (state.isPareidolia) {
+                    startScanningEffect();
+                }
+            }, 9000);
+            
+            // NUEVO: Enviar texto al Estudio
+            if (conn && conn.open) { conn.send({ type: 'ai-speech', text: text }); }
+            
+            speakText(text);
+        } catch(e) { 
+            isAIProcessing = false; 
+            currentAiText = "error de señal"; 
+            setTimeout(() => { 
+                if(currentAiText === "error de señal") {
+                    currentAiText = ""; 
+                    // Si falla, volver a escanear también
+                    if (state.isPareidolia) startScanningEffect();
+                }
+            }, 3000);
+        }
+        isAIProcessing = false; 
     }
 
     function togglePareidolia(btnElement) {
-        if(!GEMINI_API_KEY) { alert("NO API KEY"); return; }
+        if(!GEMINI_API_KEY) { alert("NO API KEY: CONFIGURA EN AJUSTES"); return; }
         const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
-        const aiHeader = document.getElementById('ai-vision-header'), aiImg = document.getElementById('ai-mini-img'), aiText = document.getElementById('ai-mini-text'), aiBox = document.getElementById('ai-container-box'), hudLayer = document.getElementById('hud-layer');
+        const aiHeader = document.getElementById('ai-vision-header');
+        
         if(isPareidoliaActive) {
-            if(btn) btn.classList.add('active-state'); document.body.classList.add('filter-pareidolia'); speakText("VISIÓN ACTIVADA"); 
-            hudLayer.classList.add('hud-hidden'); aiText.innerText = "INICIANDO ESCANEO...";
-            aiImg.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; aiBox.classList.remove('has-data');
-            aiHeader.classList.add('active'); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
+            if(btn) btn.classList.add('active-state'); 
+            document.body.classList.add('filter-pareidolia'); 
+            speakText("VISIÓN ACTIVADA"); 
+            
+            // CONTROL DE ANIMACIÓN: SWAP HUD -> IA
+            animState.hudTarget = 0.0;
+            animState.aiTarget = 1.0;
+            
+            // LIMPIAR Y ACTIVAR ESCÁNER INMEDIATO
+            currentAiText = "";
+            currentAiImage = null;
+            startScanningEffect(); // Activar visuales inmediatamente
+            
+            triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
         } else {
-            if(btn) btn.classList.remove('active-state'); document.body.classList.remove('filter-pareidolia'); speakText("VISIÓN DESACTIVADA"); 
-            clearInterval(pareidoliaInterval); isAIProcessing = false; hudLayer.classList.remove('hud-hidden'); stopScanningEffect(); 
-            aiHeader.classList.remove('active'); aiBox.classList.remove('has-data'); aiText.innerText = ""; clearTimeout(imageCollapseTimeout);
+            if(btn) btn.classList.remove('active-state'); 
+            document.body.classList.remove('filter-pareidolia'); 
+            speakText("VISIÓN DESACTIVADA"); 
+            
+            // CONTROL DE ANIMACIÓN: SWAP IA -> HUD
+            animState.hudTarget = 1.0;
+            animState.aiTarget = 0.0;
+
+            clearInterval(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); 
+            // NUEVO: Limpiar texto IA
+            currentAiText = "";
+            currentAiImage = null;
         }
         showMenus();
     }
