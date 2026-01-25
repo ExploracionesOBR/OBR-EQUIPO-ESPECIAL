@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.4.0 (TACTICAL PULSE)</title> 
+    <title>CAMARA OBR PRO v5.4.1 (TACTICAL SCAN)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -171,7 +171,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.0 (TACTICAL PULSE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.1 (TACTICAL SCAN)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -266,7 +266,8 @@
     let currentAiImage = null; // NUEVO: Imagen IA
     let aiTextTimer = null;
     let radarAngle = 0; // Para animación de radar
-    
+    let canvasScanBoxes = []; // <--- NUEVO ARRAY PARA CANVAS
+
     // ESTADO PARA TEXTO CICLICO
     let aiScannerState = 0; // 0=SEARCH, 1=RAW, 2=SENSORS
     let aiScannerTimer = 0;
@@ -413,6 +414,27 @@
         c.fillStyle = "#ffffff"; 
         c.fillText(text, x, y);
     }
+    
+    // --- NUEVA FUNCIÓN PARA DIBUJAR CUADROS DE ESCANEO EN CANVAS ---
+    function drawCanvasScanBoxes(c, w, h) {
+        const now = Date.now();
+        canvasScanBoxes = canvasScanBoxes.filter(box => now - box.startTime < 800);
+        canvasScanBoxes.forEach(box => {
+            const age = now - box.startTime;
+            const alpha = 1 - (age / 800);
+            const scale = 1.3 - (age / 800) * 0.5;
+            c.save();
+            c.translate(box.x + box.size/2, box.y + box.size/2);
+            c.scale(scale, scale);
+            c.translate(-(box.x + box.size/2), -(box.y + box.size/2));
+            c.strokeStyle = `rgba(255, 0, 0, ${alpha * 0.9})`;
+            c.lineWidth = 2;
+            c.strokeRect(box.x, box.y, box.size, box.size);
+            c.shadowBlur = 10; c.shadowColor = `rgba(255, 0, 0, ${alpha * 0.6})`;
+            c.strokeRect(box.x, box.y, box.size, box.size);
+            c.restore();
+        });
+    }
 
     function drawAIBurnIn(c, w, h, scale) {
         if(scale <= 0.01) return;
@@ -433,9 +455,9 @@
                  aiScannerTimer = 0;
              }
              
-             if(aiScannerState === 0) displayTxt = "búsqueda de señal...";
+             if(aiScannerState === 0) displayTxt = "Analizando Entorno...";
              else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`;
-             else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 24c\n  prox: 98%";
+             else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%";
         }
         
         let borderColor = isScanning ? "#ff0000" : "#ff3333";
@@ -596,9 +618,12 @@
         if(state.filter === 'night') {
             ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) contrast(1.2) brightness(1.2)';
         } else if(state.filter === 'thermal') {
-            ctx.filter = 'invert(100%) grayscale(100%) contrast(1.5)';
+            // --- MODIFICACIÓN SOLICITADA: NEGATIVO DE ALTO CONTRASTE ---
+            // Invierte colores (Personaje iluminado -> Negro, Fondo oscuro -> Blanco)
+            // Aumenta el contraste y brillo para "forzar" ver más en el "blanco" (oscuridad invertida)
+            ctx.filter = 'grayscale(100%) invert(100%) contrast(1.4) brightness(0.7)';
         } else if(state.filter === 'urbex') {
-            ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.4)';
+            ctx.filter = 'sepia(80%) hue-rotate(-15deg) contrast(1.3) saturate(1.8)';
         }
         
         if (vW && vH) {
@@ -626,6 +651,9 @@
         animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
 
         drawBurnInHUD(ctx, cW, cH, animState.hudScale);
+
+        // QUEMADO DE CUADROS ROJOS EN CANVAS
+        if (state.isPareidolia) drawCanvasScanBoxes(ctx, cW, cH);
         
         // SOLO DIBUJAR IA SI EL TARGET ES > 0 (Está activo)
         if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) {
@@ -795,7 +823,11 @@
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
         document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
-        if(f === 'night') toggleTorch(true); else toggleTorch(false); document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
+        
+        // --- MODIFICACIÓN SOLICITADA: FLASH AUTOMÁTICO EN MODO NEGATIVO (THERMAL) ---
+        if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
+        
+        document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
     }
 
     async function toggleTorch(force) { const t = videoStream?.getVideoTracks()[0]; if(!t) return; const on = (typeof force === 'boolean') ? force : !t.getSettings().torch; try { await t.applyConstraints({advanced:[{torch:on}]}); } catch(e){} }
@@ -825,13 +857,22 @@
                 x = Math.floor(Math.random() * (window.innerWidth - size));
                 y = Math.floor(Math.random() * (window.innerHeight - size));
             } while (x < 250 && y < 200); // Repetir si cae en la zona prohibida
+            
+            // --- NUEVO: GUARDAR COORDENADAS PARA CANVAS BURN-IN ---
+            canvasScanBoxes.push({ x, y, size, startTime: Date.now() });
 
             box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
             overlay.appendChild(box); setTimeout(() => box.remove(), 800);
         }, 150); 
     }
 
-    function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; }
+    function stopScanningEffect() { 
+        clearInterval(scanInterval); 
+        const overlay = document.getElementById('ai-scan-overlay'); 
+        overlay.innerHTML = ''; 
+        overlay.style.display = 'none';
+        canvasScanBoxes = []; // --- NUEVO: LIMPIAR CANVAS BURN-IN ---
+    }
 
     async function triggerPareidolia() {
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
