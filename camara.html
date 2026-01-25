@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v5.4.8 (ANTI-FLICKER)</title> 
+    <title>CAMARA OBR PRO v5.4.9 (STREAM FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -53,7 +53,7 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        /* OPTIMIZACIÓN FILTROS GPU */
+        /* OPTIMIZACIÓN FILTROS: Mantenemos CSS para feedback local instantáneo, pero el canvas manejará el stream */
         body.filter-night-vision #main-view-area { filter: contrast(1.2) brightness(1.2) sepia(100%) hue-rotate(90deg); }
         body.filter-thermal #main-view-area { filter: contrast(1.4) brightness(0.7) invert(1) grayscale(1); }
         body.filter-urbex #main-view-area { filter: contrast(1.3) saturate(1.8) sepia(0.8) hue-rotate(-15deg); }
@@ -177,7 +177,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.8 (ANTI-FLICKER)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v5.4.9 (STREAM FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -370,7 +370,6 @@
                                 lidarMask = res.segmentationMask; 
                                 lastLidarMask = res.segmentationMask; 
                                 lidarHoldFrames = 5; // Reset hold
-                                // lidarBlend = 0; // ELIMINADO para evitar flashes
                             } else if (lidarHoldFrames > 0) {
                                 lidarHoldFrames--;
                                 lidarMask = lastLidarMask; // Usar anterior si hay fallo
@@ -535,14 +534,18 @@
         const cW = el.canvas.width, cH = el.canvas.height;
         ctx.save();
         
-        // TRUCO VISUAL: MOTION DECAY EN LUGAR DE CLEARRECT
-        // Esto crea un arrastre sutil que conecta frames
+        // TRUCO VISUAL: MOTION DECAY
         ctx.fillStyle = 'rgba(0,0,0,0.08)';
         ctx.fillRect(0,0,cW,cH);
         
-        // OPTIMIZACIÓN: ELIMINADO EL PROCESADO DE FILTROS POR CPU/CANVAS
-        // if(state.filter === 'night') { ... } // DESACTIVADO
-        
+        // FIX CRÍTICO PARA STREAMING: Aplicar filtros directamente al contexto del Canvas
+        // Esto asegura que captureStream() vea los efectos, no solo el CSS local
+        if(state.filter === 'night') ctx.filter = 'contrast(1.2) brightness(1.2) sepia(100%) hue-rotate(90deg)';
+        else if(state.filter === 'thermal') ctx.filter = 'contrast(1.4) brightness(0.7) invert(1) grayscale(1)';
+        else if(state.filter === 'urbex') ctx.filter = 'contrast(1.3) saturate(1.8) sepia(0.8) hue-rotate(-15deg)';
+        else if(state.filter === 'pareidolia') ctx.filter = 'contrast(1.1) brightness(0.8) grayscale(0.8)';
+        else ctx.filter = 'none';
+
         if (vW && vH) {
             const vRatio = vW / vH, cRatio = cW / cH;
             let dW, dH, dX, dY;
@@ -550,8 +553,11 @@
             else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            
+            // Restablecer filtro para elementos de la interfaz dibujados encima
             ctx.filter = 'none'; 
-            // Las capas extras se dibujan en el canvas pero el filtro visual es externo
+            
+            // Capas adicionales
             if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 50, 0, 0.2)'; for(let i=0; i<cH; i+=4) ctx.fillRect(0, i, cW, 1); }
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
@@ -568,16 +574,11 @@
     }
 
     async function aiLoop() {
-        // OPTIMIZACIÓN: CORTAFUEGOS DE IA
-        // Si no hay ninguna función de IA activa, terminamos inmediatamente para ahorrar batería y datos.
         if (!state.isSLS && !state.isLidar && !state.isPareidolia) return;
         if (isAIProcessing) return; 
 
-        if (state.isLidar) { 
-            // LIDAR AHORA TIENE SU PROPIO LOOP DESACOPLADO
-            return; 
-        } else {
-            // OPTIMIZACIÓN IA: Canvas reducido 224x224
+        if (state.isLidar) { return; } 
+        else {
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
             if (aiDetector && state.isSLS) { try { poses = await aiDetector.estimatePoses(aiCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25 }); } catch(e){} }
             if (faceMesh && state.isSLS) { try { await faceMesh.send({image: el.video}); } catch(e){} }
@@ -623,55 +624,33 @@
         const statusEl = document.getElementById('status-text');
         const dotEl = document.getElementById('status-dot');
         const tallyEl = document.getElementById('tally-border');
-        
-        // Determinar estado de conexión
         const isConnected = (conn && conn.open);
         
         if (!isConnected) {
-            // ESTADO: DESCONECTADO (LOCAL)
             statusEl.innerText = "LOCAL";
             statusEl.className = "text-gray-500 font-mono font-bold tracking-widest";
             dotEl.className = "w-2 h-2 rounded-full bg-neutral-600";
-            
-            // Reset Tally
-            tallyEl.className = "";
-            tallyEl.style.border = "none";
-            tallyEl.style.boxShadow = "none";
+            tallyEl.className = ""; tallyEl.style.border = "none"; tallyEl.style.boxShadow = "none";
             return;
         }
 
-        // ESTADO: CONECTADO - Revisar Tally
         if (tallyState === 'program') {
-            // AL AIRE
             statusEl.innerText = "AL AIRE";
             statusEl.className = "text-white bg-red-600 px-1 rounded font-bold font-mono animate-pulse tracking-widest";
             dotEl.className = "w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red]";
-            
-            tallyEl.className = "online";
-            tallyEl.style.border = "6px solid #ff0000";
-            tallyEl.style.boxShadow = "inset 0 0 20px rgba(255,0,0,0.5)";
-            tallyEl.style.opacity = "1";
+            tallyEl.className = "online"; tallyEl.style.border = "6px solid #ff0000"; tallyEl.style.boxShadow = "inset 0 0 20px rgba(255,0,0,0.5)"; tallyEl.style.opacity = "1";
         } 
         else if (tallyState === 'preview') {
-            // PREVIO
             statusEl.innerText = "PREVIO";
             statusEl.className = "text-black bg-green-500 px-1 rounded font-bold font-mono tracking-widest";
             dotEl.className = "w-2 h-2 rounded-full bg-green-400 shadow-[0_0_10px_lime]";
-            
-            tallyEl.className = "preview";
-            tallyEl.style.border = "4px solid #00ff00";
-            tallyEl.style.boxShadow = "none";
-            tallyEl.style.opacity = "0.8";
+            tallyEl.className = "preview"; tallyEl.style.border = "4px solid #00ff00"; tallyEl.style.boxShadow = "none"; tallyEl.style.opacity = "0.8";
         } 
         else {
-            // LISTO (IDLE)
             statusEl.innerText = "LISTO";
             statusEl.className = "text-cyan-500 font-mono font-bold tracking-widest";
             dotEl.className = "w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_cyan]";
-            
-            tallyEl.className = "";
-            tallyEl.style.border = "none";
-            tallyEl.style.boxShadow = "none";
+            tallyEl.className = ""; tallyEl.style.border = "none"; tallyEl.style.boxShadow = "none";
         }
     }
 
@@ -683,8 +662,6 @@
         const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
         document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
-        
-        // Llamada a la nueva función centralizada de estado (Única fuente de verdad)
         updateStatusDisplay();
     }
 
@@ -696,7 +673,7 @@
         if(!fullId) { showToast("ID ESTUDIO VACIO", true); return; }
         
         document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
-        state.isStreaming = true; // Flag de Streaming
+        state.isStreaming = true; 
         
         let baseId = fullId;
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
@@ -710,13 +687,11 @@
         
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            
             connection.on('open', () => {
                 conn = connection;
                 conn.send({ type: 'register', name: name, hasAI: true });
                 showToast("Enlace Comandos OK", false);
             });
-            
             connection.on('data', handleCommand);
             connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; state.isStreaming = false; });
             connection.on('error', (e) => { console.error("Data error", e); });
@@ -734,7 +709,6 @@
             
             const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
             
-            // OPTIMIZACIÓN WEBRTC: Limitador de Bitrate (900 kbps)
             const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
                 const params = sender.getParameters();
@@ -767,9 +741,8 @@
             else if(action === 'reset') setFilter('normal', null);
         }
         else if (cmd.type === 'tally') {
-            // Actualización de estado global en lugar de manipulación directa
             tallyState = cmd.state; 
-            updateStatusDisplay(); // Forzar actualización visual inmediata
+            updateStatusDisplay(); 
         }
     }
 
@@ -777,16 +750,13 @@
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
         
-        // GESTIÓN DE CLASES CSS (OPTIMIZADO)
-        // Removemos todas las clases de filtro y aplicamos solo la activa
         document.body.classList.remove('filter-night-vision', 'filter-thermal', 'filter-urbex', 'filter-pareidolia');
         
         if(f !== 'normal') { 
             if(f === 'night') document.body.classList.add('filter-night-vision'); 
             else if(f === 'thermal') document.body.classList.add('filter-thermal'); 
             else if(f === 'urbex') document.body.classList.add('filter-urbex'); 
-            // CORRECCIÓN VISUAL: SLS YA NO USA FILTRO GRIS
-            else if(f === 'sls') { /* Sin filtro CSS, imagen limpia */ }
+            else if(f === 'sls') { }
             else if(f === 'pareidolia') document.body.classList.add('filter-pareidolia'); 
         }
         
@@ -821,7 +791,7 @@
     function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; canvasScanBoxes = []; }
 
     async function triggerPareidolia() {
-        if(!state.isPareidolia) return; // OPTIMIZACIÓN: Check estricto
+        if(!state.isPareidolia) return; 
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
         isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; startScanningEffect();
