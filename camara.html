@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.0.0 (FINAL CANVAS)</title> 
+    <title>CAMARA OBR PRO v6.1.0 (HYBRID PERFORMANCE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -37,13 +37,16 @@
         :root { --hud-primary: #ff3333; }
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
-        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; }
-        /* IMPORTANTE: Se han eliminado TODOS los filtros CSS de este contenedor para evitar duplicidad */
-
+        /* CONTENEDOR PRINCIPAL: AQUI SE APLICAN LOS FILTROS CSS */
+        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; transition: filter 0.2s; }
+        
         #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
         
-        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0; pointer-events: none; }
-        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; }
+        /* VIDEO: Visible ahora para los filtros CSS */
+        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
+        
+        /* CANVAS: Se usa para transmitir y overlays. Se oculta localmente cuando hay filtros pesados */
+        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; transition: opacity 0.2s; }
         
         #heatmap-buffer, #lidar-buffer { display: none; }
 
@@ -53,7 +56,44 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        .hud-burn-hidden { display: none !important; }
+        /* --- SISTEMA HÍBRIDO DE FILTROS --- */
+        
+        /* 1. NOCT (Night Vision) */
+        body.filter-night-vision #main-view-area { 
+            filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0);
+        }
+        /* Malla solo visible si el canvas se oculta */
+        body.filter-night-vision #main-view-area::after {
+            content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px);
+            background-size: 100% 3px;
+        }
+
+        /* 2. NEG (Thermal) - PARÁMETROS SOLICITADOS */
+        body.filter-thermal #main-view-area { 
+            filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8);
+        }
+
+        /* 3. URBEX (Cine Mexicano) */
+        body.filter-urbex #main-view-area { 
+            filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7);
+        }
+
+        /* TRUCO DE RENDIMIENTO: Cuando hay filtro activo, ocultar Canvas (Local) y mostrar HUD HTML */
+        body.filter-night-vision #sls-canvas, 
+        body.filter-thermal #sls-canvas, 
+        body.filter-urbex #sls-canvas { 
+            opacity: 0 !important; 
+        }
+
+        body.filter-night-vision .hud-burn-hidden, 
+        body.filter-thermal .hud-burn-hidden, 
+        body.filter-urbex .hud-burn-hidden { 
+            display: block !important; 
+        }
+
+        /* Por defecto el HUD HTML está oculto (porque lo dibuja el Canvas) */
+        .hud-burn-hidden { display: none; }
 
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
         #tally-border.preview { border: 4px solid #800000; opacity: 0.6; }
@@ -130,12 +170,12 @@
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        <!-- HUD OCULTO (BURN-IN) -->
+        <!-- HUD HTML (VISIBLE SOLO SI EL CANVAS SE OCULTA POR RENDIMIENTO) -->
         <div id="hud-layer" class="hud-burn-hidden">
-            <img src="obr-logo.png" id="hud-logo" alt="OBR">
-            <div id="hud-text-container">
-                <div id="hud-title">EXPLORACIONES OBR</div>
-                <div id="hud-time">--/--/-- - --:--:--</div>
+            <img src="obr-logo.png" id="hud-logo" class="absolute top-5 left-5 w-10 h-10 opacity-90" alt="OBR">
+            <div id="hud-text-container" class="absolute top-5 left-20">
+                <div id="hud-title" class="text-white font-orbitron font-bold text-base shadow-black drop-shadow-md">EXPLORACIONES OBR</div>
+                <div id="hud-time" class="text-[#ff3333] font-mono text-xs shadow-black drop-shadow-md">--/--/-- - --:--:--</div>
             </div>
         </div>
 
@@ -172,7 +212,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.0.0 (FINAL CANVAS)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.0 (HYBRID PERFORMANCE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -616,17 +656,16 @@
         ctx.save();
         ctx.clearRect(0, 0, cW, cH);
         
-        // --- APLICACIÓN DE FILTROS v6.0.0 (CANVAS ONLY) ---
-        // Se aplican solo en el Canvas para evitar duplicidad y conflictos con CSS
+        // --- APLICACIÓN DE FILTROS HÍBRIDA v6.1.0 ---
+        // 1. REPLICA DE CSS EN CANVAS (Para que el Stream salga procesado)
         if(state.filter === 'night') {
-            // NOCT: Verde + Malla 
             ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
         } else if(state.filter === 'thermal') {
-            // NEG: Parámetros solicitados exactos
             ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
         } else if(state.filter === 'urbex') {
-            // URBEX
             ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)';
+        } else {
+            ctx.filter = 'none';
         }
         
         if (vW && vH) {
@@ -634,12 +673,15 @@
             let dW, dH, dX, dY;
             if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } 
             else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+            
+            // DIBUJAR VIDEO EN CANVAS (Para Stream)
+            // Aunque localmente el Canvas esté oculto (opacity: 0), aquí se dibuja para el captureStream()
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
             
             ctx.filter = 'none'; 
             
-            // --- EFECTO SCANLINES (SOLO PARA NIGHT) EN CANVAS ---
+            // --- EFECTO SCANLINES EN CANVAS (Para Stream) ---
             if(state.filter === 'night') {
                 ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; 
                 for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); }
