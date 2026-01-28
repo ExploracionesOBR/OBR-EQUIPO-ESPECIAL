@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.0 (HYBRID PERFORMANCE)</title> 
+    <title>CAMARA OBR PRO v6.1.2 (NO RAD)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -69,7 +69,7 @@
             background-size: 100% 3px;
         }
 
-        /* 2. NEG (Thermal) - PARÁMETROS SOLICITADOS */
+        /* 2. NEG (Thermal) */
         body.filter-thermal #main-view-area { 
             filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8);
         }
@@ -79,7 +79,7 @@
             filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7);
         }
 
-        /* TRUCO DE RENDIMIENTO: Cuando hay filtro activo, ocultar Canvas (Local) y mostrar HUD HTML */
+        /* TRUCO DE RENDIMIENTO: Ocultar Canvas Local para filtros pesados */
         body.filter-night-vision #sls-canvas, 
         body.filter-thermal #sls-canvas, 
         body.filter-urbex #sls-canvas { 
@@ -181,7 +181,6 @@
 
         <div id="toast-container"></div>
         <div id="tally-border" class="preview"></div>
-        <div id="sls-pip" class="absolute top-4 left-1/2 -translate-x-1/2 text-purple-500 font-mono text-xs hidden bg-black/50 px-2 rounded border border-purple-500 hud-burn-hidden">● SLS ACTIVO</div>
         
         <div id="link-status" class="absolute bottom-4 left-4 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded border border-gray-800 flex items-center gap-2">
             <div id="status-dot" class="w-2 h-2 rounded-full bg-red-900"></div>
@@ -199,6 +198,7 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
+            
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('lidar', this)" id="btn-heatmap"><i class="fas fa-fingerprint"></i></div><div class="menu-label">LIDAR</div></div>
         </div>
@@ -212,7 +212,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.0 (HYBRID PERFORMANCE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.2 (NO RAD)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -656,7 +656,7 @@
         ctx.save();
         ctx.clearRect(0, 0, cW, cH);
         
-        // --- APLICACIÓN DE FILTROS HÍBRIDA v6.1.0 ---
+        // --- APLICACIÓN DE FILTROS HÍBRIDA v6.1.1 ---
         // 1. REPLICA DE CSS EN CANVAS (Para que el Stream salga procesado)
         if(state.filter === 'night') {
             ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
@@ -852,7 +852,7 @@
             const action = cmd.action;
             const value = cmd.value;
             if(action === 'filter') { 
-                const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; 
+                const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'rad': 'btn-rad', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; 
                 setFilter(value, document.getElementById(map[value])); 
             }
             else if(action === 'flash') toggleTorch(value); 
@@ -870,7 +870,7 @@
     function setFilter(f, btn) {
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
-        document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
+        document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'rad') document.body.classList.add('filter-rad'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
         
         // --- MODIFICACIÓN SOLICITADA: FLASH AUTOMÁTICO EN MODO NEGATIVO (THERMAL) ---
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
@@ -888,6 +888,16 @@
             const femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female')));
             if (femaleVoice) u.voice = femaleVoice; window.speechSynthesis.speak(u);
         }
+    }
+
+    function refreshAudioTracks() {
+        if (!videoStream) return;
+        // Hack para "despertar" el micrófono si quedó atenuado por el speech
+        const tracks = videoStream.getAudioTracks();
+        tracks.forEach(track => {
+            track.enabled = false;
+            setTimeout(() => { track.enabled = true; }, 50); // Breve reinicio
+        });
     }
 
     function startScanningEffect() {
@@ -1014,6 +1024,10 @@
             
             triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
         } else {
+            // --- CORRECCIÓN DE MICROFONO (Audio Ducking Fix) ---
+            window.speechSynthesis.cancel(); // 1. Cancelar cualquier audio pendiente agresivamente
+            refreshAudioTracks(); // 2. Refrescar tracks de audio para recuperar ganancia
+            
             if(btn) btn.classList.remove('active-state'); 
             document.body.classList.remove('filter-pareidolia'); 
             speakText("VISIÓN DESACTIVADA"); 
