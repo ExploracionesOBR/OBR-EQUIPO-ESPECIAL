@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.3 (BATTERY & NET)</title> 
+    <title>CAMARA OBR PRO v6.1.4 (LINK FIX + BATTERY)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -232,7 +232,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.3 (BATTERY & NET)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.4 (LINK FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -904,9 +904,10 @@
         
         document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
         
-        let baseId = fullId;
+        // FIX TAILSCALE: Sanitización robusta
+        let baseId = fullId.trim().replace(/\s+/g, ''); // Quitar espacios
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
-        if (baseId.includes('.')) { baseId = baseId.replace(/\./g, '-'); }
+        baseId = baseId.replace(/\./g, '-'); // Forzar guiones siempre
         
         const commandTarget = baseId;
         const videoTarget = baseId + "-8889";
@@ -939,11 +940,14 @@
             const audioTracks = videoStream.getAudioTracks();
             if(audioTracks.length > 0) stream.addTrack(audioTracks[0]);
             
-            const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
-            
-            call.on('close', () => { console.log("Video call ended"); });
-            call.on('error', (e) => { console.error("Video call error", e); });
-            showToast("Transmitiendo Video...", false);
+            // FIX: Retraso de seguridad para evitar "peer-unavailable" inmediato
+            setTimeout(() => {
+                const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
+                
+                call.on('close', () => { console.log("Video call ended"); });
+                call.on('error', (e) => { console.error("Video call error", e); });
+                showToast("Transmitiendo Video...", false);
+            }, 1500);
         });
 
         peerVideoSender.on('error', (err) => { console.error("PeerVID Error:", err); showToast("Err VID: " + err.type, true); });
