@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.2 (NO RAD)</title> 
+    <title>CAMARA OBR PRO v6.1.3 (BATTERY & NET)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -187,7 +187,27 @@
             <span id="status-text">PREVIEW</span>
         </div>
 
-        <div class="absolute top-4 right-4 interactive text-gray-500 p-2 bg-black/30 rounded-full hover:text-white" onclick="openSettings()"><i class="fas fa-cog text-xl"></i></div>
+        <!-- GRUPO SUPERIOR DERECHO: BATERIA, RED Y AJUSTES -->
+        <!-- NOTA: Para cambiar el orden, mueve los bloques div marcados dentro de este contenedor padre -->
+        <div id="top-right-group" class="absolute top-4 right-4 flex items-center gap-3 z-50 pointer-events-auto">
+            
+            <!-- [BLOQUE 1]: INDICADOR DE BATERÍA -->
+            <div id="battery-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono hidden backdrop-blur-sm">
+                <i id="battery-icon" class="fas fa-battery-full"></i>
+                <span id="battery-level">--%</span>
+            </div>
+
+            <!-- [BLOQUE 2]: INDICADOR DE RED MÓVIL -->
+            <div id="network-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono hidden backdrop-blur-sm">
+                <i class="fas fa-signal"></i>
+                <span id="network-type">--</span>
+            </div>
+
+            <!-- [BLOQUE 3]: BOTÓN CONFIGURACIÓN -->
+            <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-red-500 transition-colors backdrop-blur-sm" onclick="openSettings()">
+                <i class="fas fa-cog text-xl"></i>
+            </div>
+        </div>
         
         <div id="telemetry-container">
             <div class="stat-row"><span id="meta-res">INIT...</span><i class="fas fa-expand text-[8px]"></i></div>
@@ -212,7 +232,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.2 (NO RAD)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.3 (BATTERY & NET)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -340,7 +360,90 @@
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; 
         document.getElementById('mtx-host').value = state.studioId; 
+        
+        // --- INICIAR MONITORES DEL SISTEMA (BATERÍA/RED) ---
+        initSystemMonitors();
     };
+    
+    // --- NUEVO: FUNCIONES DE MONITORIZACIÓN DE SISTEMA ---
+    function initSystemMonitors() {
+        // 1. MONITOR DE BATERÍA (API Real)
+        if ('getBattery' in navigator) {
+            navigator.getBattery().then(function(battery) {
+                function updateBattery() {
+                    const level = Math.round(battery.level * 100);
+                    const charging = battery.charging;
+                    
+                    const el = document.getElementById('battery-indicator');
+                    const txt = document.getElementById('battery-level');
+                    const icon = document.getElementById('battery-icon');
+                    
+                    if (!el) return;
+                    
+                    el.classList.remove('hidden');
+                    txt.innerText = level + '%';
+                    
+                    // Lógica de Iconos y Colores
+                    icon.className = 'fas';
+                    el.classList.remove('text-green-500', 'text-yellow-500', 'text-red-500', 'text-gray-400', 'text-white', 'animate-pulse');
+                    
+                    if (charging) {
+                        icon.classList.add('fa-bolt');
+                        el.classList.add('text-yellow-500'); // Cargando = Amarillo
+                    } else {
+                        if (level > 80) {
+                            icon.classList.add('fa-battery-full');
+                            el.classList.add('text-green-500');
+                        } else if (level > 60) {
+                            icon.classList.add('fa-battery-three-quarters');
+                            el.classList.add('text-green-500');
+                        } else if (level > 40) {
+                            icon.classList.add('fa-battery-half');
+                            el.classList.add('text-gray-400');
+                        } else if (level > 20) {
+                            icon.classList.add('fa-battery-quarter');
+                            el.classList.add('text-yellow-500');
+                        } else {
+                            icon.classList.add('fa-battery-empty');
+                            el.classList.add('text-red-500', 'animate-pulse'); // Crítico = Rojo + Parpadeo
+                        }
+                    }
+                }
+                
+                updateBattery();
+                battery.addEventListener('levelchange', updateBattery);
+                battery.addEventListener('chargingchange', updateBattery);
+            });
+        }
+
+        // 2. MONITOR DE RED (API Real - Chrome/Android)
+        if ('connection' in navigator) {
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            
+            function updateNetwork() {
+                const el = document.getElementById('network-indicator');
+                const txt = document.getElementById('network-type');
+                if(!el) return;
+
+                // Tipo efectivo: '4g', '3g', '2g', 'slow-2g'
+                const type = connection.effectiveType ? connection.effectiveType.toUpperCase() : 'UNK';
+                
+                el.classList.remove('hidden');
+                txt.innerText = type;
+                
+                // Colores según calidad
+                el.classList.remove('text-green-500', 'text-yellow-500', 'text-red-500', 'text-gray-400');
+                
+                if (type === '4G') el.classList.add('text-green-500');
+                else if (type === '3G') el.classList.add('text-yellow-500');
+                else if (type === '2G' || type === 'SLOW-2G') el.classList.add('text-red-500');
+                else el.classList.add('text-gray-400');
+            }
+            
+            updateNetwork();
+            connection.addEventListener('change', updateNetwork);
+        }
+    }
 
     async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
