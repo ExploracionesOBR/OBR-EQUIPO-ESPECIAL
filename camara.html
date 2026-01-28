@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.5 (SENSOR FIX)</title> 
+    <title>CAMARA OBR PRO v6.1.6 (FILTER BURN FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -80,10 +80,11 @@
         }
 
         /* TRUCO DE RENDIMIENTO: Ocultar Canvas Local para filtros pesados */
+        /* FIX: Opacidad 0.01 en lugar de 0 para forzar actualización de stream en WebRTC */
         body.filter-night-vision #sls-canvas, 
         body.filter-thermal #sls-canvas, 
         body.filter-urbex #sls-canvas { 
-            opacity: 0 !important; 
+            opacity: 0.01 !important; 
         }
 
         body.filter-night-vision .hud-burn-hidden, 
@@ -232,7 +233,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.5 (SENSOR FIX)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.6 (FILTER FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -343,7 +344,8 @@
 
     const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
 
-    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    // FIX: Quitamos desynchronized: true para asegurar que los filtros se 'quemen' en el stream
+    const ctx = el.canvas.getContext('2d', { alpha: true });
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
     const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
     const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
