@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.15 (REMOTE ASSET CHECK)</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.16 (PEER REF FIX)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -611,6 +611,11 @@
         };
 
         const DockMode = ({ preferredId }) => {
+          // --- FIX: DECLARACIÓN DE REFERENCIAS FALTANTES ---
+          const peerRef = useRef(null);
+          const videoPeerRef = useRef(null);
+          const peekCallRef = useRef(null);
+          
           const [myId, setMyId] = useState(null);
           const [cameras, setCameras] = useState({}); 
           const [programId, setProgramId] = useState(null);
@@ -1076,7 +1081,7 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.15</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.16</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} />
                     </div>
                     
@@ -1187,7 +1192,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v6.0.15</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v6.0.16</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest uppercase tracking-widest">ID (Tailscale IP)</label>
@@ -1208,7 +1213,7 @@
           
           if(!loaded) return (
             <div className="h-screen w-screen bg-black flex flex-col items-center justify-center gap-4">
-                <div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Iniciando v6.0.15...</div>
+                <div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Iniciando v6.0.16...</div>
             </div>
           );
 
