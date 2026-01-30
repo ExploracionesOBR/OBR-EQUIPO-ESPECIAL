@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.18 (BACKGROUND FIX)</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.20 (OBS & RESIZE FIX)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -715,62 +715,92 @@
               });
           }, []);
 
-          // OBS LOGIC
+          // OBS LOGIC CONEXIÓN QUIRÚRGICA: BUCLE PERSISTENTE Y AUTH NULA
           useEffect(() => {
               let obs = null;
-              try {
-                  // FIX: USAR window.OBSWebSocket
-                  if (window.OBSWebSocket) {
-                      obs = new window.OBSWebSocket();
-                      obsRef.current = obs;
+              let isMounted = true;
+              let connectInterval = null;
 
-                      const connectOBS = async () => {
-                          try {
-                              await obs.connect('ws://localhost:4455');
-                              setObsConnected(true);
-                              notify("OBS CONECTADO OK");
-                              
-                              const streamStatus = await obs.call('GetStreamStatus');
-                              setObsStreaming(streamStatus.outputActive);
-                              const recordStatus = await obs.call('GetRecordStatus');
-                              setObsRecording(recordStatus.outputActive);
-                          } catch (e) {
-                              console.error("OBS Connection Failed (Silent)", e);
-                              setObsConnected(false);
-                          }
-                      };
+              const connectOBS = async () => {
+                  if (obsRef.current && obsRef.current.identified) return; // Ya conectado
+                  
+                  try {
+                       // Si no existe instancia, crearla
+                       if (!obsRef.current) {
+                           if (window.OBSWebSocket) {
+                               obsRef.current = new window.OBSWebSocket();
+                           } else {
+                               console.warn("Librería OBS WS no cargada");
+                               return;
+                           }
+                       }
+                       
+                       obs = obsRef.current;
 
-                      connectOBS();
-
-                      obs.on('StreamStateChanged', (data) => {
+                       // Configurar listeners SOLO UNA VEZ si es posible, o limpiar antes
+                       // (OBS WS JS maneja múltiples listeners bien, pero idealmente limpiar)
+                       obs.removeAllListeners(); 
+                       
+                       obs.on('StreamStateChanged', (data) => {
                           setObsStreaming(data.outputActive);
                           if(data.outputActive) notify("OBS: STREAM INICIADO", "warning");
                           else notify("OBS: STREAM DETENIDO");
-                      });
+                       });
                       
-                      obs.on('RecordStateChanged', (data) => {
+                       obs.on('RecordStateChanged', (data) => {
                           setObsRecording(data.outputActive);
                           if(data.outputActive) notify("OBS: GRABACIÓN INICIADA", "warning");
                           else notify("OBS: GRABACIÓN DETENIDA");
-                      });
+                       });
 
-                      obs.on('ConnectionClosed', () => {
-                          setObsConnected(false);
-                          setObsStreaming(false);
-                          setObsRecording(false);
-                          notify("OBS DESCONECTADO", "error");
-                      });
-                  } else {
-                      console.warn("OBSWebSocket Library not loaded globally");
+                       obs.on('ConnectionClosed', () => {
+                          if(isMounted) {
+                              setObsConnected(false);
+                              setObsStreaming(false);
+                              setObsRecording(false);
+                              // La reconexión la maneja el intervalo
+                          }
+                       });
+
+                       // INTENTO DE CONEXIÓN EXPLÍCITO SIN PASSWORD (undefined)
+                       await obs.connect('ws://localhost:4455', undefined, { rpcVersion: 1 });
+                       
+                       if(isMounted) {
+                           setObsConnected(true);
+                           notify("OBS CONECTADO OK");
+                           // Obtener estados iniciales
+                           try {
+                               const streamStatus = await obs.call('GetStreamStatus');
+                               setObsStreaming(streamStatus.outputActive);
+                               const recordStatus = await obs.call('GetRecordStatus');
+                               setObsRecording(recordStatus.outputActive);
+                           } catch(e) {}
+                       }
+
+                  } catch (e) {
+                      // Silencioso, el intervalo reintentará
                   }
-              } catch(e) {
-                  console.error("Failed to initialize OBS WebSocket module", e);
-              }
+              };
+
+              // Bucle de intento de conexión cada 3s si no está conectado
+              connectInterval = setInterval(() => {
+                  if (!obsConnected && isMounted) {
+                      connectOBS();
+                  }
+              }, 3000);
+              
+              // Primer intento inmediato
+              connectOBS();
 
               return () => {
-                  if(obs) obs.disconnect();
+                  isMounted = false;
+                  clearInterval(connectInterval);
+                  if(obsRef.current) {
+                      obsRef.current.disconnect();
+                      obsRef.current = null;
+                  }
               };
-          }, []);
+          }, [obsConnected]); // Dependencia para reiniciar si se desconecta manualmente
 
           const sendToOBS = async (action) => {
              if (!obsRef.current || !obsConnected) {
@@ -815,7 +845,7 @@
              });
           };
 
-          // FIX: PREVENIR CONGELAMIENTO EN SEGUNDO PLANO (KEEP ALIVE)
+          // FIX: PREVENIR CONGELAMIENTO EN SEGUNDO PLANO (KEEP ALIVE DUAL)
           useEffect(() => {
               let cleanup = () => {};
               const initAudio = () => {
@@ -827,7 +857,7 @@
                       const gain = ac.createGain();
                       osc.connect(gain);
                       gain.connect(ac.destination);
-                      gain.gain.value = 0.0001; 
+                      gain.gain.value = 0.0001; // Inaudible
                       osc.start();
                       
                       // Monitor de Estado: Si el navegador suspende el audio, forzar reanudación
@@ -841,6 +871,7 @@
               return cleanup;
           }, []);
           
+          // FIX VENTANA OBS: AUTOPLAY FORZADO, TAMAÑO AJUSTABLE Y KEEP ALIVE
           useEffect(() => {
             if (obsWindowOpen) {
                 if (!obsWindowRef.current || obsWindowRef.current.closed) {
@@ -848,9 +879,11 @@
                     if (win) {
                         obsWindowRef.current = win;
                         try {
+                            // CSS CRÍTICO PARA AJUSTE DE TAMAÑO (RESPONSIVO) Y FONDO NEGRO
                             win.document.documentElement.style.backgroundColor = 'black';
-                            win.document.body.style.cssText = 'margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; background:black; display:flex; align-items:center; justify-content:center;';
+                            win.document.body.style.cssText = 'margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:black; display:flex; align-items:center; justify-content:center;';
 
+                            // KEEP ALIVE EN VENTANA FLOTANTE
                             const AC = win.AudioContext || win.webkitAudioContext;
                             if(AC) {
                                 const ac = new AC();
@@ -858,12 +891,30 @@
                                 const gn = ac.createGain();
                                 os.connect(gn); gn.connect(ac.destination);
                                 gn.gain.value = 0.0001; os.start();
-                                // FIX: Monitor de Estado para Ventana OBS (Background Throttling Preventer)
+                                // Monitor anti-throttling en ventana hija
                                 const resumeInt = win.setInterval(() => {
                                     if(ac.state === 'suspended') ac.resume().catch(e=>{});
                                 }, 1000);
                                 win.addEventListener('unload', () => clearInterval(resumeInt));
                             }
+                            
+                            // SCRIPT DE AUTOPLAY FORZADO PARA VIDEO INYECTADO
+                            const autoplayScript = win.document.createElement('script');
+                            autoplayScript.textContent = `
+                                setInterval(() => {
+                                    const v = document.querySelector('video');
+                                    if(v) {
+                                        if(v.paused) v.play().catch(e => {});
+                                        if(v.muted && !v.dataset.manualMute) v.muted = false; // Desmutear si no es intencional
+                                        // Asegurar ajuste visual
+                                        if(v.style.objectFit !== 'contain') v.style.objectFit = 'contain';
+                                        if(v.style.width !== '100%') v.style.width = '100%';
+                                        if(v.style.height !== '100%') v.style.height = '100%';
+                                    }
+                                }, 1000);
+                            `;
+                            win.document.head.appendChild(autoplayScript);
+
                         } catch(e){}
 
                         const script = win.document.createElement('script');
@@ -876,9 +927,13 @@
 
                         win.document.title = "SALIDA OBS | PRODOCK (CLEAN FEED)";
 
+                        // CONTENEDOR FLEXIBLE PARA VIDEO RESPONSIVO
                         const container = win.document.createElement('div');
                         container.style.height = '100%';
                         container.style.width = '100%';
+                        container.style.display = 'flex';
+                        container.style.alignItems = 'center';
+                        container.style.justifyContent = 'center';
                         container.style.backgroundColor = 'black';
                         win.document.body.appendChild(container);
                         setObsMountNode(container);
@@ -1110,8 +1165,9 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.18</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.20</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} />
+                        {!obsConnected && <span className="ml-4 text-[9px] font-bold text-neutral-600 animate-pulse tracking-widest uppercase">BUSCANDO OBS...</span>}
                     </div>
                     
                     <div className="flex items-center gap-4">
@@ -1200,10 +1256,10 @@
                 
                 {obsMountNode && createPortal(
                     <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
-                        <div className="relative w-full h-full bg-black">
+                        <div className="relative w-full h-full bg-black flex items-center justify-center">
                             {/* VIDEO DE VENTANA FLOTANTE: Instancia Independiente CLONADA */}
                             {programId && cameras[programId]?.stream ? (
-                                <VideoPeer key={`obs-prog-${programId}`} stream={cameras[programId].stream} className="w-full h-full object-cover" muted={isGlobalMuted} />
+                                <VideoPeer key={`obs-prog-${programId}`} stream={cameras[programId].stream} className="w-full h-full object-contain" muted={isGlobalMuted} />
                             ) : (
                                 <div className="w-full h-full bg-black flex items-center justify-center">
                                     <img src="./obr-logo.png" className="w-32 opacity-10" />
@@ -1228,7 +1284,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v6.0.18</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v6.0.20</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest uppercase tracking-widest">ID (Tailscale IP)</label>
@@ -1249,7 +1305,7 @@
           
           if(!loaded) return (
             <div className="h-screen w-screen bg-black flex flex-col items-center justify-center gap-4">
-                <div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Iniciando v6.0.18...</div>
+                <div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Iniciando v6.0.20...</div>
             </div>
           );
 
