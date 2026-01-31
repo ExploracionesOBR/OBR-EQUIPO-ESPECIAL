@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.6 (FILTER BURN FIX)</title> 
+    <title>CAMARA OBR PRO v6.1.26 (AUDIO PEAKS)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -37,63 +37,30 @@
         :root { --hud-primary: #ff3333; }
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
-        /* CONTENEDOR PRINCIPAL: AQUI SE APLICAN LOS FILTROS CSS */
         #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; transition: filter 0.2s; }
-        
         #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
-        
-        /* VIDEO: Visible ahora para los filtros CSS */
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
-        
-        /* CANVAS: Se usa para transmitir y overlays. Se oculta localmente cuando hay filtros pesados */
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; transition: opacity 0.2s; }
         
+        /* NUEVO CANVAS INDEPENDIENTE PARA AUDIO (CAPA SUPERIOR LIMPIA) */
+        #audio-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
+
         #heatmap-buffer, #lidar-buffer { display: none; }
 
-        #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+        #ui-layer { position: absolute; inset: 0; pointer-events: none; z-index: 70; }
         .interactive { pointer-events: auto; cursor: pointer; }
         
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        /* --- SISTEMA HÍBRIDO DE FILTROS --- */
-        
-        /* 1. NOCT (Night Vision) */
-        body.filter-night-vision #main-view-area { 
-            filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0);
-        }
-        /* Malla solo visible si el canvas se oculta */
-        body.filter-night-vision #main-view-area::after {
-            content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10;
-            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px);
-            background-size: 100% 3px;
-        }
+        /* FILTROS CSS */
+        body.filter-night-vision #main-view-area { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
+        body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
+        body.filter-thermal #main-view-area { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
+        body.filter-urbex #main-view-area { filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7); }
 
-        /* 2. NEG (Thermal) */
-        body.filter-thermal #main-view-area { 
-            filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8);
-        }
-
-        /* 3. URBEX (Cine Mexicano) */
-        body.filter-urbex #main-view-area { 
-            filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7);
-        }
-
-        /* TRUCO DE RENDIMIENTO: Ocultar Canvas Local para filtros pesados */
-        /* FIX: Opacidad 0.01 en lugar de 0 para forzar actualización de stream en WebRTC */
-        body.filter-night-vision #sls-canvas, 
-        body.filter-thermal #sls-canvas, 
-        body.filter-urbex #sls-canvas { 
-            opacity: 0.01 !important; 
-        }
-
-        body.filter-night-vision .hud-burn-hidden, 
-        body.filter-thermal .hud-burn-hidden, 
-        body.filter-urbex .hud-burn-hidden { 
-            display: block !important; 
-        }
-
-        /* Por defecto el HUD HTML está oculto (porque lo dibuja el Canvas) */
+        body.filter-night-vision #sls-canvas, body.filter-thermal #sls-canvas, body.filter-urbex #sls-canvas { opacity: 0.01 !important; }
+        body.filter-night-vision .hud-burn-hidden, body.filter-thermal .hud-burn-hidden, body.filter-urbex .hud-burn-hidden { display: block !important; }
         .hud-burn-hidden { display: none; }
 
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
@@ -101,21 +68,8 @@
         #tally-border.online { border: 6px solid #00ff00; box-shadow: inset 0 0 20px rgba(0,255,0,0.5), 0 0 15px rgba(0,255,0,0.5); opacity: 1; }
 
         #ai-scan-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 55; display: none; overflow: hidden; }
-        
-        .scan-box { 
-            position: absolute; 
-            border: 2px solid rgba(255, 0, 0, 0.9); 
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.6), inset 0 0 10px rgba(255, 0, 0, 0.3); 
-            background: rgba(255, 0, 0, 0.1); 
-            opacity: 0; 
-            animation: targetScan 0.6s ease-out forwards; 
-        }
-        @keyframes targetScan { 
-            0% { transform: scale(1.3); opacity: 0; border-color: white; } 
-            10% { opacity: 1; border-color: red; } 
-            80% { transform: scale(1); opacity: 1; } 
-            100% { transform: scale(0.8); opacity: 0; } 
-        }
+        .scan-box { position: absolute; border: 2px solid rgba(255, 0, 0, 0.9); box-shadow: 0 0 15px rgba(255, 0, 0, 0.6), inset 0 0 10px rgba(255, 0, 0, 0.3); background: rgba(255, 0, 0, 0.1); opacity: 0; animation: targetScan 0.6s ease-out forwards; }
+        @keyframes targetScan { 0% { transform: scale(1.3); opacity: 0; border-color: white; } 10% { opacity: 1; border-color: red; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.8); opacity: 0; } }
 
         #toast-container { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 200; pointer-events: none; width: 80%; align-items: center; }
         .toast { background: rgba(0, 30, 0, 0.9); border: 1px solid #00ff00; color: #00ff00; padding: 10px 20px; border-radius: 4px; font-family: 'Share Tech Mono'; font-size: 14px; text-shadow: 0 0 5px #00ff00; box-shadow: 0 4px 15px rgba(0,0,0,0.8); animation: slideDown 0.3s ease-out; pointer-events: auto; text-align: center; }
@@ -133,13 +87,16 @@
 
         #telemetry-container { position: absolute; bottom: 10px; right: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; z-index: 150; }
         .stat-row { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: rgba(0, 255, 0, 0.7); text-shadow: 1px 1px 0px black; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px; display: flex; align-items: center; gap: 6px; }
+        
         .signal-bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; width: 16px; }
         .bar { width: 4px; background: #333; border-radius: 1px; transition: background 0.3s; }
         .bar:nth-child(1) { height: 33%; } .bar:nth-child(2) { height: 66%; } .bar:nth-child(3) { height: 100%; }
         .signal-level-0 .bar { background: #333; }
-        .signal-level-1 .bar:nth-child(1) { background: #ff3333; }
-        .signal-level-2 .bar:nth-child(1), .signal-level-2 .bar:nth-child(2) { background: #ffff00; }
         .signal-level-3 .bar { background: #00ff00; }
+
+        /* MIC BUTTON ESTILO TELEMETRÍA - CIAN */
+        .mic-toggle { pointer-events: auto; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; }
+        .mic-toggle.active { opacity: 1; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
 
         #loading { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .modal-bg { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; }
@@ -164,6 +121,10 @@
         </div>
         <div id="ai-scan-overlay"></div>
     </div>
+    
+    <!-- AUDIO CANVAS INDEPENDIENTE -->
+    <canvas id="audio-canvas"></canvas>
+    
     <canvas id="heatmap-buffer"></canvas>
     <canvas id="lidar-buffer"></canvas>
     
@@ -171,7 +132,6 @@
     <div id="zoom-target-indicator"></div>
 
     <div id="ui-layer">
-        <!-- HUD HTML (VISIBLE SOLO SI EL CANVAS SE OCULTA POR RENDIMIENTO) -->
         <div id="hud-layer" class="hud-burn-hidden">
             <img src="obr-logo.png" id="hud-logo" class="absolute top-5 left-5 w-10 h-10 opacity-90" alt="OBR">
             <div id="hud-text-container" class="absolute top-5 left-20">
@@ -188,29 +148,29 @@
             <span id="status-text">PREVIEW</span>
         </div>
 
-        <!-- GRUPO SUPERIOR DERECHO: BATERIA, RED Y AJUSTES -->
-        <!-- NOTA: Para cambiar el orden, mueve los bloques div marcados dentro de este contenedor padre -->
         <div id="top-right-group" class="absolute top-4 right-4 flex items-center gap-3 z-50 pointer-events-auto">
-            
-            <!-- [BLOQUE 1]: INDICADOR DE BATERÍA -->
-            <div id="battery-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono hidden backdrop-blur-sm transition-colors duration-300">
-                <i id="battery-icon" class="fas fa-battery-full"></i>
-                <span id="battery-level">--%</span>
+            <!-- BATERÍA -->
+            <div id="battery-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
+                <i id="battery-icon" class="fas fa-bolt"></i>
+                <span id="battery-level">SYS OK</span>
             </div>
 
-            <!-- [BLOQUE 2]: INDICADOR DE RED MÓVIL -->
-            <div id="network-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono hidden backdrop-blur-sm transition-colors duration-300">
-                <i class="fas fa-signal"></i>
-                <span id="network-type">--</span>
+            <!-- RED -->
+            <div id="network-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
+                <i class="fas fa-wifi"></i>
+                <span id="network-type">LINK</span>
             </div>
 
-            <!-- [BLOQUE 3]: BOTÓN CONFIGURACIÓN -->
             <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-red-500 transition-colors backdrop-blur-sm" onclick="openSettings()">
                 <i class="fas fa-cog text-xl"></i>
             </div>
         </div>
         
         <div id="telemetry-container">
+            <!-- BOTÓN MICRÓFONO INTEGRADO EN TELEMETRÍA -->
+            <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()">
+                <span>AUDIO SCAN</span><i class="fas fa-microphone text-[10px]"></i>
+            </div>
             <div class="stat-row"><span id="meta-res">INIT...</span><i class="fas fa-expand text-[8px]"></i></div>
             <div class="stat-row"><span id="meta-fps">-- FPS</span><div class="signal-bars signal-level-0" id="signal-ui"><div class="bar"></div><div class="bar"></div><div class="bar"></div></div></div>
         </div>
@@ -233,7 +193,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">LIDAR v6.1.6 (FILTER FIX)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.26 (AUDIO PEAKS)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -248,72 +208,41 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONFIGURACIÓN UNIFICADO (2 COLUMNAS) -->
     <div id="settings-modal" class="modal-bg">
         <div class="relative bg-neutral-900 border border-red-900 p-6 rounded w-[480px] max-w-[95%] shadow-[0_0_30px_rgba(255,0,0,0.1)]">
-            <!-- BOTÓN X DE CIERRE -->
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
-
             <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest text-lg">CONFIGURACIÓN SISTEMA</h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <!-- COLUMNA 1: RED -->
                 <div class="bg-black/50 p-3 rounded border border-gray-800">
                     <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">RED ESTUDIO</h3>
                     <label class="text-[9px] text-gray-500 font-mono mb-1 block uppercase">DOCK ID / IP</label>
                     <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono outline-none focus:border-red-500 text-center mb-2">
                     <p class="text-[8px] text-gray-600 font-mono uppercase text-center leading-tight">IP SE CONVIERTE A ID AUTO</p>
                 </div>
-
-                <!-- COLUMNA 2: IA -->
                 <div class="bg-black/50 p-3 rounded border border-gray-800">
                     <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">IA ANALYZER</h3>
                     <label class="text-[9px] text-gray-500 font-mono mb-1 block">API KEY</label>
-                    
-                    <!-- INPUT CON BOTÓN EMBEBIDO -->
                     <div class="relative w-full mb-2">
                         <input type="password" id="api-key-internal" placeholder="GEMINI KEY" class="w-full bg-black border border-gray-700 p-2 pr-10 text-white text-xs rounded outline-none focus:border-red-500">
-                        <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="absolute right-2 top-1/2 -translate-y-1/2 text-base hover:scale-110 transition-transform leading-none" title="Crear API Key">
-                            📲
-                        </button>
+                        <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="absolute right-2 top-1/2 -translate-y-1/2 text-base hover:scale-110 transition-transform leading-none" title="Crear API Key">📲</button>
                     </div>
-
                     <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-800 text-green-500 hover:bg-green-900/30 py-1 rounded text-[10px] font-bold">VALIDAR KEY</button>
                     <div id="api-status-msg" class="text-[9px] font-mono mt-1 text-center text-yellow-500 h-3"></div>
                 </div>
             </div>
-
             <div class="h-px bg-gray-800 w-full mb-4"></div>
-            
             <button onclick="saveSettings()" class="w-full bg-red-900/20 border border-red-600 text-red-500 hover:bg-red-900/50 hover:text-white py-3 rounded text-sm font-bold uppercase tracking-widest transition-colors font-orbitron">GUARDAR Y CERRAR</button>
         </div>
     </div>
 
 <script>
     const AI_SENSITIVITY = 0.2; 
-    const state = { 
-        apiKey: localStorage.getItem("obr_gemini_key") || "", 
-        aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", 
-        studioId: localStorage.getItem("obr_studio_id") || "",
-        filter: 'normal', 
-        isSLS: false, 
-        isLidar: false, 
-        isPareidolia: false, 
-        zoom: 1 
-    };
+    const state = { apiKey: localStorage.getItem("obr_gemini_key") || "", aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash-preview-09-2025", studioId: localStorage.getItem("obr_studio_id") || "", filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 };
     
-    const PEER_CONFIG = {
-        config: {
-            iceServers: [
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
-        }
-    };
+    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] } };
     
-    // Globals
     let GEMINI_API_KEY = state.apiKey;
     let CURRENT_AI_MODEL = state.aiModel;
     let isAIProcessing = false;
@@ -321,31 +250,41 @@
     let pareidoliaInterval = null;
     let scanInterval = null;
     let lastPareidoliaCall = 0; 
-    let imageCollapseTimeout = null;
-
-    // VARIABLES BURN-IN IA
+    
+    // VARIABLES VISUALIZACIÓN IA/AUDIO
     let currentAiText = "";
-    let currentAiImage = null; // NUEVO: Imagen IA
+    let currentAiImage = null; 
     let aiTextTimer = null;
-    let radarAngle = 0; // Para animación de radar
-    let canvasScanBoxes = []; // <--- NUEVO ARRAY PARA CANVAS
+    let radarAngle = 0; 
+    let canvasScanBoxes = []; 
 
-    // ESTADO PARA TEXTO CICLICO
-    let aiScannerState = 0; // 0=SEARCH, 1=RAW, 2=SENSORS
+    let aiScannerState = 0; 
     let aiScannerTimer = 0;
 
-    // SISTEMA DE ANIMACIÓN FÍSICA (Spring Physics)
-    const animState = {
-        hudScale: 1.0,
-        hudTarget: 1.0,
-        aiScale: 0.0,
-        aiTarget: 0.0
+    // AUDIO SCANNER VARS
+    let audioCtx = null;
+    let audioAnalyser = null;
+    let audioDataArray = null;
+    let speechRec = null;
+    let lastSpokenText = "";
+    let speechTimer = null;
+
+    const animState = { hudScale: 1.0, hudTarget: 1.0, aiScale: 0.0, aiTarget: 0.0 };
+    const el = { 
+        video: document.getElementById('shared-video-element'), 
+        canvas: document.getElementById('sls-canvas'), 
+        audioCanvas: document.getElementById('audio-canvas'),
+        heatCanvas: document.getElementById('heatmap-buffer'), 
+        lidarCanvas: document.getElementById('lidar-buffer'), 
+        zoom: document.getElementById('zoom-container'), 
+        statusText: document.getElementById('status-text'), 
+        statusDot: document.getElementById('status-dot') 
     };
 
-    const el = { video: document.getElementById('shared-video-element'), canvas: document.getElementById('sls-canvas'), heatCanvas: document.getElementById('heatmap-buffer'), lidarCanvas: document.getElementById('lidar-buffer'), zoom: document.getElementById('zoom-container'), statusText: document.getElementById('status-text'), statusDot: document.getElementById('status-dot') };
-
-    // FIX: Quitamos desynchronized: true para asegurar que los filtros se 'quemen' en el stream
     const ctx = el.canvas.getContext('2d', { alpha: true });
+    // CONTEXTO PARA CAPA DE AUDIO INDEPENDIENTE
+    const audioLayerCtx = el.audioCanvas.getContext('2d', { alpha: true });
+
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
     const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
     const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
@@ -359,21 +298,25 @@
 
     let logoImg = new Image(); logoImg.src = 'obr-logo.png';
 
+    // --- PIP & BACKGROUND HANDLER ---
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "hidden" && el.video.readyState === 4) {
+             try {
+                if (el.video !== document.pictureInPictureElement && document.pictureInPictureEnabled) {
+                     await el.video.requestPictureInPicture(); 
+                }
+             } catch(e) {}
+        }
+    });
+
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; 
         document.getElementById('mtx-host').value = state.studioId; 
-        initSystemMonitors(); // Init ASAP
+        initSystemMonitors(); 
     };
 
-    document.addEventListener("DOMContentLoaded", () => {
-        initSystemMonitors(); // Init on DOM Ready
-    });
-    
-    // --- NUEVO: FUNCIONES DE MONITORIZACIÓN DE SISTEMA REFORZADAS ---
     function initSystemMonitors() {
         const baseClasses = "flex items-center gap-2 bg-black/60 border px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300";
-
-        // 1. MONITOR DE BATERÍA (API Real)
         const batEl = document.getElementById('battery-indicator');
         const batTxt = document.getElementById('battery-level');
         const batIcon = document.getElementById('battery-icon');
@@ -381,127 +324,241 @@
         if ('getBattery' in navigator) {
             navigator.getBattery().then(function(battery) {
                 function updateBattery() {
-                    if (!batEl) return;
-                    
                     const level = Math.round(battery.level * 100);
-                    const charging = battery.charging;
-                    
-                    batEl.classList.remove('hidden');
                     batTxt.innerText = level + '%';
-                    
-                    // Resetear clases base para evitar conflictos
                     batEl.className = baseClasses;
-                    batIcon.className = 'fas'; // Reset icono
-                    
-                    if (charging) {
-                        batIcon.classList.add('fa-bolt');
-                        batEl.classList.add('text-yellow-400', 'border-yellow-600');
-                    } else {
-                        if (level > 80) {
-                            batIcon.classList.add('fa-battery-full');
-                            batEl.classList.add('text-green-400', 'border-green-800');
-                        } else if (level > 60) {
-                            batIcon.classList.add('fa-battery-three-quarters');
-                            batEl.classList.add('text-green-400', 'border-green-800');
-                        } else if (level > 40) {
-                            batIcon.classList.add('fa-battery-half');
-                            batEl.classList.add('text-gray-400', 'border-gray-700');
-                        } else if (level > 20) {
-                            batIcon.classList.add('fa-battery-quarter');
-                            batEl.classList.add('text-yellow-500', 'border-yellow-700');
-                        } else {
-                            batIcon.classList.add('fa-battery-empty');
-                            batEl.classList.add('text-red-500', 'border-red-600', 'animate-pulse');
-                        }
-                    }
+                    batIcon.className = 'fas'; 
+                    if (battery.charging) { batIcon.classList.add('fa-bolt'); batEl.classList.add('text-yellow-400', 'border-yellow-600'); }
+                    else if (level > 20) { batIcon.classList.add('fa-battery-full'); batEl.classList.add('text-green-400', 'border-green-800'); }
+                    else { batIcon.classList.add('fa-battery-empty'); batEl.classList.add('text-red-500', 'border-red-600', 'animate-pulse'); }
                 }
                 updateBattery();
                 battery.addEventListener('levelchange', updateBattery);
-                battery.addEventListener('chargingchange', updateBattery);
-            }).catch(e => console.log("Battery API Error:", e));
+            }).catch(() => {});
+        } else {
+             batTxt.innerText = "SYS OK";
+             batEl.classList.add('text-green-400', 'border-green-800');
         }
 
-        // 2. MONITOR DE RED (API Real - Chrome/Android)
         const netEl = document.getElementById('network-indicator');
         const netTxt = document.getElementById('network-type');
         const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
 
-        if (connection && netEl) {
+        if (connection) {
             function updateNetwork() {
-                // Tipo efectivo: '4g', '3g', '2g', 'slow-2g'
                 const type = connection.effectiveType ? connection.effectiveType.toUpperCase() : '4G';
-                
-                netEl.classList.remove('hidden');
                 netTxt.innerText = type;
-                
-                // Reset clases
                 netEl.className = baseClasses;
-                
                 if (type === '4G') netEl.classList.add('text-green-400', 'border-green-800');
-                else if (type === '3G') netEl.classList.add('text-yellow-400', 'border-yellow-700');
-                else if (type === '2G' || type === 'SLOW-2G') netEl.classList.add('text-red-500', 'border-red-600');
-                else netEl.classList.add('text-gray-400', 'border-gray-700');
+                else netEl.classList.add('text-yellow-400', 'border-yellow-700');
             }
-            
             updateNetwork();
             connection.addEventListener('change', updateNetwork);
+        } else {
+             netTxt.innerText = "ONLINE";
+             netEl.classList.add('text-green-400', 'border-green-800');
         }
     }
 
     async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
-        initSystemMonitors(); // INTENTO EXTRA AL INICIAR APP
+        initSystemMonitors(); 
         try {
             updateProgress(10, "INICIANDO SENSOR...");
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
         } catch(e) {
-            alert("Error Crítico Cámara: " + e.message);
-            return; 
+            alert("Error Crítico Cámara: " + e.message); return; 
         }
-        updateProgress(100, "VIDEO OK");
-        document.getElementById('loading').style.display = 'none';
-        resize(); window.addEventListener('resize', resize);
-        requestAnimationFrame(renderLoop);
-        setInterval(telemetryLoop, 1000);
-        showToast("Cargando Motores IA...", false);
+        
+        updateProgress(50, "CALIBRANDO MOTORES IA...");
+        
         setTimeout(async () => {
             try {
-                if(window.tf) { 
-                    try { 
-                        await tf.setBackend('webgl'); 
-                    } catch(e) { await tf.setBackend('cpu'); } 
+                if(window.tf) { try { await tf.setBackend('webgl'); } catch(e) { await tf.setBackend('cpu'); } }
+                
+                if(window.poseDetection) aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING });
+                if(window.FaceMesh) { 
+                    faceMesh = new FaceMesh({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`}); 
+                    await faceMesh.initialize(); 
+                    faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; });
                 }
+                if(window.SelfieSegmentation) { segmenter = new SelfieSegmentation({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`}); segmenter.setOptions({ modelSelection: 1 }); segmenter.onResults(res => { lidarMask = res.segmentationMask; lidarBusy = false; }); }
+
+                if(segmenter) await segmenter.send({image: el.video}); 
+                if(aiDetector) await aiDetector.estimatePoses(el.video);
+
+            } catch(e) { console.log("Warmup partial error", e); }
+            
+            updateProgress(100, "SISTEMAS LISTOS");
+            document.getElementById('loading').style.display = 'none';
+            resize(); window.addEventListener('resize', resize);
+            requestAnimationFrame(renderLoop);
+            setInterval(telemetryLoop, 1000);
+            setInterval(aiLoop, 80);
+            
+            initAudioEngine();
+            
+        }, 800);
+    }
+
+    function initAudioEngine() {
+        if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            const source = audioCtx.createMediaStreamSource(videoStream);
+            audioAnalyser = audioCtx.createAnalyser();
+            audioAnalyser.fftSize = 2048; 
+            source.connect(audioAnalyser);
+            audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+            
+            // Speech Recognition BLINDADO
+            if ('webkitSpeechRecognition' in window) {
+                speechRec = new webkitSpeechRecognition();
+                speechRec.continuous = true; // Mantener sesión abierta
+                speechRec.interimResults = true; 
+                speechRec.lang = 'es-MX';
                 
-                if(window.poseDetection) { 
-                    try { 
-                        aiDetector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { 
-                            modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING 
-                        }); 
-                    } catch(e) {} 
-                }
+                speechRec.onresult = (event) => {
+                    const lastIndex = event.results.length - 1;
+                    const latestText = event.results[lastIndex][0].transcript;
+                    
+                    if (latestText.trim().length > 0) {
+                        lastSpokenText = latestText;
+                        clearTimeout(speechTimer);
+                        speechTimer = setTimeout(() => { lastSpokenText = ""; }, 4000); 
+                        
+                        if(event.results[lastIndex].isFinal && conn && conn.open) {
+                             conn.send({type: 'ai-speech', text: `[VOZ]: ${latestText}`});
+                        }
+                    }
+                };
                 
-                if(window.FaceMesh) { try { faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`}); faceMesh.setOptions({ maxNumFaces: 3, minDetectionConfidence: AI_SENSITIVITY }); faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; }); await faceMesh.initialize(); } catch(e) {} }
+                // REINICIO AUTOMÁTICO (Blindaje)
+                speechRec.onend = () => {
+                    if(state.isAudioScan) {
+                         try { speechRec.start(); } catch(e) {}
+                    }
+                };
+            }
+        }
+    }
+
+    function toggleAudioScanner() {
+        state.isAudioScan = !state.isAudioScan;
+        const btn = document.getElementById('mic-btn');
+        if (state.isAudioScan) {
+            btn.classList.add('active');
+            if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if(speechRec) try { speechRec.start(); } catch(e){}
+        } else {
+            btn.classList.remove('active');
+            if(speechRec) try { speechRec.stop(); } catch(e){}
+        }
+    }
+
+    // --- VISUALIZADOR DE AUDIO (Renderizado Dual) ---
+    function drawAudioVisualizer(c, w, h) {
+        if (!state.isAudioScan || !audioAnalyser) return;
+        
+        audioAnalyser.getByteTimeDomainData(audioDataArray);
+        
+        const bufferLength = audioAnalyser.frequencyBinCount;
+        // AJUSTE GEOMÉTRICO: Bajado un 7% adicional (0.85 -> 0.92)
+        const bottomY = h * 0.92; 
+        const waveHeight = 50; 
+        const sensitivity = 3.0; 
+
+        c.save();
+        
+        // 1. Subtítulos (ROJO ESPECTRAL CON TRANSPARENCIA)
+        if (lastSpokenText) {
+            c.font = "bold 16px 'Share Tech Mono'";
+            c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
+            c.textAlign = "center";
+            c.shadowColor = "rgba(255, 0, 0, 0.5)"; c.shadowBlur = 10; 
+            c.fillText(`"${lastSpokenText.toUpperCase()}"`, w/2, bottomY - 60);
+        }
+
+        // 2. ONDAS (Con Clamp de +/- 50px)
+        c.lineWidth = 2;
+        c.lineJoin = 'round';
+
+        const displayWidth = Math.min(700, w * 0.9);
+        const startX = (w - displayWidth) / 2;
+        const displaySliceWidth = displayWidth / bufferLength;
+
+        // Función de limitación (Clamp)
+        const clampY = (val) => Math.max(-50, Math.min(50, val));
+
+        // CAPA CIAN
+        c.beginPath();
+        c.strokeStyle = 'rgba(0, 255, 255, 0.8)'; 
+        c.shadowColor = 'rgba(0, 255, 255, 0.8)';
+        c.shadowBlur = 15;
+        
+        let x = startX;
+        for (let i = 0; i < bufferLength; i++) {
+            const v = (audioDataArray[i] / 128.0) - 1; 
+            const rawH = v * waveHeight * sensitivity;
+            const y = bottomY + clampY(rawH); // Aplicar Clamp
+            
+            const offset = Math.sin(i * 0.1 + performance.now() * 0.01) * 2; 
+
+            if (i === 0) c.moveTo(x, y + offset);
+            else c.lineTo(x, y + offset);
+            x += displaySliceWidth;
+        }
+        c.stroke();
+        
+        // SEGUNDA PASADA: DETECCIÓN DE ANOMALÍAS (PUNTOS DE LUZ EN PICOS)
+        x = startX; 
+        for (let i = 0; i < bufferLength; i++) {
+            const v = (audioDataArray[i] / 128.0) - 1; 
+            // Umbral de pico > 0.15 y optimización de dibujado
+            if (Math.abs(v) > 0.15 && i % 4 === 0) { 
+                const rawH = v * waveHeight * sensitivity;
+                const y = bottomY + clampY(rawH);
+                const offset = Math.sin(i * 0.1 + performance.now() * 0.01) * 2;
                 
-                if(window.SelfieSegmentation) { 
-                    try { 
-                        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`}); 
-                        selfieSegmentation.setOptions({ modelSelection: 1 }); // 1 = Landscape
-                        selfieSegmentation.onResults(res => { 
-                            if(res && res.segmentationMask) {
-                                lidarMask = res.segmentationMask; 
-                                lastLidarMask = res.segmentationMask; 
-                            }
-                            lidarBusy = false;
-                        }); 
-                        segmenter = selfieSegmentation; 
-                    } catch(e) {} 
-                }
-                
-                showToast("SISTEMAS IA ACTIVOS", false);
-                setInterval(aiLoop, 80); 
-            } catch(globalErr) { console.error("Error Global IA:", globalErr); showToast("IA: Carga Parcial (Cam OK)", true); }
-        }, 500); 
+                c.save();
+                c.fillStyle = "rgba(255, 255, 255, 0.95)";
+                c.shadowColor = "white";
+                c.shadowBlur = 15;
+                c.beginPath();
+                c.arc(x, y + offset, 2.5, 0, Math.PI * 2);
+                c.fill();
+                c.restore();
+            }
+            x += displaySliceWidth;
+        }
+
+        // CAPA MAGENTA (Invertida)
+        c.beginPath();
+        c.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+        c.shadowColor = 'rgba(255, 0, 255, 0.8)';
+        c.shadowBlur = 15;
+        
+        x = startX;
+        for (let i = 0; i < bufferLength; i++) {
+            const v = (audioDataArray[i] / 128.0) - 1;
+            const rawH = v * waveHeight * sensitivity * 0.8;
+            const y = bottomY - clampY(rawH); // Aplicar Clamp invertido
+             
+            if (i === 0) c.moveTo(x, y);
+            else c.lineTo(x, y);
+            
+            if (Math.abs(v) > 0.05 && i % 15 === 0) {
+                 const pSize = Math.random() * 2 + 1;
+                 c.fillStyle = Math.random() > 0.5 ? '#00ffff' : '#ff00ff';
+                 c.fillRect(x, y + (Math.random() * 30 - 15), pSize, pSize);
+            }
+
+            x += displaySliceWidth;
+        }
+        c.stroke();
+        
+        c.restore();
     }
 
     function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
@@ -521,19 +578,22 @@
         c.globalCompositeOperation = 'screen'; c.drawImage(el.lidarCanvas, 0, 0, width, height); c.globalCompositeOperation = 'source-over';
     }
 
-    function resize() { el.canvas.width = window.innerWidth; el.canvas.height = window.innerHeight; el.lidarCanvas.width = window.innerWidth; el.lidarCanvas.height = window.innerHeight; }
+    function resize() { 
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        el.canvas.width = w; el.canvas.height = h; 
+        el.lidarCanvas.width = w; el.lidarCanvas.height = h;
+        // Resize del nuevo canvas de audio
+        el.audioCanvas.width = w; el.audioCanvas.height = h;
+    }
+    
     function updateProgress(p, t) { document.getElementById('progress-bar').style.width = p + '%'; document.getElementById('progress-text').innerText = t; }
 
     function drawBurnInHUD(ctx, width, height, scale) {
         if(scale <= 0.01) return;
-
         ctx.save();
-        const centerX = 20 + 80; 
-        const centerY = 20 + 20; 
-        ctx.translate(centerX, centerY);
-        ctx.scale(scale, scale);
-        ctx.translate(-centerX, -centerY);
-
+        const centerX = 20 + 80; const centerY = 20 + 20; 
+        ctx.translate(centerX, centerY); ctx.scale(scale, scale); ctx.translate(-centerX, -centerY);
         ctx.shadowColor = "black"; ctx.shadowBlur = 4;
         if(logoImg.complete) ctx.drawImage(logoImg, 20, 20, 40, 40);
         ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif";
@@ -541,278 +601,125 @@
         const now = new Date();
         ctx.fillStyle = "#ff3333"; ctx.font = "12px 'Share Tech Mono', monospace";
         ctx.fillText(now.toLocaleDateString() + " - " + now.toLocaleTimeString(), 70, 58);
-        
         if(state.isSLS) {
-            const bx = width/2 - 40;
-            ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, 20, 80, 20);
+            const bx = width/2 - 40; ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, 20, 80, 20);
             ctx.strokeStyle = "#d946ef"; ctx.lineWidth = 1; ctx.strokeRect(bx, 20, 80, 20);
             ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace"; ctx.fillText("● SLS ACTIVO", bx + 5, 33);
         }
         ctx.restore();
     }
 
-    // FUNCIÓN AUXILIAR PARA TEXTO GLITCH
     function drawGlitchText(c, text, x, y, size = 12) {
         const glitchOffset = Math.random() * 4 - 2;
         c.font = `bold ${size}px 'Share Tech Mono'`;
-        c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
-        c.fillText(text, x + glitchOffset, y);
-        c.fillStyle = "rgba(0, 255, 255, 0.7)"; 
-        c.fillText(text, x - glitchOffset, y);
-        c.fillStyle = "#ffffff"; 
-        c.fillText(text, x, y);
+        c.fillStyle = "rgba(255, 0, 0, 0.7)"; c.fillText(text, x + glitchOffset, y);
+        c.fillStyle = "rgba(0, 255, 255, 0.7)"; c.fillText(text, x - glitchOffset, y);
+        c.fillStyle = "#ffffff"; c.fillText(text, x, y);
     }
     
-    // --- NUEVA FUNCIÓN PARA DIBUJAR CUADROS DE ESCANEO EN CANVAS ---
     function drawCanvasScanBoxes(c, w, h) {
         const now = Date.now();
         canvasScanBoxes = canvasScanBoxes.filter(box => now - box.startTime < 800);
         canvasScanBoxes.forEach(box => {
-            const age = now - box.startTime;
-            const alpha = 1 - (age / 800);
-            const scale = 1.3 - (age / 800) * 0.5;
-            c.save();
-            c.translate(box.x + box.size/2, box.y + box.size/2);
-            c.scale(scale, scale);
-            c.translate(-(box.x + box.size/2), -(box.y + box.size/2));
-            c.strokeStyle = `rgba(255, 0, 0, ${alpha * 0.9})`;
-            c.lineWidth = 2;
+            const age = now - box.startTime; const alpha = 1 - (age / 800); const scale = 1.3 - (age / 800) * 0.5;
+            c.save(); c.translate(box.x + box.size/2, box.y + box.size/2); c.scale(scale, scale); c.translate(-(box.x + box.size/2), -(box.y + box.size/2));
+            c.strokeStyle = `rgba(255, 0, 0, ${alpha * 0.9})`; c.lineWidth = 2;
             c.strokeRect(box.x, box.y, box.size, box.size);
             c.shadowBlur = 10; c.shadowColor = `rgba(255, 0, 0, ${alpha * 0.6})`;
-            c.strokeRect(box.x, box.y, box.size, box.size);
-            c.restore();
+            c.strokeRect(box.x, box.y, box.size, box.size); c.restore();
         });
     }
 
     function drawAIBurnIn(c, w, h, scale) {
         if(scale <= 0.01) return;
-
         c.save();
-        
-        const bx = 20, by = 20; 
-        const panelW = 220; 
-        
-        let displayTxt = currentAiText;
-        let isScanning = !currentAiImage; // Si no hay imagen, estamos escaneando
-        
-        // --- LÓGICA DE ESTADO CÍCLICO PARA EL TEXTO ---
+        const bx = 20, by = 20; const panelW = 220; 
+        let displayTxt = currentAiText; let isScanning = !currentAiImage; 
         if (isScanning && !displayTxt) {
              aiScannerTimer++;
-             if(aiScannerTimer > 150) { // Cambia cada ~2.5 segundos (60fps)
-                 aiScannerState = (aiScannerState + 1) % 3;
-                 aiScannerTimer = 0;
-             }
-             
+             if(aiScannerTimer > 150) { aiScannerState = (aiScannerState + 1) % 3; aiScannerTimer = 0; }
              if(aiScannerState === 0) displayTxt = "Analizando Entorno...";
              else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`;
              else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%";
         }
-        
-        let borderColor = isScanning ? "#ff0000" : "#ff3333";
-        // REGLA: SI ESCANEA, FONDO TRANSPARENTE. SI HAY RESULTADO, FONDO OPACO.
-        let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)"; 
-        
-        // Calcular altura imagen (o altura del escáner simulado)
-        let imgH = 0;
-        if (isScanning) {
-            imgH = 150; 
-        } else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) {
-             imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth);
-        }
+        let borderColor = isScanning ? "#ff0000" : "#ff3333"; let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)"; 
+        let imgH = 0; if (isScanning) imgH = 150; else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth);
+        const centerX = bx + panelW/2; const centerY = by + imgH/2 + 20; 
+        c.translate(centerX, centerY); c.scale(scale, scale); c.translate(-centerX, -centerY);
 
-        // ANIMACIÓN POP
-        const centerX = bx + panelW/2;
-        const centerY = by + imgH/2 + 20; 
-        c.translate(centerX, centerY);
-        c.scale(scale, scale);
-        c.translate(-centerX, -centerY);
+        if (!isScanning) { let txtH = 40; const totalH = imgH + txtH; c.fillStyle = bgColor; c.fillRect(bx, by, panelW, totalH); c.fillStyle = borderColor; c.fillRect(bx, by, 4, totalH); }
 
-        // REGLA: SI ESCANEA, NO DIBUJAR CAJA PRINCIPAL
-        if (!isScanning) {
-            let txtH = 40; // Approx
-            const totalH = imgH + txtH;
-            
-            c.fillStyle = bgColor; 
-            c.fillRect(bx, by, panelW, totalH);
-            c.fillStyle = borderColor;
-            c.fillRect(bx, by, 4, totalH);
-        }
-
-        // DIBUJAR VISUALIZACIÓN (IMAGEN O RADAR)
         if(imgH > 0) {
             if (isScanning) {
-                // --- NUEVO RADAR "TACTICAL PULSE" (2 Aspas + Respiración) ---
-                c.save();
-                
-                const radarRadiusBase = 50;
-                const radarCx = bx + radarRadiusBase + 10;
-                const radarCy = by + radarRadiusBase + 10;
-                
-                c.translate(radarCx, radarCy);
-                
-                // 1. FONDO MALLA CIRCULAR (ESTÁTICA/WIREFRAME)
-                // Usamos un cian/verde muy transparente para simular pantalla
-                c.strokeStyle = "rgba(0, 255, 100, 0.15)"; 
-                c.lineWidth = 1;
-                
-                // Anillos concéntricos
-                for(let r=10; r<=radarRadiusBase; r+=10) {
-                    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke();
-                }
-                // Mira en cruz
-                c.beginPath(); c.moveTo(-radarRadiusBase, 0); c.lineTo(radarRadiusBase, 0); c.stroke();
-                c.beginPath(); c.moveTo(0, -radarRadiusBase); c.lineTo(0, radarRadiusBase); c.stroke();
-
-                // 2. DINÁMICA DE RESPIRACIÓN (PULSE)
-                // Usamos el tiempo para crear una onda senoidal suave
-                const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2; // Va de 0 a 1 suavemente
-                const currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4)); // Radio oscila entre 60% y 100%
-
-                // 3. ASPAS GIRATORIAS (HELICE DE 2 HOJAS)
-                radarAngle += 0.04; 
-                c.rotate(radarAngle);
-
+                c.save(); const radarRadiusBase = 50; const radarCx = bx + radarRadiusBase + 10; const radarCy = by + radarRadiusBase + 10; c.translate(radarCx, radarCy);
+                c.strokeStyle = "rgba(0, 255, 100, 0.15)"; c.lineWidth = 1;
+                for(let r=10; r<=radarRadiusBase; r+=10) { c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke(); }
+                c.beginPath(); c.moveTo(-radarRadiusBase, 0); c.lineTo(radarRadiusBase, 0); c.stroke(); c.beginPath(); c.moveTo(0, -radarRadiusBase); c.lineTo(0, radarRadiusBase); c.stroke();
+                const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2; const currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4));
+                radarAngle += 0.04; c.rotate(radarAngle);
                 const drawBlade = (angleOffset) => {
-                    c.save();
-                    c.rotate(angleOffset);
-                    
-                    c.beginPath();
-                    c.moveTo(0,0);
-                    c.arc(0, 0, currentRadius, -0.4, 0.4); // Cono de ~45 grados
-                    c.lineTo(0,0);
-                    
-                    // GRADIENTE DINÁMICO (CAMBIA SEGÚN EL TAMAÑO)
-                    const grad = c.createRadialGradient(0, 0, 0, 0, 0, currentRadius);
-                    grad.addColorStop(0, "rgba(0,0,0,0)"); // Centro transparente
-                    
-                    if (pulse > 0.7) {
-                        // GRANDE = PELIGRO (ROJO)
-                        grad.addColorStop(0.5, "rgba(255, 100, 0, 0.3)"); // Naranja
-                        grad.addColorStop(1, "rgba(255, 0, 0, 0.6)"); // Rojo
-                    } else {
-                        // PEQUEÑO = SEGURO (VERDE/AMARILLO)
-                        grad.addColorStop(0.5, "rgba(0, 150, 0, 0.3)"); // Verde
-                        grad.addColorStop(1, "rgba(200, 200, 0, 0.5)"); // Amarillo
-                    }
-                    
-                    c.fillStyle = grad;
-                    c.fill();
-                    c.restore();
+                    c.save(); c.rotate(angleOffset); c.beginPath(); c.moveTo(0,0); c.arc(0, 0, currentRadius, -0.4, 0.4); c.lineTo(0,0);
+                    const grad = c.createRadialGradient(0, 0, 0, 0, 0, currentRadius); grad.addColorStop(0, "rgba(0,0,0,0)"); 
+                    if (pulse > 0.7) { grad.addColorStop(0.5, "rgba(255, 100, 0, 0.3)"); grad.addColorStop(1, "rgba(255, 0, 0, 0.6)"); } else { grad.addColorStop(0.5, "rgba(0, 150, 0, 0.3)"); grad.addColorStop(1, "rgba(200, 200, 0, 0.5)"); }
+                    c.fillStyle = grad; c.fill(); c.restore();
                 };
-
-                // DIBUJAR LAS 2 ASPAS "ENCONTRADAS" (OPUESTAS 180 GRADOS)
-                drawBlade(0);          // Aspa 1
-                drawBlade(Math.PI);    // Aspa 2 (Opuesta)
-
-                c.restore();
-
-                // TEXTO DE ESTADO AL LADO DERECHO DEL RADAR (ASIMÉTRICO)
-                const txtX = radarCx + radarRadiusBase + 15;
-                const txtY = radarCy; 
-
-                if (displayTxt.includes('\n')) {
-                    const lines = displayTxt.split('\n');
-                    let lineY = txtY - 15;
-                    lines.forEach((l, idx) => {
-                        drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11);
-                    });
-                } else {
-                    drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12);
-                }
-
+                drawBlade(0); drawBlade(Math.PI); c.restore();
+                const txtX = radarCx + radarRadiusBase + 15; const txtY = radarCy; 
+                if (displayTxt.includes('\n')) { const lines = displayTxt.split('\n'); let lineY = txtY - 15; lines.forEach((l, idx) => { drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11); }); } else { drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12); }
             } else {
-                // --- IMAGEN REAL RESULTANTE ---
-                c.save();
-                c.filter = "invert(100%) grayscale(100%) contrast(1.5)";
-                c.drawImage(currentAiImage, bx, by, panelW, imgH);
-                c.restore(); 
-                c.strokeStyle = borderColor;
-                c.lineWidth = 1;
-                c.strokeRect(bx, by, panelW, imgH);
-                
-                // Texto de resultado
-                c.fillStyle = "#ffcccc";
-                c.font = "10px 'Share Tech Mono'";
-                let line = '';
-                let ly = by + imgH + 20;
-                
+                c.save(); c.filter = "invert(100%) grayscale(100%) contrast(1.5)"; c.drawImage(currentAiImage, bx, by, panelW, imgH); c.restore(); 
+                c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH);
+                c.fillStyle = "#ffcccc"; c.font = "10px 'Share Tech Mono'"; let line = ''; let ly = by + imgH + 20;
                 const resWords = currentAiText ? currentAiText.split(' ') : [];
-                 for(let n = 0; n < resWords.length; n++) {
-                    let testLine = line + resWords[n] + ' ';
-                    if (c.measureText(testLine).width > (panelW - 20) && n > 0) {
-                        c.fillText(line.toLowerCase(), bx + 10, ly); 
-                        line = resWords[n] + ' ';
-                        ly += 14;
-                    } else {
-                        line = testLine;
-                    }
-                }
+                 for(let n = 0; n < resWords.length; n++) { let testLine = line + resWords[n] + ' '; if (c.measureText(testLine).width > (panelW - 20) && n > 0) { c.fillText(line.toLowerCase(), bx + 10, ly); line = resWords[n] + ' '; ly += 14; } else { line = testLine; } }
                 c.fillText(line.toLowerCase(), bx + 10, ly);
             }
         }
-
         c.restore();
     }
 
     function renderLoop() {
         frameCount++;
-        
         const vW = el.video.videoWidth, vH = el.video.videoHeight;
         const cW = el.canvas.width, cH = el.canvas.height;
+        ctx.save(); ctx.clearRect(0, 0, cW, cH);
         
-        ctx.save();
-        ctx.clearRect(0, 0, cW, cH);
+        // LIMPIAR CANVAS DE AUDIO INDEPENDIENTE
+        audioLayerCtx.clearRect(0, 0, cW, cH);
         
-        // --- APLICACIÓN DE FILTROS HÍBRIDA v6.1.1 ---
-        // 1. REPLICA DE CSS EN CANVAS (Para que el Stream salga procesado)
-        if(state.filter === 'night') {
-            ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
-        } else if(state.filter === 'thermal') {
-            ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
-        } else if(state.filter === 'urbex') {
-            ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)';
-        } else {
-            ctx.filter = 'none';
-        }
+        if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; } 
+        else if(state.filter === 'thermal') { ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; } 
+        else if(state.filter === 'urbex') { ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; } 
+        else { ctx.filter = 'none'; }
         
         if (vW && vH) {
             const vRatio = vW / vH, cRatio = cW / cH;
             let dW, dH, dX, dY;
-            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } 
-            else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
-            
-            // DIBUJAR VIDEO EN CANVAS (Para Stream)
-            // Aunque localmente el Canvas esté oculto (opacity: 0), aquí se dibuja para el captureStream()
+            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
-            
             ctx.filter = 'none'; 
-            
-            // --- EFECTO SCANLINES EN CANVAS (Para Stream) ---
-            if(state.filter === 'night') {
-                ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; 
-                for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); }
-            }
+            if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); } }
             if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
         }
-        
         ctx.restore(); 
 
         if (state.isSLS && !state.isLidar) drawSLS();
         
-        // --- LOGICA DE ANIMACIÓN (WATER POP) ---
         const speed = 0.4;
         animState.hudScale += (animState.hudTarget - animState.hudScale) * speed;
         animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
 
         drawBurnInHUD(ctx, cW, cH, animState.hudScale);
-
-        // QUEMADO DE CUADROS ROJOS EN CANVAS
         if (state.isPareidolia) drawCanvasScanBoxes(ctx, cW, cH);
+        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) drawAIBurnIn(ctx, cW, cH, animState.aiScale);
         
-        // SOLO DIBUJAR IA SI EL TARGET ES > 0 (Está activo)
-        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) {
-            drawAIBurnIn(ctx, cW, cH, animState.aiScale);
+        // --- DIBUJAR VISUALIZADOR DE AUDIO (Renderizado Dual) ---
+        if (state.isAudioScan) {
+            // 1. Quemar en Main Canvas (ctx) para Streaming
+            drawAudioVisualizer(ctx, cW, cH);
+            // 2. Dibujar en Audio Canvas (audioLayerCtx) para Local (Visible sobre filtros)
+            drawAudioVisualizer(audioLayerCtx, cW, cH);
         }
 
         requestAnimationFrame(renderLoop);
@@ -820,30 +727,14 @@
 
     async function aiLoop() {
         if (isAIProcessing) return; 
-        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { 
-            poses = []; faces = []; lidarMask = null; return; 
-        }
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) { poses = []; faces = []; lidarMask = null; return; }
 
         if (state.isLidar && segmenter) { 
-            if(!lidarBusy) { 
-                lidarBusy = true; 
-                try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } 
-            } 
+            if(!lidarBusy) { lidarBusy = true; try { await segmenter.send({image: el.video}); } catch(e){ lidarBusy = false; } } 
         } else {
             aiCtx.drawImage(el.video, 0, 0, aiCanvas.width, aiCanvas.height);
-            
-            if (aiDetector && state.isSLS) { 
-                try { 
-                    poses = await aiDetector.estimatePoses(aiCanvas, {
-                        maxPoses: 5, 
-                        flipHorizontal: false,
-                        scoreThreshold: 0.25 
-                    }); 
-                } catch(e){} 
-            }
-            if (faceMesh && state.isSLS) { 
-                try { await faceMesh.send({image: el.video}); } catch(e){} 
-            }
+            if (aiDetector && state.isSLS) { try { poses = await aiDetector.estimatePoses(aiCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: 0.25 }); } catch(e){} }
+            if (faceMesh && state.isSLS) { try { await faceMesh.send({image: el.video}); } catch(e){} }
         }
     }
 
@@ -908,10 +799,9 @@
         
         document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
         
-        // FIX TAILSCALE: Sanitización robusta
-        let baseId = fullId.trim().replace(/\s+/g, ''); // Quitar espacios
+        let baseId = fullId.trim().replace(/\s+/g, ''); 
         if (baseId.endsWith("-8889")) { baseId = baseId.slice(0, -5); }
-        baseId = baseId.replace(/\./g, '-'); // Forzar guiones siempre
+        baseId = baseId.replace(/\./g, '-'); 
         
         const commandTarget = baseId;
         const videoTarget = baseId + "-8889";
@@ -921,13 +811,7 @@
         
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            
-            connection.on('open', () => {
-                conn = connection;
-                conn.send({ type: 'register', name: name, hasAI: true });
-                showToast("Enlace Comandos OK", false);
-            });
-            
+            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
             connection.on('data', handleCommand);
             connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; });
             connection.on('error', (e) => { console.error("Data error", e); });
@@ -939,15 +823,12 @@
         peerVideoSender = new Peer(null, PEER_CONFIG);
         
         peerVideoSender.on('open', () => {
-            // TRANSMISIÓN: Se usa el stream del canvas procesado
             const stream = el.canvas.captureStream(30); 
             const audioTracks = videoStream.getAudioTracks();
             if(audioTracks.length > 0) stream.addTrack(audioTracks[0]);
             
-            // FIX: Retraso de seguridad para evitar "peer-unavailable" inmediato
             setTimeout(() => {
                 const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } });
-                
                 call.on('close', () => { console.log("Video call ended"); });
                 call.on('error', (e) => { console.error("Video call error", e); });
                 showToast("Transmitiendo Video...", false);
@@ -960,8 +841,7 @@
     function handleCommand(cmd) {
         showToast(`CMD: ${cmd.action?.toUpperCase() || cmd.type?.toUpperCase()}`);
         if(cmd.type === 'cmd' || cmd.category === 'cam') {
-            const action = cmd.action;
-            const value = cmd.value;
+            const action = cmd.action; const value = cmd.value;
             if(action === 'filter') { 
                 const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'rad': 'btn-rad', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; 
                 setFilter(value, document.getElementById(map[value])); 
@@ -972,9 +852,7 @@
         }
         else if (cmd.type === 'tally') {
             const tallyEl = document.getElementById('tally-border');
-            if (cmd.state === 'program') { tallyEl.className = 'online'; }
-            else if (cmd.state === 'preview') { tallyEl.className = 'preview'; }
-            else { tallyEl.className = ''; }
+            if (cmd.state === 'program') { tallyEl.className = 'online'; } else if (cmd.state === 'preview') { tallyEl.className = 'preview'; } else { tallyEl.className = ''; }
         }
     }
 
@@ -982,11 +860,8 @@
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
         document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'rad') document.body.classList.add('filter-rad'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
-        
-        // --- MODIFICACIÓN SOLICITADA: FLASH AUTOMÁTICO EN MODO NEGATIVO (THERMAL) ---
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
-        
-        document.getElementById('sls-pip').style.display = state.isSLS ? 'block' : 'none'; poses = []; lidarMask = null; lastLidarMask = null;
+        poses = []; lidarMask = null; lastLidarMask = null;
     }
 
     async function toggleTorch(force) { const t = videoStream?.getVideoTracks()[0]; if(!t) return; const on = (typeof force === 'boolean') ? force : !t.getSettings().torch; try { await t.applyConstraints({advanced:[{torch:on}]}); } catch(e){} }
@@ -1001,68 +876,26 @@
         }
     }
 
-    function refreshAudioTracks() {
-        if (!videoStream) return;
-        // Hack para "despertar" el micrófono si quedó atenuado por el speech
-        const tracks = videoStream.getAudioTracks();
-        tracks.forEach(track => {
-            track.enabled = false;
-            setTimeout(() => { track.enabled = true; }, 50); // Breve reinicio
-        });
-    }
-
     function startScanningEffect() {
         const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'block';
-        
-        // Limpiar intervalo previo si existe
         if (scanInterval) clearInterval(scanInterval);
-
         scanInterval = setInterval(() => {
             const box = document.createElement('div'); box.className = 'scan-box'; const size = Math.floor(Math.random() * 80) + 40;
-            // REGLA: EXCLUIR LA ZONA SUPERIOR IZQUIERDA (DONDE ESTÁ EL RADAR)
-            // El radar ocupa aprox. 250x200 px desde la esquina (bx=20, by=20, w=220, h=varía)
-            let x, y;
-            do {
-                x = Math.floor(Math.random() * (window.innerWidth - size));
-                y = Math.floor(Math.random() * (window.innerHeight - size));
-            } while (x < 250 && y < 200); // Repetir si cae en la zona prohibida
-            
-            // --- NUEVO: GUARDAR COORDENADAS PARA CANVAS BURN-IN ---
+            let x, y; do { x = Math.floor(Math.random() * (window.innerWidth - size)); y = Math.floor(Math.random() * (window.innerHeight - size)); } while (x < 250 && y < 200); 
             canvasScanBoxes.push({ x, y, size, startTime: Date.now() });
-
             box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
             overlay.appendChild(box); setTimeout(() => box.remove(), 800);
         }, 150); 
     }
 
-    function stopScanningEffect() { 
-        clearInterval(scanInterval); 
-        const overlay = document.getElementById('ai-scan-overlay'); 
-        overlay.innerHTML = ''; 
-        overlay.style.display = 'none';
-        canvasScanBoxes = []; // --- NUEVO: LIMPIAR CANVAS BURN-IN ---
-    }
+    function stopScanningEffect() { clearInterval(scanInterval); const overlay = document.getElementById('ai-scan-overlay'); overlay.innerHTML = ''; overlay.style.display = 'none'; canvasScanBoxes = []; }
 
     async function triggerPareidolia() {
         const video = el.video; if(!GEMINI_API_KEY) return; if(isAIProcessing || window.speechSynthesis.speaking) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
-        
-        isAIProcessing = true; 
-        
-        // FEEDBACK INMEDIATO: MANTENER ESCÁNER VISUAL
-        currentAiText = "búsqueda de señal..."; // Texto temporal en modo escáner
-        currentAiImage = null; // Nos aseguramos de que no hay imagen para que el HUD dibuje el radar
-        
-        // Los cuadros ya deberían estar activos si isPareidoliaActive es true, 
-        // pero por seguridad los reiniciamos/aseguramos aquí
-        startScanningEffect();
-
+        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; startScanningEffect();
         const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360; canvas.getContext('2d').drawImage(video, 0, 0, 640, 360);
-        
-        // CAPTURAR IMAGEN (Pero solo mostrarla tras recibir respuesta para evitar "movimiento")
-        const snapshot = new Image();
-        snapshot.src = canvas.toDataURL('image/jpeg', 0.8);
-        
+        const snapshot = new Image(); snapshot.src = canvas.toDataURL('image/jpeg', 0.8);
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         try {
@@ -1075,82 +908,26 @@
                 } catch(err) { attempts++; }
             }
             let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SEÑAL DEBIL...";
-            
-            // --- RESULTADO OBTENIDO ---
-            // Detenemos los cuadros rojos de la pantalla principal
-            stopScanningEffect();
-            
-            // ACTUALIZACIÓN IA: Mostrar imagen y texto
-            currentAiText = text;
-            currentAiImage = snapshot; // Ahora sí mostramos la imagen estática en el HUD
-            
-            clearTimeout(aiTextTimer);
-            // TIEMPO EXTENDIDO: 9 SEGUNDOS DE VISIBILIDAD
-            aiTextTimer = setTimeout(() => { 
-                currentAiText = ""; 
-                currentAiImage = null;
-                
-                // CRUCIAL: AL TERMINAR, SI LA IA SIGUE ACTIVA, VOLVER A ESCANEAR
-                if (state.isPareidolia) {
-                    startScanningEffect();
-                }
-            }, 9000);
-            
-            // NUEVO: Enviar texto al Estudio
+            stopScanningEffect(); currentAiText = text; currentAiImage = snapshot; 
+            clearTimeout(aiTextTimer); aiTextTimer = setTimeout(() => { currentAiText = ""; currentAiImage = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
             if (conn && conn.open) { conn.send({ type: 'ai-speech', text: text }); }
-            
             speakText(text);
-        } catch(e) { 
-            isAIProcessing = false; 
-            currentAiText = "error de señal"; 
-            setTimeout(() => { 
-                if(currentAiText === "error de señal") {
-                    currentAiText = ""; 
-                    // Si falla, volver a escanear también
-                    if (state.isPareidolia) startScanningEffect();
-                }
-            }, 3000);
-        }
+        } catch(e) { isAIProcessing = false; currentAiText = "error de señal"; setTimeout(() => { if(currentAiText === "error de señal") { currentAiText = ""; if (state.isPareidolia) startScanningEffect(); } }, 3000); }
         isAIProcessing = false; 
     }
 
     function togglePareidolia(btnElement) {
         if(!GEMINI_API_KEY) { alert("NO API KEY: CONFIGURA EN AJUSTES"); return; }
         const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
-        const aiHeader = document.getElementById('ai-vision-header');
         
         if(isPareidoliaActive) {
-            if(btn) btn.classList.add('active-state'); 
-            document.body.classList.add('filter-pareidolia'); 
-            speakText("VISIÓN ACTIVADA"); 
-            
-            // CONTROL DE ANIMACIÓN: SWAP HUD -> IA
-            animState.hudTarget = 0.0;
-            animState.aiTarget = 1.0;
-            
-            // LIMPIAR Y ACTIVAR ESCÁNER INMEDIATO
-            currentAiText = "";
-            currentAiImage = null;
-            startScanningEffect(); // Activar visuales inmediatamente
-            
-            triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
+            if(btn) btn.classList.add('active-state'); document.body.classList.add('filter-pareidolia'); speakText("VISIÓN ACTIVADA"); 
+            animState.hudTarget = 0.0; animState.aiTarget = 1.0;
+            currentAiText = ""; currentAiImage = null; startScanningEffect(); triggerPareidolia(); pareidoliaInterval = setInterval(triggerPareidolia, 12000);
         } else {
-            // --- CORRECCIÓN DE MICROFONO (Audio Ducking Fix) ---
-            window.speechSynthesis.cancel(); // 1. Cancelar cualquier audio pendiente agresivamente
-            refreshAudioTracks(); // 2. Refrescar tracks de audio para recuperar ganancia
-            
-            if(btn) btn.classList.remove('active-state'); 
-            document.body.classList.remove('filter-pareidolia'); 
-            speakText("VISIÓN DESACTIVADA"); 
-            
-            // CONTROL DE ANIMACIÓN: SWAP IA -> HUD
-            animState.hudTarget = 1.0;
-            animState.aiTarget = 0.0;
-
-            clearInterval(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); 
-            // NUEVO: Limpiar texto IA
-            currentAiText = "";
-            currentAiImage = null;
+            window.speechSynthesis.cancel(); if(btn) btn.classList.remove('active-state'); document.body.classList.remove('filter-pareidolia'); speakText("VISIÓN DESACTIVADA"); 
+            animState.hudTarget = 1.0; animState.aiTarget = 0.0;
+            clearInterval(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); currentAiText = ""; currentAiImage = null;
         }
         showMenus();
     }
@@ -1172,10 +949,8 @@
     function saveSettings() { 
         const rawIp = document.getElementById('mtx-host').value.trim();
         if(!rawIp) { showToast("Ingresa un ID válido", true); return; }
-        state.studioId = rawIp; 
-        localStorage.setItem('obr_studio_id', state.studioId);
-        showToast("Config Guardada"); 
-        document.getElementById('settings-modal').classList.remove('active');
+        state.studioId = rawIp; localStorage.setItem('obr_studio_id', state.studioId);
+        showToast("Config Guardada"); document.getElementById('settings-modal').classList.remove('active');
     }
 
     function openSettings() { document.getElementById('settings-modal').classList.add('active'); }
