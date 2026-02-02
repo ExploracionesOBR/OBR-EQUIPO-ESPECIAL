@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.26 (AUDIO PEAKS)</title> 
+    <title>CAMARA OBR PRO v6.1.32 (GAMING MODE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
     
-    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
+    <!-- MEJORA 1: MANIFIESTO TIPO JUEGO (Categoría Games + Fullscreen) -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"fullscreen","orientation":"landscape","categories":["games","entertainment"],"background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -37,12 +39,17 @@
         :root { --hud-primary: #ff3333; }
         body { background: #000; overflow: hidden; font-family: 'Orbitron', sans-serif; width: 100vw; height: 100vh; margin: 0; padding: 0; }
         
-        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; transition: filter 0.2s; }
-        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
-        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
-        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; transition: opacity 0.2s; }
+        /* OPTIMIZACIÓN DE LAG: ACELERACIÓN POR HARDWARE */
+        #main-view-area { position: absolute; inset: 0; background: #000; overflow: hidden; transition: filter 0.2s; transform: translateZ(0); will-change: filter; }
         
-        /* NUEVO CANVAS INDEPENDIENTE PARA AUDIO (CAPA SUPERIOR LIMPIA) */
+        #zoom-container { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; transition: transform 0.2s ease-out; will-change: transform; backface-visibility: hidden; }
+        
+        #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
+        
+        /* CANVAS DE STREAMING (QUEMADO): Invisible al ojo (0.01 opacity) pero activo para el stream */
+        #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; opacity: 0.01 !important; }
+        
+        /* CANVAS LOCAL (VISUALIZACIÓN): Visible para el usuario (HUD sobre CSS) */
         #audio-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
 
         #heatmap-buffer, #lidar-buffer { display: none; }
@@ -53,14 +60,13 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        /* FILTROS CSS */
-        body.filter-night-vision #main-view-area { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
+        /* FILTROS CSS (SOLO PARA USUARIO LOCAL) */
+        body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
         body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
-        body.filter-thermal #main-view-area { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
-        body.filter-urbex #main-view-area { filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7); }
+        
+        body.filter-thermal #shared-video-element { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
+        body.filter-urbex #shared-video-element { filter: sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7); }
 
-        body.filter-night-vision #sls-canvas, body.filter-thermal #sls-canvas, body.filter-urbex #sls-canvas { opacity: 0.01 !important; }
-        body.filter-night-vision .hud-burn-hidden, body.filter-thermal .hud-burn-hidden, body.filter-urbex .hud-burn-hidden { display: block !important; }
         .hud-burn-hidden { display: none; }
 
         #tally-border { position: absolute; inset: 0; border: 0px solid transparent; transition: all 0.3s; z-index: 50; pointer-events: none; }
@@ -94,7 +100,6 @@
         .signal-level-0 .bar { background: #333; }
         .signal-level-3 .bar { background: #00ff00; }
 
-        /* MIC BUTTON ESTILO TELEMETRÍA - CIAN */
         .mic-toggle { pointer-events: auto; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; }
         .mic-toggle.active { opacity: 1; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
 
@@ -122,7 +127,6 @@
         <div id="ai-scan-overlay"></div>
     </div>
     
-    <!-- AUDIO CANVAS INDEPENDIENTE -->
     <canvas id="audio-canvas"></canvas>
     
     <canvas id="heatmap-buffer"></canvas>
@@ -149,25 +153,24 @@
         </div>
 
         <div id="top-right-group" class="absolute top-4 right-4 flex items-center gap-3 z-50 pointer-events-auto">
-            <!-- BATERÍA -->
             <div id="battery-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
                 <i id="battery-icon" class="fas fa-bolt"></i>
                 <span id="battery-level">SYS OK</span>
             </div>
-
-            <!-- RED -->
             <div id="network-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
                 <i class="fas fa-wifi"></i>
                 <span id="network-type">LINK</span>
             </div>
-
+            <!-- BOTÓN DE PIP (VENTANA FLOTANTE) FORZADO -->
+            <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-blue-500 transition-colors backdrop-blur-sm" onclick="togglePiP()" title="Ventana Flotante">
+                <i class="fas fa-images text-xl"></i>
+            </div>
             <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-red-500 transition-colors backdrop-blur-sm" onclick="openSettings()">
                 <i class="fas fa-cog text-xl"></i>
             </div>
         </div>
         
         <div id="telemetry-container">
-            <!-- BOTÓN MICRÓFONO INTEGRADO EN TELEMETRÍA -->
             <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()">
                 <span>AUDIO SCAN</span><i class="fas fa-microphone text-[10px]"></i>
             </div>
@@ -179,7 +182,6 @@
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
-            
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('lidar', this)" id="btn-heatmap"><i class="fas fa-fingerprint"></i></div><div class="menu-label">LIDAR</div></div>
         </div>
@@ -193,7 +195,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.26 (AUDIO PEAKS)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.32 (GAMING MODE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -269,6 +271,10 @@
     let lastSpokenText = "";
     let speechTimer = null;
 
+    // GUARDIAN DE IMAGEN (FRAME PACING)
+    let lastFrameTime = 0;
+    const fpsInterval = 1000 / 30; // Limitar a 30 FPS estables
+
     const animState = { hudScale: 1.0, hudTarget: 1.0, aiScale: 0.0, aiTarget: 0.0 };
     const el = { 
         video: document.getElementById('shared-video-element'), 
@@ -281,11 +287,11 @@
         statusDot: document.getElementById('status-dot') 
     };
 
-    const ctx = el.canvas.getContext('2d', { alpha: true });
-    // CONTEXTO PARA CAPA DE AUDIO INDEPENDIENTE
-    const audioLayerCtx = el.audioCanvas.getContext('2d', { alpha: true });
-
-    const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true });
+    // MEJORA 3: CONTEXTO DE BAJA LATENCIA (GAMING MODE HINT)
+    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    const audioLayerCtx = el.audioCanvas.getContext('2d', { alpha: true, desynchronized: true });
+    const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true, desynchronized: true });
+    
     const aiCanvas = document.createElement('canvas'); aiCanvas.width = 320; aiCanvas.height = 180;
     const aiCtx = aiCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -298,14 +304,55 @@
 
     let logoImg = new Image(); logoImg.src = 'obr-logo.png';
 
-    // --- PIP & BACKGROUND HANDLER ---
+    // LIMPIADOR DE CACHÉ (MEMORY CLEANER)
+    setInterval(systemGC, 30000);
+    function systemGC() {
+        if (canvasScanBoxes.length > 50) canvasScanBoxes = [];
+        ctx.beginPath(); 
+        audioLayerCtx.beginPath();
+        console.log("Sistema OBR: Limpieza de Memoria Ejecutada");
+    }
+
+    // MEJORA 2: WAKE LOCK API (MANTIENE LA PANTALLA ACTIVA COMO UN JUEGO)
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                await navigator.wakeLock.request('screen');
+                console.log('GAMING MODE: Wake Lock Active');
+            } catch (err) {
+                console.log(`Wake Lock Error: ${err.name}, ${err.message}`);
+            }
+        }
+    }
+
+    async function togglePiP() {
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else if (document.pictureInPictureEnabled && el.video.readyState === 4) {
+                await el.video.requestPictureInPicture();
+            } else {
+                showToast("PIP NO SOPORTADO O VIDEO NO LISTO", true);
+            }
+        } catch (e) {
+            showToast("ERROR PIP: " + e.message, true);
+        }
+    }
+
+    // --- PIP & BACKGROUND HANDLER (Auto-attempt) ---
     document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState === "hidden" && el.video.readyState === 4) {
              try {
                 if (el.video !== document.pictureInPictureElement && document.pictureInPictureEnabled) {
+                     // Intento automático, pero en móvil suele fallar sin interacción
+                     // El botón manual togglePiP es la solución segura
                      await el.video.requestPictureInPicture(); 
                 }
              } catch(e) {}
+        }
+        // RE-ACTIVAR WAKE LOCK SI SE PIERDE FOCO Y SE REGRESA
+        if (document.visibilityState === 'visible') {
+            requestWakeLock();
         }
     });
 
@@ -321,7 +368,16 @@
         const batTxt = document.getElementById('battery-level');
         const batIcon = document.getElementById('battery-icon');
 
-        if ('getBattery' in navigator) {
+        // DETECCION DE iOS (PARA API DE BATERIA FALSA)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (isIOS) {
+            // iOS API: No permite batería real en Web. Mostramos Monitor de Memoria Simulado.
+            batTxt.innerText = "iOS OPTIMIZED";
+            batEl.className = baseClasses;
+            batEl.classList.add('text-cyan-400', 'border-cyan-800');
+            batIcon.className = "fab fa-apple";
+        } else if ('getBattery' in navigator) {
             navigator.getBattery().then(function(battery) {
                 function updateBattery() {
                     const level = Math.round(battery.level * 100);
@@ -363,9 +419,19 @@
     async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
         initSystemMonitors(); 
+        requestWakeLock(); // ACTIVAR WAKE LOCK AL INICIAR
+        
         try {
             updateProgress(10, "INICIANDO SENSOR...");
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true }, video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } });
+            // MEJORA 4: AUDIO NO INVASIVO (Evita secuestro de micrófono en iOS/TikTok)
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { 
+                    echoCancellation: false, 
+                    autoGainControl: false, 
+                    noiseSuppression: false 
+                }, 
+                video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } 
+            });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
         } catch(e) {
             alert("Error Crítico Cámara: " + e.message); return; 
@@ -393,7 +459,14 @@
             updateProgress(100, "SISTEMAS LISTOS");
             document.getElementById('loading').style.display = 'none';
             resize(); window.addEventListener('resize', resize);
-            requestAnimationFrame(renderLoop);
+            
+            // MEJORA 5: OPTIMIZACIÓN DE LAG (VideoFrameCallback si disponible)
+            if ('requestVideoFrameCallback' in el.video) {
+                el.video.requestVideoFrameCallback(renderLoop);
+            } else {
+                requestAnimationFrame(renderLoop);
+            }
+            
             setInterval(telemetryLoop, 1000);
             setInterval(aiLoop, 80);
             
@@ -405,7 +478,7 @@
     function initAudioEngine() {
         if (!audioCtx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
+            audioCtx = new AudioContext({ latencyHint: 'playback' }); // Optimización de latencia
             const source = audioCtx.createMediaStreamSource(videoStream);
             audioAnalyser = audioCtx.createAnalyser();
             audioAnalyser.fftSize = 2048; 
@@ -535,7 +608,7 @@
 
         // CAPA MAGENTA (Invertida)
         c.beginPath();
-        c.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+        c.strokeStyle = 'rgba(255, 0, 255, 0.8)'; 
         c.shadowColor = 'rgba(255, 0, 255, 0.8)';
         c.shadowBlur = 15;
         
@@ -678,51 +751,93 @@
         c.restore();
     }
 
-    function renderLoop() {
-        frameCount++;
-        const vW = el.video.videoWidth, vH = el.video.videoHeight;
-        const cW = el.canvas.width, cH = el.canvas.height;
-        ctx.save(); ctx.clearRect(0, 0, cW, cH);
+    function renderLoop(now, metadata) {
+        // GUARDIAN DE IMAGEN (Frame Pacing)
+        if (!now) now = performance.now();
+        const elapsed = now - lastFrameTime;
         
-        // LIMPIAR CANVAS DE AUDIO INDEPENDIENTE
-        audioLayerCtx.clearRect(0, 0, cW, cH);
-        
-        if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; } 
-        else if(state.filter === 'thermal') { ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; } 
-        else if(state.filter === 'urbex') { ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; } 
-        else { ctx.filter = 'none'; }
-        
-        if (vW && vH) {
-            const vRatio = vW / vH, cRatio = cW / cH;
-            let dW, dH, dX, dY;
-            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
-            ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
-            window.drawCoords = { dW, dH, dX, dY, vW, vH };
-            ctx.filter = 'none'; 
-            if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); } }
-            if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH); }
+        // Limitar a ~30FPS para estabilidad
+        if (elapsed > fpsInterval) {
+            lastFrameTime = now - (elapsed % fpsInterval);
+            
+            frameCount++;
+            const vW = el.video.videoWidth, vH = el.video.videoHeight;
+            const cW = el.canvas.width, cH = el.canvas.height;
+            ctx.save(); ctx.clearRect(0, 0, cW, cH);
+            
+            // LIMPIAR CANVAS DE AUDIO INDEPENDIENTE
+            audioLayerCtx.clearRect(0, 0, cW, cH);
+            
+            // APLICACIÓN DE FILTROS AL CANVAS (QUEMADO PARA STREAM)
+            if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; } 
+            else if(state.filter === 'thermal') { ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; } 
+            else if(state.filter === 'urbex') { ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; } 
+            else { ctx.filter = 'none'; }
+            
+            if (vW && vH) {
+                const vRatio = vW / vH, cRatio = cW / cH;
+                let dW, dH, dX, dY;
+                if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+                
+                // DIBUJAR VIDEO FILTRADO EN EL CANVAS
+                ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
+                window.drawCoords = { dW, dH, dX, dY, vW, vH };
+                
+                // RESETEAR FILTRO PARA CAPAS SUPERIORES (HUD, SLS, ETC)
+                ctx.filter = 'none'; 
+                
+                // EFECTOS ADICIONALES PARA STREAM Y VISUALIZACIÓN
+                if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); } }
+                if (state.isLidar) { 
+                    // EFECTO LIDAR EN STREAM
+                    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); 
+                    drawLidarEffect(ctx, cW, cH);
+                    
+                    // EFECTO LIDAR EN VISTA LOCAL (RECUPERADO)
+                    audioLayerCtx.fillStyle = 'rgba(0,0,0,0.25)'; 
+                    audioLayerCtx.fillRect(0,0, cW, cH); 
+                    drawLidarEffect(audioLayerCtx, cW, cH);
+                }
+            }
+            ctx.restore(); 
+
+            // SLS & LIDAR: DIBUJADO DOBLE (EN STREAM CTX Y EN LOCAL AUDIO LAYER)
+            if (state.isSLS && !state.isLidar) {
+                 drawSLS(ctx); // Para Stream
+                 drawSLS(audioLayerCtx); // Para Usuario Local
+            }
+            
+            const speed = 0.4;
+            animState.hudScale += (animState.hudTarget - animState.hudScale) * speed;
+            animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
+
+            // HUD BURN-IN: DOBLE CAPA
+            drawBurnInHUD(ctx, cW, cH, animState.hudScale);
+            drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale);
+            
+            if (state.isPareidolia) {
+                 drawCanvasScanBoxes(ctx, cW, cH);
+                 drawCanvasScanBoxes(audioLayerCtx, cW, cH);
+            }
+            
+            if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) {
+                 drawAIBurnIn(ctx, cW, cH, animState.aiScale);
+                 drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale);
+            }
+            
+            // --- DIBUJAR VISUALIZADOR DE AUDIO (Renderizado Dual) ---
+            if (state.isAudioScan) {
+                drawAudioVisualizer(ctx, cW, cH);
+                drawAudioVisualizer(audioLayerCtx, cW, cH);
+            }
         }
-        ctx.restore(); 
 
-        if (state.isSLS && !state.isLidar) drawSLS();
-        
-        const speed = 0.4;
-        animState.hudScale += (animState.hudTarget - animState.hudScale) * speed;
-        animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
-
-        drawBurnInHUD(ctx, cW, cH, animState.hudScale);
-        if (state.isPareidolia) drawCanvasScanBoxes(ctx, cW, cH);
-        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) drawAIBurnIn(ctx, cW, cH, animState.aiScale);
-        
-        // --- DIBUJAR VISUALIZADOR DE AUDIO (Renderizado Dual) ---
-        if (state.isAudioScan) {
-            // 1. Quemar en Main Canvas (ctx) para Streaming
-            drawAudioVisualizer(ctx, cW, cH);
-            // 2. Dibujar en Audio Canvas (audioLayerCtx) para Local (Visible sobre filtros)
-            drawAudioVisualizer(audioLayerCtx, cW, cH);
+        // BUCLE OPTIMIZADO: USAR VideoFrameCallback O RequestAnimationFrame
+        if ('requestVideoFrameCallback' in el.video) {
+             el.video.requestVideoFrameCallback(renderLoop);
+        } else {
+             requestAnimationFrame(renderLoop);
         }
-
-        requestAnimationFrame(renderLoop);
     }
 
     async function aiLoop() {
@@ -738,33 +853,33 @@
         }
     }
 
-    function drawSLS() {
+    function drawSLS(targetCtx) {
         if (!window.drawCoords) return;
         const { dW, dH, dX, dY } = window.drawCoords;
         const mapX = (x) => (x / aiCanvas.width) * dW + dX; const mapY = (y) => (y / aiCanvas.height) * dH + dY;
-        ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.fillStyle = '#a855f7';
+        targetCtx.strokeStyle = '#d946ef'; targetCtx.lineWidth = 4; targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round'; targetCtx.fillStyle = '#a855f7';
         
         poses.forEach(pose => {
             const k = pose.keypoints;
             const bodyPairs = [[5,7],[7,9],[6,8],[8,10],[11,12],[11,13],[13,15],[12,14],[14,16],[5,11],[6,12]];
-            ctx.beginPath(); bodyPairs.forEach(([i, j]) => { if(k[i].score > AI_SENSITIVITY && k[j].score > AI_SENSITIVITY) { ctx.moveTo(mapX(k[i].x), mapY(k[i].y)); ctx.lineTo(mapX(k[j].x), mapY(k[j].y)); } }); ctx.stroke();
+            targetCtx.beginPath(); bodyPairs.forEach(([i, j]) => { if(k[i].score > AI_SENSITIVITY && k[j].score > AI_SENSITIVITY) { targetCtx.moveTo(mapX(k[i].x), mapY(k[i].y)); targetCtx.lineTo(mapX(k[j].x), mapY(k[j].y)); } }); targetCtx.stroke();
             const nose = k[0], lEye = k[1], rEye = k[2], lShoulder = k[5], rShoulder = k[6];
             let neckX, neckY;
             if(lShoulder.score > AI_SENSITIVITY && rShoulder.score > AI_SENSITIVITY) {
                 neckX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2; neckY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
-                ctx.beginPath(); ctx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(mapX(rShoulder.x), mapY(rShoulder.y)); ctx.lineTo(neckX, neckY); ctx.stroke();
-                if(nose.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(nose.x), mapY(nose.y)); ctx.lineTo(neckX, neckY); ctx.stroke(); }
+                targetCtx.beginPath(); targetCtx.moveTo(mapX(lShoulder.x), mapY(lShoulder.y)); targetCtx.lineTo(neckX, neckY); targetCtx.stroke();
+                targetCtx.beginPath(); targetCtx.moveTo(mapX(rShoulder.x), mapY(rShoulder.y)); targetCtx.lineTo(neckX, neckY); targetCtx.stroke();
+                if(nose.score > AI_SENSITIVITY) { targetCtx.beginPath(); targetCtx.moveTo(mapX(nose.x), mapY(nose.y)); targetCtx.lineTo(neckX, neckY); targetCtx.stroke(); }
             }
-            if(nose.score > AI_SENSITIVITY) { if(lEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(lEye.x), mapY(lEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } if(rEye.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.moveTo(mapX(rEye.x), mapY(rEye.y)); ctx.lineTo(mapX(nose.x), mapY(nose.y)); ctx.stroke(); } }
-            k.forEach((p, i) => { if(i === 3 || i === 4) return; if(p.score > AI_SENSITIVITY) { ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), 4, 0, 2*Math.PI); ctx.fill(); } });
+            if(nose.score > AI_SENSITIVITY) { if(lEye.score > AI_SENSITIVITY) { targetCtx.beginPath(); targetCtx.moveTo(mapX(lEye.x), mapY(lEye.y)); targetCtx.lineTo(mapX(nose.x), mapY(nose.y)); targetCtx.stroke(); } if(rEye.score > AI_SENSITIVITY) { targetCtx.beginPath(); targetCtx.moveTo(mapX(rEye.x), mapY(rEye.y)); targetCtx.lineTo(mapX(nose.x), mapY(nose.y)); targetCtx.stroke(); } }
+            k.forEach((p, i) => { if(i === 3 || i === 4) return; if(p.score > AI_SENSITIVITY) { targetCtx.beginPath(); targetCtx.arc(mapX(p.x), mapY(p.y), 4, 0, 2*Math.PI); targetCtx.fill(); } });
         });
         if(faces.length > 0) {
             faces.forEach(face => {
                 let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
                 face.forEach((pt) => { const x=pt.x*dW+dX; const y=pt.y*dH+dY; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; });
-                const pad=20; ctx.strokeStyle='red'; ctx.lineWidth=2; ctx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
-                ctx.fillStyle='#39ff14'; face.forEach((pt) => { ctx.fillRect(pt.x*dW+dX, pt.y*dH+dY, 1.5, 1.5); });
+                const pad=20; targetCtx.strokeStyle='red'; targetCtx.lineWidth=2; targetCtx.strokeRect(minX-pad, minY-pad, (maxX-minX)+pad*2, (maxY-minY)+pad*2);
+                targetCtx.fillStyle='#39ff14'; face.forEach((pt) => { targetCtx.fillRect(pt.x*dW+dX, pt.y*dH+dY, 1.5, 1.5); });
             });
         }
     }
@@ -859,7 +974,17 @@
     function setFilter(f, btn) {
         if(state.filter === f && f !== 'normal') f = 'normal'; state.filter = f; state.isSLS = (f === 'sls'); state.isLidar = (f === 'lidar');
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
-        document.body.className = ''; if(f !== 'normal') { if(f === 'night') document.body.classList.add('filter-night-vision'); else if(f === 'thermal') document.body.classList.add('filter-thermal'); else if(f === 'urbex') document.body.classList.add('filter-urbex'); else if(f === 'rad') document.body.classList.add('filter-rad'); else if(f === 'sls') document.body.classList.add('filter-pareidolia'); }
+        
+        // RESTAURADO: Aplicación de clases CSS
+        document.body.className = ''; 
+        if(f !== 'normal') { 
+            if(f === 'night') document.body.classList.add('filter-night-vision'); 
+            else if(f === 'thermal') document.body.classList.add('filter-thermal'); 
+            else if(f === 'urbex') document.body.classList.add('filter-urbex'); 
+            else if(f === 'rad') document.body.classList.add('filter-rad'); 
+            else if(f === 'sls') document.body.classList.add('filter-pareidolia'); 
+        }
+        
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false); 
         poses = []; lidarMask = null; lastLidarMask = null;
     }
@@ -960,9 +1085,61 @@
     function showMenus() { menus.forEach(m => m.classList.add('visible')); clearTimeout(menuTimeout); menuTimeout = setTimeout(() => menus.forEach(m => m.classList.remove('visible')), 4000); }
     function showToast(msg, isError = false) { const t = document.createElement('div'); t.className = `toast ${isError ? 'error' : ''}`; t.innerText = msg; document.getElementById('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000); }
     let pressTimer; const touchSurface = document.getElementById('touch-surface');
-    touchSurface.addEventListener('pointerdown', (e) => { pressTimer = setTimeout(() => { state.zoom = state.zoom === 1 ? 2.5 : 1; const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; el.zoom.style.transform = `scale(${state.zoom})`; const ind = document.getElementById('zoom-target-indicator'); ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; ind.classList.add('active'); setTimeout(()=>ind.classList.remove('active'),500); if(navigator.vibrate) navigator.vibrate(50); }, 500); });
-    touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer)); touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
-    function resetZoom(btn) { state.zoom = 1; el.zoom.style.transform = `scale(1)`; if(btn) btn.classList.add('active-state'); setTimeout(()=>btn?.classList.remove('active-state'), 200); }
+    
+    // MEJORA 3: ZOOM HÍBRIDO (HARDWARE + CSS FALLBACK)
+    touchSurface.addEventListener('pointerdown', (e) => { 
+        pressTimer = setTimeout(async () => { 
+            state.zoom = state.zoom === 1 ? 2.5 : 1; 
+            
+            // INTENTO DE ZOOM ÓPTICO (HARDWARE)
+            let hardwareZoomSuccess = false;
+            const track = videoStream?.getVideoTracks()[0];
+            if (track) {
+                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                if (caps.zoom) {
+                    try {
+                        const targetZoom = state.zoom === 1 ? caps.zoom.min : Math.min(caps.zoom.max, 2.0);
+                        await track.applyConstraints({ advanced: [{ zoom: targetZoom }] });
+                        hardwareZoomSuccess = true;
+                        // ZOOM SILENCIOSO: No mostrar notificación
+                    } catch (err) {
+                        console.log("Hardware zoom failed, falling back to digital");
+                    }
+                }
+            }
+
+            // FALLBACK A ZOOM DIGITAL (CSS) MEJORADO
+            if (!hardwareZoomSuccess) {
+                const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; 
+                el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; 
+                el.zoom.style.transform = `scale(${state.zoom})`; 
+                // ZOOM SILENCIOSO: No mostrar notificación
+            }
+            
+            const ind = document.getElementById('zoom-target-indicator'); 
+            ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; 
+            ind.classList.add('active'); 
+            setTimeout(()=>ind.classList.remove('active'),500); 
+            if(navigator.vibrate) navigator.vibrate(50); 
+        }, 500); 
+    });
+    
+    touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer)); 
+    touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
+    
+    function resetZoom(btn) { 
+        state.zoom = 1; 
+        // Reset Hardware Zoom
+        const track = videoStream?.getVideoTracks()[0];
+        if (track) {
+             const caps = track.getCapabilities ? track.getCapabilities() : {};
+             if(caps.zoom) track.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] }).catch(()=>{});
+        }
+        // Reset Digital Zoom
+        el.zoom.style.transform = `scale(1)`; 
+        if(btn) btn.classList.add('active-state'); 
+        setTimeout(()=>btn?.classList.remove('active-state'), 200); 
+    }
 </script>
 </body>
 </html>
