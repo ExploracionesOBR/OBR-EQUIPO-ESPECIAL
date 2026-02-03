@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.20 (OBS & RESIZE FIX)</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.26</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -14,8 +14,6 @@
     <link rel="manifest" href='data:application/manifest+json,{"name":"PRODOCK STUDIO","short_name":"PRODOCK","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"./obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"./obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- FIX: Carga Global de OBS Websocket para evitar errores de ImportMap y Pantalla Negra -->
     <script src="https://unpkg.com/obs-websocket-js@5.0.5/dist/obs-websocket.min.js"></script>
 
     <script type="importmap">
@@ -28,7 +26,7 @@
       }
     }
     </script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <style>
@@ -47,8 +45,8 @@
         @keyframes pop-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .animate-pop-in { animation: pop-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin 2s linear infinite; }
+        @keyframes pulse-red { 0%, 100% { background-color: rgba(220, 38, 38, 0.1); } 50% { background-color: rgba(220, 38, 38, 0.3); } }
+        .emergency-mode { animation: pulse-red 2s infinite; border: 2px solid #dc2626; }
 
         .soft-mask {
             mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
@@ -61,37 +59,38 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
+    <script type="text/babel" data-type="module" data-presets="react">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
         import { createPortal } from 'react-dom';
         import { 
             Monitor, Wifi, Mic, MicOff, Activity, Maximize, X, 
             Settings, Eye, Moon, Flame, Ghost, Play, Volume2, VolumeX, Pause,
-            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe, Box, Link2, Info, Share2, Music, UserPlus, RefreshCw, ScanLine, RotateCcw, Database, Copy, AlertOctagon, Loader2
+            Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe, Box, Link2, Info, Share2, Music, UserPlus, RefreshCw, ScanLine, RotateCcw, Database, Copy, AlertOctagon, Loader2, Link, ShieldAlert
         } from 'lucide-react';
         
+        // --- AGREGADOS VIDEOS DE RESPALDO (HIGHTLIGHTS) ---
         const STUDIO_ASSETS = {
             intro: './INTRO_1.mp4',
             outro: './FIN_DIRECTO.mp4',
             banner: './BANNER_1.mp4',
             standby: './VIDEO-ESPERA.mp4',
-            transicion: './transicion.mp4' 
+            transicion: './transicion.mp4',
+            backup1: './BACKUP_1.mp4', // Archivo local
+            backup2: './BACKUP_2.mp4'  // Archivo local
         };
 
         const PEER_CONFIG = {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' }
                 ],
                 sdpSemantics: 'unified-plan'
             }
         };
 
+        // --- COMPONENTES AUXILIARES (MODALES) ---
         const ShareModal = ({ onClose, dockId }) => (
             <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-[#111] p-6 rounded-2xl border border-red-900/30 max-w-sm w-full text-center relative shadow-2xl">
@@ -104,7 +103,6 @@
                     <button onClick={() => { navigator.clipboard.writeText(dockId); onClose(); }} className="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-4 rounded-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
                         <Copy size={16}/> Copiar ID
                     </button>
-                    <p className="text-[9px] text-gray-600 mt-4 uppercase tracking-widest">Comparte este ID con el Director Remoto</p>
                 </div>
             </div>
         );
@@ -121,7 +119,7 @@
         
         const ZoomModal = ({ stream, name, onClose }) => (
             <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-                <div className="relative w-full max-w-5xl aspect-video bg-black border-2 border-green-500 rounded-xl shadow-[0_0_50px_rgba(22,163,74,0.3)] overflow-hidden animate-pop-in transform transition-all" onClick={(e) => e.stopPropagation()}>
+                <div className="relative w-full max-w-5xl aspect-video bg-black border-2 border-green-500 rounded-xl shadow-[0_0_50px_rgba(22,163,74,0.3)] overflow-hidden animate-pop-in" onClick={(e) => e.stopPropagation()}>
                     <button onClick={onClose} className="absolute top-4 right-4 z-30 bg-black/50 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur transition-colors"><X size={24}/></button>
                     <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
                         <div className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow-lg uppercase tracking-widest animate-pulse">LIVE ZOOM</div>
@@ -140,62 +138,25 @@
           const [loaded, setLoaded] = useState(false);
           useEffect(() => {
             if (window.Peer) { setLoaded(true); return; }
-            
-            const timeout = setTimeout(() => {
-                console.warn("PeerJS tardó mucho, forzando carga...");
-                setLoaded(true);
-            }, 3000);
-
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js';
             script.async = true;
-            script.onload = () => { clearTimeout(timeout); setLoaded(true); };
-            script.onerror = () => { clearTimeout(timeout); setLoaded(true); }; 
+            script.onload = () => setLoaded(true);
             document.body.appendChild(script);
-            
-            return () => clearTimeout(timeout);
           }, []);
           return loaded;
         };
 
         const VideoPeer = ({ stream, className, muted = true, id }) => {
             const videoRef = useRef(null);
-            
-            useEffect(() => { 
-                const vid = videoRef.current;
-                if (vid) {
-                    vid.muted = muted;
-                    if(!muted) vid.volume = 1.0; // Force max volume if unmuted
-                }
-            }, [muted]);
-
             useEffect(() => { 
                 const vid = videoRef.current;
                 if (vid && stream) { 
                     vid.srcObject = stream; 
-                    const attemptPlay = async () => {
-                        try { 
-                            vid.muted = muted;
-                            if(!muted) vid.volume = 1.0;
-                            await vid.play(); 
-                        } catch (err) {
-                            console.warn("Autoplay failed:", err);
-                            // Only fallback to mute if absolutely necessary, but try to keep intended state
-                            if (!vid.muted && !muted) { 
-                                // Retry logic or keep trying on interaction
-                            }
-                        }
-                    };
-                    attemptPlay();
-                    const interval = setInterval(() => {
-                        if(vid.paused && vid.readyState >= 3) { 
-                            vid.play().catch(() => {}); 
-                        }
-                    }, 1000);
-                    return () => clearInterval(interval);
+                    vid.muted = muted;
+                    vid.play().catch(e => {});
                 } 
-            }, [stream]);
-
+            }, [stream, muted]);
             return <video id={id} ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
         };
 
@@ -203,11 +164,9 @@
             <div className="fixed top-16 left-4 z-[100] flex flex-col gap-2 pointer-events-none w-64">
                 {notifications.map(n => (
                     <div key={n.id} className={`flex items-center gap-3 px-3 py-3 rounded-lg shadow-2xl border-l-4 pointer-events-auto animate-fade-in backdrop-blur-xl transition-all ${n.type === 'error' ? 'bg-red-950/80 border-red-500 text-white' : n.type === 'warning' ? 'bg-yellow-950/80 border-yellow-500 text-white' : 'bg-green-950/80 border-green-500 text-white'}`}>
-                        <div className="shrink-0">
-                            {n.type === 'error' ? <AlertTriangle size={18} /> : n.type === 'warning' ? <Activity size={18} /> : <CheckCircle size={18} />}
-                        </div>
+                        <div className="shrink-0">{n.type === 'error' ? <AlertTriangle size={18} /> : n.type === 'warning' ? <Activity size={18} /> : <CheckCircle size={18} />}</div>
                         <div className="flex flex-col overflow-hidden">
-                            <span className="text-[10px] font-bold uppercase tracking-widest leading-none mb-1 opacity-50">{n.type === 'error' ? 'Alerta Crítica' : 'Notificación'}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest leading-none mb-1 opacity-50">{n.type === 'error' ? 'Alerta' : 'Info'}</span>
                             <span className="text-xs font-bold leading-tight truncate">{n.msg}</span>
                         </div>
                     </div>
@@ -216,33 +175,20 @@
         );
 
         const BroadcastHUD = ({ hidden }) => {
-            const [log, setLog] = useState({ msg: 'SISTEMA OBR ONLINE', type: 'text-green-500' });
-            const [socialIdx, setSocialIdx] = useState(0);
-            useEffect(() => {
-                const msgs = ["Escaneo espectro...", "Geometría: OK", "Red Peer: ESTABLE", "Buffer video: 100%", "Temp: NOMINAL", "Buscando E.V.P...", "Ciclo red: OK", "Fluctuación detectada", "IR: ACTIVO", "Analizando patrón...", "Ruido: -40dB", "Mag: Estable"];
-                const t = setInterval(() => { if(Math.random() > 0.5) { const isCrit = Math.random() > 0.8; const type = isCrit ? 'text-red-500 font-bold' : (Math.random()>0.6 ? 'text-yellow-400' : 'text-pink-300'); setLog({ msg: msgs[Math.floor(Math.random() * msgs.length)], type }); } }, 1500);
-                return () => clearInterval(t);
-            }, []);
-            useEffect(() => { const t = setInterval(() => setSocialIdx(prev => (prev + 1) % 3), 4000); return () => clearInterval(t); }, []);
-            return (
+             return (
                 <div className={`absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30 transition-all duration-500 ${hidden ? 'opacity-0' : 'opacity-100'}`}>
-                    <div className="absolute bottom-12 left-4">
-                        <div className={`text-[10px] font-mono bg-black/80 px-2 py-1 border-l-2 border-red-500 animate-pulse ${log.type}`}>{`> ${log.msg.toUpperCase()}`}</div>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 flex justify-center items-end">
-                        <div className="bg-gradient-to-t from-black via-black/80 to-transparent w-full py-2 flex justify-center h-10 items-end border-t border-red-900/30">
-                            {socialIdx === 0 && <span className="text-white font-bold tracking-[0.3em] animate-fade-in text-xs mb-1 uppercase tracking-widest">Siguenos en</span>}
-                            {socialIdx === 1 && <div className="flex gap-6 text-white text-sm animate-fade-in font-bold mb-1 items-center uppercase"><span className="text-pink-500 drop-shadow-sm">TikTok</span><span className="text-blue-500 drop-shadow-sm">Facebook</span><span className="text-red-500 drop-shadow-sm">YouTube</span></div>}
-                            {socialIdx === 2 && <span className="text-red-500 font-mono tracking-widest animate-fade-in text-sm bg-black/90 px-3 py-0.5 border-b-2 border-red-600 uppercase">@EXPLORACIONES OBR</span>}
-                        </div>
+                    <div className="absolute top-4 left-4 flex items-center gap-2 opacity-80">
+                         <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_#dc2626]"></div>
+                         <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">OBR LIVE FEED</span>
                     </div>
                 </div>
-            );
+             );
         };
 
-        const MediaOverlay = ({ activeMedia, onFinish, onTimeUpdate }) => {
-            if (!activeMedia) return null;
-            const src = STUDIO_ASSETS[activeMedia];
+        const MediaOverlay = ({ activeMedia, blobAssets, onFinish, onTimeUpdate }) => {
+            if (!activeMedia || !blobAssets[activeMedia]) return null;
+            const src = blobAssets[activeMedia];
+            
             const isBanner = activeMedia === 'banner';
             const isTransicion = activeMedia === 'transicion';
             let containerStyle = "absolute inset-0 z-50 bg-black flex items-center justify-center";
@@ -250,41 +196,39 @@
             
             if (isBanner) { containerStyle = "absolute bottom-0 left-0 w-full h-[150px] z-40 flex items-center justify-center pointer-events-none pb-0 bg-transparent soft-mask"; videoStyle = "w-full h-full object-cover opacity-95"; } 
             else if (isTransicion) { containerStyle = "absolute inset-0 z-[60] flex items-center justify-center pointer-events-none bg-transparent"; videoStyle = "w-full h-full object-cover"; }
+            
             const shouldLoop = activeMedia === 'standby'; 
             return (
                 <div className={containerStyle}>
-                    <video key={activeMedia} id="studio-media-player" src={src} autoPlay loop={shouldLoop} playsInline className={videoStyle} onTimeUpdate={(e) => onTimeUpdate && onTimeUpdate(e.target.duration, e.target.currentTime)} onEnded={() => { if (!shouldLoop && onFinish) { onFinish(); } }} onError={() => { if(onFinish) onFinish(); }} />
+                    <video key={activeMedia} src={src} autoPlay loop={shouldLoop} playsInline className={videoStyle} onTimeUpdate={(e) => onTimeUpdate && onTimeUpdate(e.target.duration, e.target.currentTime)} onEnded={() => { if (!shouldLoop && onFinish) { onFinish(); } }} onError={() => { if(onFinish) onFinish(); }} />
                 </div>
             );
         };
 
-        const StatusIndicators = ({ isLive, isRec, isObs }) => (
+        const StatusIndicators = ({ isLive, isRec, isObs, isFailover }) => (
             <div className="flex items-center gap-4 ml-4 border-l border-neutral-800 pl-4">
                 {[
                     { label: 'OBS', active: isObs },
                     { label: 'LIVE', active: isLive },
                     { label: 'REC', active: isRec }
                 ].map((item) => (
-                    <div 
-                        key={item.label}
-                        className="flex items-center gap-2 select-none transition-all opacity-90"
-                    >
+                    <div key={item.label} className="flex items-center gap-2 select-none transition-all opacity-90">
                         <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] transition-colors duration-300 ${item.active ? 'bg-green-500 text-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-900 text-red-900'}`}></div>
-                        <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors duration-300 ${item.active ? 'text-white' : 'text-neutral-600'}`}>
-                            {item.label}
-                        </span>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors duration-300 ${item.active ? 'text-white' : 'text-neutral-600'}`}>{item.label}</span>
                     </div>
                 ))}
+                {isFailover && (
+                     <div className="flex items-center gap-2 select-none animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_10px_#eab308]"></div>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-yellow-500">BACKUP ON</span>
+                    </div>
+                )}
             </div>
         );
 
         const DirectorPanel = ({ activeCam, onCommand, isOffline, currentFilter }) => {
-            const handleFilterToggle = (filterName) => { 
-                const targetFilter = currentFilter === filterName ? 'normal' : filterName; 
-                onCommand({ category: 'cam', action: 'filter', value: targetFilter, target: activeCam?.id }); 
-            };
+            const handleFilterToggle = (filterName) => { onCommand({ category: 'cam', action: 'filter', value: currentFilter === filterName ? 'normal' : filterName, target: activeCam?.id }); };
             const canUseAI = activeCam?.hasAI || false;
-
             return (
                 <div className="h-full flex flex-col">
                       <div className="flex-1 director-scroll p-4 space-y-4">
@@ -294,18 +238,17 @@
                             <>
                                 <div className="pb-2 border-b border-neutral-800 mb-2">
                                     <h3 className="text-white font-bold text-sm flex items-center gap-2 uppercase tracking-tighter"><Settings size={14} className="text-red-500" /> CAM: {activeCam?.name || 'SIMULADOR'}</h3>
-                                    {isOffline && <span className="text-[9px] text-yellow-500 bg-yellow-900/20 px-1 rounded uppercase font-bold tracking-widest">Simulación</span>}
                                 </div>
                                 <section>
-                                    <label className="text-[10px] font-bold text-neutral-500 mb-2 block tracking-wider uppercase tracking-widest">Filtros Avanzados</label>
+                                    <label className="text-[10px] font-bold text-neutral-500 mb-2 block uppercase tracking-widest">Filtros Avanzados</label>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => handleFilterToggle('night')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'night' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-green-500 border-green-900/30'}`}><Moon size={16}/> NOCTURNO</button>
-                                        <button onClick={() => handleFilterToggle('thermal')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'thermal' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-blue-500 border-blue-900/30'}`}><Flame size={16}/> TÉRMICO</button>
-                                        <button onClick={() => handleFilterToggle('urbex')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'urbex' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-orange-500 border-orange-900/30'}`}><Box size={16}/> URBEX</button>
+                                        <button onClick={() => handleFilterToggle('night')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'night' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-green-500 border-green-900/30'}`}><Moon size={16}/> NOCTURNO</button>
+                                        <button onClick={() => handleFilterToggle('thermal')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'thermal' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-blue-500 border-blue-900/30'}`}><Flame size={16}/> TÉRMICO</button>
+                                        <button onClick={() => handleFilterToggle('urbex')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'urbex' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-orange-500 border-orange-900/30'}`}><Box size={16}/> URBEX</button>
                                         <button onClick={() => handleFilterToggle('lidar')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'lidar' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-teal-400 border-teal-900/30'}`}><ScanLine size={16}/> LIDAR</button>
-                                        <button onClick={() => handleFilterToggle('sls')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold transition-colors ${currentFilter === 'sls' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-purple-400 border-purple-900/30'}`}><Ghost size={16}/> SLS (CALOR)</button>
+                                        <button onClick={() => handleFilterToggle('sls')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'sls' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-purple-400 border-purple-900/30'}`}><Ghost size={16}/> SLS</button>
                                         <button onClick={() => onCommand({ category: 'cmd', action: 'toggle', value: 'pareidolia', target: activeCam?.id })} disabled={!canUseAI} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${canUseAI ? (currentFilter === 'pareidolia' ? 'bg-white text-black border-white' : 'bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border-red-900/50') : 'bg-[#151515] text-gray-600 border-gray-800 opacity-50 cursor-not-allowed'}`}><Eye size={16}/> {canUseAI ? 'VISION IA' : 'IA N/A'}</button>
-                                        <button onClick={() => onCommand({ category: 'cmd', action: 'reset', value: '', target: activeCam?.id })} className="col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-gray-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 transition-colors uppercase font-bold tracking-widest"><RotateCcw size={12}/> Resetear Cámara</button>
+                                        <button onClick={() => onCommand({ category: 'cmd', action: 'reset', value: '', target: activeCam?.id })} className="col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-gray-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 uppercase font-bold tracking-widest"><RotateCcw size={12}/> Reset</button>
                                     </div>
                                 </section>
                             </>
@@ -322,134 +265,122 @@
             return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         };
 
-        // MEDIA PANEL MODIFICADO PARA RECIBIR ESTADO DE ASSETS
         const MediaPanel = ({ onPlay, timers, activeMedia, assetStatus }) => {
-            
             const getButtonStyle = (type) => {
-                const status = assetStatus?.[type] || 'idle';
-                if (status === 'error') return 'bg-red-950/50 border-red-900 text-red-700 cursor-not-allowed opacity-50 grayscale';
-                if (status === 'loading') return 'bg-neutral-900 border-neutral-700 text-neutral-500 cursor-wait';
+                const status = assetStatus?.[type] || 'loading';
                 
-                // Normal styles based on type
+                if (status !== 'ready') return 'bg-neutral-900 border-neutral-800 text-neutral-600 cursor-not-allowed opacity-50';
+                
                 if (type === 'intro') return activeMedia === 'intro' ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-cyan-900/10 text-cyan-400 border-cyan-900/50 hover:bg-cyan-900/30';
                 if (type === 'banner') return activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-blue-900/10 text-blue-400 border-blue-900/50 hover:bg-blue-900/30';
                 if (type === 'outro') return activeMedia === 'outro' ? 'bg-red-600 text-white border-red-400' : 'bg-red-900/10 text-red-400 border-red-900/50 hover:bg-red-900/30';
+                // Estilo para Backups
+                if (type.startsWith('backup')) return activeMedia === type ? 'bg-yellow-700 text-white border-yellow-500 animate-pulse' : 'bg-neutral-900 text-yellow-700 border-yellow-900/30';
+
                 return 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white';
             };
 
             const isDisabled = (type) => {
-                return (assetStatus?.[type] === 'error' || assetStatus?.[type] === 'loading');
+                return (assetStatus?.[type] !== 'ready');
             }
 
             return (
                  <div className="p-3 border-t border-red-900/30 bg-[#080808] shrink-0 z-50 pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.8)]">
-                     <h3 className="text-white font-bold text-[10px] flex items-center gap-2 mb-2 uppercase tracking-widest text-gray-500">
-                         <Film size={12} className="text-red-500" /> Media Control
-                     </h3>
+                     <h3 className="text-white font-bold text-[10px] flex items-center gap-2 mb-2 uppercase tracking-widest text-gray-500"><Film size={12} className="text-red-500" /> Media Control (Blob Only)</h3>
                      <div className="grid grid-cols-2 gap-2">
-                        {/* INTRO */}
-                        <button disabled={isDisabled('intro')} onClick={() => onPlay('intro')} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle('intro')}`}>
-                            {timers && timers.intro > 0 && <div className="absolute inset-0 bg-cyan-600/20 z-0" style={{width: '100%'}}></div>}
-                            <span className="z-10 relative flex items-center gap-2 font-bold tracking-tighter uppercase">
-                                {assetStatus?.intro === 'loading' ? <Loader2 className="animate-spin" size={12}/> : assetStatus?.intro === 'error' ? <AlertOctagon size={12}/> : (timers && timers.intro > 0 ? formatTime(timers.intro) : <><Play size={12}/> INTRO</>)}
-                            </span>
-                        </button>
-
-                        {/* PAUSA (Standby) */}
-                        <button disabled={isDisabled('standby')} onClick={() => onPlay('standby')} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 transition-colors font-bold ${activeMedia === 'standby' ? 'bg-yellow-600 text-black border-yellow-500 animate-pulse' : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'}`}>
-                            <span className="flex items-center gap-2 font-bold tracking-tighter uppercase">
-                                 {assetStatus?.standby === 'loading' ? <Loader2 className="animate-spin" size={12}/> : assetStatus?.standby === 'error' ? <AlertOctagon size={12}/> : <><Pause size={12}/> PAUSA</>}
-                            </span>
-                        </button>
-
-                        {/* BANNER */}
-                        <button disabled={isDisabled('banner')} onClick={() => onPlay('banner')} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle('banner')}`}>
-                            {timers && timers.banner > 0 && <div className="absolute inset-0 bg-blue-600/20 z-0" style={{width: '100%'}}></div>}
-                            <span className="z-10 relative flex items-center gap-2 font-bold tracking-tighter uppercase">
-                                {assetStatus?.banner === 'loading' ? <Loader2 className="animate-spin" size={12}/> : assetStatus?.banner === 'error' ? <AlertOctagon size={12}/> : (timers && timers.banner > 0 ? formatTime(timers.banner) : <><Layers size={12}/> BANNER</>)}
-                            </span>
-                        </button>
-
-                        {/* OUTRO */}
-                        <button disabled={isDisabled('outro')} onClick={() => onPlay('outro')} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle('outro')}`}>
-                            {timers && timers.outro > 0 && <div className="absolute inset-0 bg-red-600/20 z-0" style={{width: '100%'}}></div>}
-                            <span className="z-10 relative flex items-center gap-2 font-bold tracking-tighter uppercase">
-                                {assetStatus?.outro === 'loading' ? <Loader2 className="animate-spin" size={12}/> : assetStatus?.outro === 'error' ? <AlertOctagon size={12}/> : (timers && timers.outro > 0 ? formatTime(timers.outro) : <><Power size={12}/> OUTRO</>)}
-                            </span>
-                        </button>
+                        {['intro', 'standby', 'banner', 'outro'].map(key => (
+                            <button key={key} disabled={isDisabled(key)} onClick={() => onPlay(key)} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle(key)}`}>
+                                <span className="z-10 relative flex items-center gap-2 font-bold tracking-tighter uppercase">
+                                    {(assetStatus?.[key] === 'loading' || !assetStatus?.[key]) ? <><Loader2 className="animate-spin" size={12}/> CARGANDO...</> : 
+                                     assetStatus?.[key] === 'error' ? 'NO DISPONIBLE' :
+                                     (key === 'standby' ? (activeMedia === 'standby' ? 'PAUSADO' : 'PAUSA') : 
+                                     (timers && timers[key] > 0 ? formatTime(timers[key]) : key))}
+                                </span>
+                            </button>
+                        ))}
+                        {/* Indicadores de Backup (Solo lectura o activacion manual) */}
+                        {['backup1', 'backup2'].map(key => (
+                            <button key={key} disabled={isDisabled(key)} onClick={() => onPlay(key)} className={`col-span-1 relative text-[10px] py-2 rounded border flex items-center justify-center gap-1 font-bold ${getButtonStyle(key)}`}>
+                                <ShieldAlert size={10}/> {key.toUpperCase()}
+                            </button>
+                        ))}
                     </div>
                 </div>
             );
         };
         
+        // --- CLEAN FEED OBS (LOCAL) ---
+        const ObsCleanFeed = ({ targetId, blobAssets }) => {
+            const [stream, setStream] = useState(null);
+            const [activeMedia, setActiveMedia] = useState(null);
+            const peerRef = useRef(null);
+
+            useEffect(() => {
+                const peer = new window.Peer(null, PEER_CONFIG);
+                peerRef.current = peer;
+
+                peer.on('open', () => {
+                    const conn = peer.connect(targetId, { reliable: true });
+                    conn.on('open', () => { conn.send({ type: 'register-obs-client' }); });
+                    conn.on('data', (data) => {
+                        if(data.type === 'program-update') setActiveMedia(data.activeMedia);
+                    });
+                });
+
+                peer.on('call', (call) => {
+                    call.answer();
+                    call.on('stream', (remoteStream) => setStream(remoteStream));
+                });
+
+                return () => peer.destroy();
+            }, [targetId]);
+
+            return (
+                <div className="w-screen h-screen bg-black overflow-hidden relative flex items-center justify-center">
+                    {stream ? (
+                        <video ref={v => {if(v) v.srcObject = stream}} autoPlay playsInline className="w-full h-full object-contain" />
+                    ) : (
+                        <div className="text-neutral-800 font-bold text-2xl animate-pulse tracking-widest font-mono">ESPERANDO SEÑAL OBR...</div>
+                    )}
+                    <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={()=>{}} />
+                </div>
+            );
+        };
+
         const RemoteDirector = ({ onBack }) => {
             const [dockId, setDockId] = useState('');
             const [isConnected, setIsConnected] = useState(false);
-            const [isOffline, setIsOffline] = useState(false);
             const [cameraList, setCameraList] = useState([]); 
             const [obsState, setObsState] = useState({ streaming: false, recording: false, connected: false });
             const [notifications, setNotifications] = useState([]);
             const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, banner: 0, standby: 0 });
             const [activeMedia, setActiveMedia] = useState(null);
-            
             const [peekStream, setPeekStream] = useState(null);
             const [peekName, setPeekName] = useState("");
-            const [selectedControlId, setSelectedControlId] = useState(null);
-
-            // ESTADO DE CARGA DE ASSETS (RESILIENTE) EN DIRECTOR
-            const [assetStatus, setAssetStatus] = useState({});
-
-            const peekTimeoutRef = useRef(null);
+            
+            // ASSET STATUS SYNC FROM DOCK
+            const [assetStatus, setAssetStatus] = useState({intro:'loading', outro:'loading', banner:'loading', standby:'loading', transicion:'loading', backup1: 'loading', backup2: 'loading'});
+            
             const peerRef = useRef(null);
             const connRef = useRef(null);
             const activeProgramCam = cameraList.find(c => c.tally === 'program');
-            
-            const controlTargetCam = cameraList.find(c => c.id === selectedControlId) || activeProgramCam;
-            const currentFilter = controlTargetCam ? controlTargetCam.filter : null;
+            const peekTimeoutRef = useRef(null);
 
             const notify = (msg, type = 'success') => {
                 const id = Date.now();
                 setNotifications(prev => [...prev, { id, msg, type }]);
                 setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
             };
-
+            
             const enterSimulation = () => {
-                setIsOffline(true);
-                setIsConnected(true);
-                setCameraList([
-                    { id: 'sim1', name: 'CAM 1 (SIM)', tally: 'program', filter: 'normal', hasAI: true, snapshot: '' },
-                    { id: 'sim2', name: 'CAM 2 (SIM)', tally: 'preview', filter: 'night', hasAI: false, snapshot: '' }
-                ]);
-                notify("MODO SIMULACIÓN ACTIVADO", "warning");
+                 setAssetStatus({intro:'ready', outro:'ready', banner:'ready', standby:'ready', transicion:'ready', backup1: 'ready', backup2: 'ready'});
+                 setCameraList([ { id: 'sim1', name: 'CAM SIM', tally: 'program', hasAI: true } ]);
+                 setIsConnected(true);
             };
-
-            // LOGICA DE CARGA RESILIENTE DE ASSETS (Background) EN DIRECTOR
-            useEffect(() => {
-                const loadAsset = async (key, url, retriesLeft = 3) => {
-                    setAssetStatus(prev => ({ ...prev, [key]: 'loading' }));
-                    try {
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error("404 Not Found");
-                        const blob = await response.blob(); 
-                        if (blob.size < 100) throw new Error("Empty file");
-                        setAssetStatus(prev => ({ ...prev, [key]: 'ready' }));
-                    } catch (e) {
-                        if (retriesLeft > 0) {
-                            setTimeout(() => loadAsset(key, url, retriesLeft - 1), 1000);
-                        } else {
-                            setAssetStatus(prev => ({ ...prev, [key]: 'error' }));
-                        }
-                    }
-                };
-
-                Object.entries(STUDIO_ASSETS).forEach(([key, url]) => {
-                    loadAsset(key, url);
-                });
-            }, []);
 
             const connect = () => {
                 if(!dockId) return;
-                const peer = new window.Peer(null, { ...PEER_CONFIG, debug: 1 });
+                const peer = new window.Peer(null, { ...PEER_CONFIG });
                 peerRef.current = peer;
                 
                 let targetId = dockId.trim();
@@ -464,80 +395,46 @@
                         if (data.type === 'camera-list-update') setCameraList(data.cameras);
                         if (data.type === 'obs-state-update') setObsState(data.state);
                         if (data.type === 'media-time') setMediaTimers(data.timers);
-                        if (data.type === 'dock-status') { setActiveMedia(data.activeMedia); }
+                        if (data.type === 'dock-status') { 
+                            setActiveMedia(data.activeMedia); 
+                            if (data.assetStatus) setAssetStatus(data.assetStatus);
+                        }
                         if (data.type === 'toast') notify(data.msg, data.toastType);
                     });
                     conn.on('close', () => { setIsConnected(false); notify("CONEXIÓN PERDIDA", "error"); });
-                    conn.on('error', (err) => { notify("Error de enlace móvil", "error"); console.error(err); });
-                });
-
-                peer.on('error', (err) => {
-                  if(err.type === 'unavailable-id') notify("ID ocupado. Reintenta.", "error");
-                  if(err.type === 'network') notify("Error de red: Check datos", "warning");
-                  console.error(err);
                 });
                 
                 peer.on('call', (call) => {
                     call.answer();
-                    call.on('stream', (remoteStream) => {
-                         setPeekStream(remoteStream);
-                         if(navigator.vibrate) navigator.vibrate(50);
-                    });
-                    call.on('close', () => { setPeekStream(null); });
+                    call.on('stream', (remoteStream) => { setPeekStream(remoteStream); });
                 });
             };
 
-            const send = (categoryOrObj, action, value) => {
-                let payload = {};
-                if (typeof categoryOrObj === 'object') {
-                    payload = categoryOrObj;
-                } else {
-                    payload = { category: categoryOrObj, action, value };
-                }
-
-                if(isOffline) {
-                     if(payload.category === 'mixer') {
-                         if(payload.action === 'program') setCameraList(prev => prev.map(c => ({...c, tally: c.id === payload.value ? 'program' : 'idle'})));
-                         if(payload.action === 'preview') setCameraList(prev => prev.map(c => { if(c.tally === 'program') return c; return {...c, tally: c.id === payload.value ? 'preview' : 'idle'}; }));
-                         if(payload.action === 'filter') setCameraList(prev => prev.map(c => { if(c.id === (selectedControlId || activeProgramCam?.id)) return {...c, filter: payload.value}; return c; }));
-                     }
-                     return;
-                }
-                if(connRef.current) { 
-                    if(navigator.vibrate) navigator.vibrate(50); 
-                    connRef.current.send({ type: 'director-cmd', ...payload }); 
-                }
+            const send = (category, action, value) => {
+                if(connRef.current) connRef.current.send({ type: 'director-cmd', category, action, value }); 
             };
             
             const handlePointerDown = (camId, camName) => {
-                if(isOffline) return;
                 peekTimeoutRef.current = setTimeout(() => {
                     setPeekName(camName);
                     send('peek', 'start', camId);
-                }, 500); 
+                }, 600); 
             };
 
             const handlePointerUp = () => {
                 if(peekTimeoutRef.current) clearTimeout(peekTimeoutRef.current);
             };
-
-            const handleClosePeek = () => {
-                 setPeekStream(null);
-                 send('peek', 'stop', null);
-            };
+            
+            const isTransicionReady = assetStatus['transicion'] === 'ready';
 
             if(!isConnected) {
                 return (
                     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-6">
                         <img src="./obr-logo.png" className="w-20 h-20 mb-4 drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
                         <h2 className="text-2xl font-bold text-white tracking-widest uppercase">Director <span className="text-red-600">Móvil</span></h2>
-                        <div className="w-full max-w-xs">
-                             <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest tracking-widest uppercase">Dock ID del Estudio</label>
-                             <input value={dockId} onChange={e=>setDockId(e.target.value)} placeholder="Ej: 100.80.20.14" className="w-full bg-[#111] border border-red-900 p-4 text-center text-xl text-white font-mono rounded-lg outline-none focus:border-red-500 mb-2 uppercase"/>
-                        </div>
-                        <button onClick={connect} className="w-full max-w-xs bg-red-900 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-red-700 transition-colors uppercase tracking-widest font-bold">Conectar</button>
+                        <input value={dockId} onChange={e=>setDockId(e.target.value)} placeholder="DOCK ID" className="w-full max-w-xs bg-[#111] border border-red-900 p-4 text-center text-xl text-white font-mono rounded-lg outline-none focus:border-red-500 mb-2 uppercase"/>
+                        <button onClick={connect} className="w-full max-w-xs bg-red-900 text-white font-bold py-4 rounded-lg shadow-lg hover:bg-red-700 transition-colors uppercase tracking-widest">Conectar</button>
                         <button onClick={onBack} className="text-gray-500 text-sm mt-4 font-bold uppercase tracking-widest">Volver</button>
-                        
                         <button onClick={enterSimulation} className="text-[9px] text-gray-800 opacity-20 mt-10 uppercase font-bold tracking-[0.3em] tracking-widest uppercase">Modo Simulación</button>
                     </div>
                 );
@@ -548,8 +445,8 @@
                      onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onTouchEnd={handlePointerUp}>
                     
                     <ToastContainer notifications={notifications} />
+                    {peekStream && <PeekModal stream={peekStream} name={peekName} onClose={()=>{setPeekStream(null); send('peek','stop',null);}} />}
                     
-                    {peekStream && <PeekModal stream={peekStream} name={peekName} onClose={handleClosePeek} />}
                     <div className="bg-[#111] p-3 border-b border-red-900 flex justify-between items-center shrink-0 z-20">
                         <div className="flex items-center gap-1 overflow-hidden">
                             <span className="font-bold text-xs tracking-tighter text-red-500 uppercase truncate">Director OBR</span>
@@ -559,127 +456,111 @@
                     </div>
 
                     <div className="flex-1 director-scroll p-4 space-y-6 select-none bg-black">
-                        <div className="space-y-2">
-                            <h3 className="text-[9px] text-red-500 font-bold tracking-[0.3em] border-b border-red-900/40 pb-1 uppercase flex items-center gap-2 tracking-widest uppercase"><Radio size={10}/> Control de Emisión</h3>
+                         <div className="space-y-2">
+                            <h3 className="text-[9px] text-red-500 font-bold tracking-[0.3em] border-b border-red-900/40 pb-1 uppercase">Control de Emisión {obsState.connected ? '' : '(OBS OFFLINE)'}</h3>
                             <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => send('obs', 'start-stream', null)} className={`bg-green-700 border-b-4 border-green-900 text-white py-6 rounded-lg font-bold text-lg uppercase transition-opacity ${obsState.streaming ? 'opacity-50' : ''}`}>Iniciar Live</button>
-                                <button onClick={() => send('obs', 'stop-stream', null)} className={`bg-red-700 border-b-4 border-red-900 text-white py-6 rounded-lg font-bold text-lg uppercase transition-opacity ${!obsState.streaming ? 'opacity-50' : ''}`}>Cortar Live</button>
+                                <button 
+                                    onClick={() => send('obs', 'start-stream', null)} 
+                                    disabled={!obsState.connected}
+                                    className={`bg-green-700 border-b-4 border-green-900 text-white py-6 rounded-lg font-bold text-lg uppercase ${obsState.streaming ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                    Iniciar Live
+                                </button>
+                                <button 
+                                    onClick={() => send('obs', 'stop-stream', null)} 
+                                    disabled={!obsState.connected}
+                                    className={`bg-red-700 border-b-4 border-red-900 text-white py-6 rounded-lg font-bold text-lg uppercase ${!obsState.streaming ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                    Cortar Live
+                                </button>
                             </div>
                             <div className="grid grid-cols-2 gap-4 mt-2">
-                                <button onClick={() => send('obs', 'start-record', null)} className={`bg-yellow-700 border-b-4 border-yellow-900 text-white py-3 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 ${obsState.recording ? 'opacity-50' : ''}`}><Disc size={14}/> Grabar</button>
-                                <button onClick={() => send('obs', 'stop-record', null)} className={`bg-neutral-700 border-b-4 border-neutral-900 text-white py-3 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 ${!obsState.recording ? 'opacity-50' : ''}`}><X size={14}/> Parar Rec</button>
+                                <button 
+                                    onClick={() => send('obs', 'start-record', null)} 
+                                    disabled={!obsState.connected}
+                                    className={`bg-yellow-700 border-b-4 border-yellow-900 text-white py-3 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 ${obsState.recording ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                    <Disc size={14}/> Grabar
+                                </button>
+                                <button 
+                                    onClick={() => send('obs', 'stop-record', null)} 
+                                    disabled={!obsState.connected}
+                                    className={`bg-neutral-700 border-b-4 border-neutral-900 text-white py-3 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 ${!obsState.recording ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                                    <X size={14}/> Parar Rec
+                                </button>
                             </div>
+
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <button onClick={() => send('mixer', 'cut', null)} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold uppercase shadow-lg transition-transform active:scale-95">Cut</button>
-                                <button onClick={() => send('mixer', 'auto', null)} className="bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold uppercase tracking-tighter shadow-lg active:scale-95 transition-all">Auto Mix</button>
+                                <button onClick={() => send('mixer', 'cut', null)} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold uppercase">Cut</button>
+                                <button onClick={() => send('mixer', 'auto', null)} disabled={!isTransicionReady} className={`bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold uppercase ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
                             </div>
                         </div>
-
+                        
                         <div className="space-y-2">
-                            <h3 className="text-[9px] text-gray-500 font-bold tracking-[0.3em] border-b border-gray-800 pb-1 flex justify-between uppercase">
+                             <h3 className="text-[9px] text-gray-500 font-bold tracking-[0.3em] border-b border-gray-800 pb-1 flex justify-between uppercase">
                                 <span>Fuentes en Grid</span>
                                 <span className="text-[8px] text-yellow-600 lowercase tracking-tighter tracking-widest uppercase">Long-press Peek</span>
                             </h3>
-                            {cameraList.length === 0 ? <div className="text-gray-700 text-xs text-center py-4 uppercase font-bold opacity-30 tracking-[0.2em] uppercase tracking-widest">Sin fuentes conectadas</div> : cameraList.map(cam => (
+                             {cameraList.map(cam => (
                                 <div key={cam.id} 
-                                     className={`flex items-center border rounded-lg p-2 gap-3 transition-all active:scale-[0.98] ${cam.tally === 'program' ? 'bg-red-900/20 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'bg-[#151515] border-gray-800'}`} 
-                                     onPointerDown={() => handlePointerDown(cam.id, cam.name)}
-                                     onPointerUp={handlePointerUp}
-                                     onClick={() => {
-                                        send('mixer', 'preview', cam.id);
-                                        setSelectedControlId(cam.id);
-                                     }}>
+                                    className={`flex items-center border rounded-lg p-2 gap-3 transition-all active:scale-[0.98] ${cam.tally === 'program' ? 'bg-red-900/20 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'bg-[#151515] border-gray-800'}`} 
+                                    onPointerDown={() => handlePointerDown(cam.id, cam.name)}
+                                    onClick={()=>send('mixer', 'preview', cam.id)}>
                                     
                                     <div className="w-14 aspect-video bg-black rounded border border-neutral-800 flex items-center justify-center overflow-hidden shrink-0 pointer-events-none relative">
-                                        {/* Previsualización mediante Snapshot enviado desde Dock */}
                                         {cam.snapshot ? <img src={cam.snapshot} className="w-full h-full object-cover opacity-80" /> : <Monitor size={12} className="opacity-20 text-white"/>}
                                     </div>
 
                                     <div className="flex-1 flex flex-col justify-center pointer-events-none overflow-hidden">
-                                        <div className="text-white font-mono text-[11px] font-bold uppercase tracking-widest truncate uppercase tracking-widest">{cam.name}</div>
+                                        <div className="text-white font-mono text-[11px] font-bold uppercase tracking-widest truncate">{cam.name}</div>
                                         <div className="flex gap-2 text-[8px] text-gray-500 font-mono tracking-widest uppercase tracking-tighter">
                                             <span className={`flex items-center gap-1 font-bold ${cam.tally === 'program' ? 'text-red-500' : cam.tally === 'preview' ? 'text-green-500' : ''}`}>
                                                 {cam.tally === 'program' ? 'Al Aire' : cam.tally === 'preview' ? 'En Previo' : 'Lista'}
                                             </span>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex gap-1">
                                         <button onClick={(e) => { e.stopPropagation(); send('mixer', 'auto', cam.id); }} className="px-2 py-3 bg-red-800 hover:bg-red-600 text-white rounded text-[8px] font-bold uppercase border border-red-900 transition-colors uppercase tracking-widest">Auto</button>
-                                        <button onClick={(e) => { e.stopPropagation(); send('mixer', 'program', cam.id); }} className={`px-2 py-3 rounded text-[8px] font-bold border transition-colors uppercase tracking-widest ${cam.tally === 'program' ? 'bg-red-900 text-white border-red-400' : 'bg-gray-800 text-gray-400 border-gray-600'}`}>Cut</button>
+                                        <button onClick={(e)=>{e.stopPropagation(); send('mixer','program',cam.id)}} className="px-3 py-2 bg-red-800 text-white rounded text-[9px] font-bold">CUT</button>
                                     </div>
                                 </div>
-                            ))}
+                             ))}
                         </div>
-
-                        <div className="bg-[#111] p-2 rounded border border-gray-800">
-                            <DirectorPanel activeCam={controlTargetCam} onCommand={send} isOffline={isOffline} currentFilter={currentFilter || 'normal'} />
-                        </div>
+                        <DirectorPanel activeCam={activeProgramCam} onCommand={send} isOffline={false} currentFilter="normal" />
                     </div>
-                    
-                    {/* MEDIA PANEL FIXED AT BOTTOM */}
                     <MediaPanel onPlay={(type) => send('media', 'play', type)} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
                 </div>
             );
         };
 
-        const DockMode = ({ preferredId }) => {
-          // --- FIX: DECLARACIÓN DE REFERENCIAS FALTANTES ---
-          const peerRef = useRef(null);
-          const videoPeerRef = useRef(null);
-          const peekCallRef = useRef(null);
-          
+        const DockMode = ({ preferredId, initialBlobAssets }) => {
           const [myId, setMyId] = useState(null);
           const [cameras, setCameras] = useState({}); 
           const [programId, setProgramId] = useState(null);
           const [previewId, setPreviewId] = useState(null);
-          const [obsWindowOpen, setObsWindowOpen] = useState(false);
           const [activeMedia, setActiveMedia] = useState(null);
           const [headerHidden, setHeaderHidden] = useState(false);
           const [notifications, setNotifications] = useState([]);
-          const [forceCam1Audio, setForceCam1Audio] = useState(false);
           const [mediaTimers, setMediaTimers] = useState({ intro: 0, outro: 0, banner: 0, standby: 0 }); 
           const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-          
           const [obsStreaming, setObsStreaming] = useState(false);
           const [obsRecording, setObsRecording] = useState(false);
           const [obsConnected, setObsConnected] = useState(false);
-          const [isOutroTriggered, setIsOutroTriggered] = useState(false);
-          
-          // ESTADO DE CARGA DE ASSETS (RESILIENTE)
-          const [assetStatus, setAssetStatus] = useState({}); // { intro: 'loading' | 'ready' | 'error' }
-
-          // ESTADO ZOOM
           const [zoomedCamId, setZoomedCamId] = useState(null);
-          const longPressTimerRef = useRef(null);
-
-          // --- FIX STALE CLOSURE FOR INDICATORS ---
-          // Estado Ref para que el setInterval siempre lea el valor real
-          const [obsState, setObsState] = useState({ streaming: false, recording: false, connected: false });
-          const obsStateRef = useRef({ streaming: false, recording: false, connected: false });
+          const [backupIndex, setBackupIndex] = useState(0); // Indice para rotar backups
           
-          // Sincronizar State -> Ref
-          useEffect(() => {
-              setObsState({ streaming: obsStreaming, recording: obsRecording, connected: obsConnected });
-              obsStateRef.current = { streaming: obsStreaming, recording: obsRecording, connected: obsConnected };
-          }, [obsStreaming, obsRecording, obsConnected]);
+          const [blobAssets, setBlobAssets] = useState(initialBlobAssets || {}); 
+          const [assetStatus, setAssetStatus] = useState(() => {
+              const status = {};
+              ['intro', 'outro', 'banner', 'standby', 'transicion', 'backup1', 'backup2'].forEach(k => {
+                  status[k] = initialBlobAssets && initialBlobAssets[k] ? 'ready' : 'error';
+              });
+              return status;
+          });
 
-          const previewRef = useRef(null);
-          const programRef = useRef(null);
-          useEffect(() => { previewRef.current = previewId; }, [previewId]);
-          useEffect(() => { programRef.current = programId; }, [programId]);
-
-          const camerasRef = useRef({});
-          const directorConnRef = useRef(null);
-          const snapshotCanvasRef = useRef(document.createElement('canvas'));
           const obsRef = useRef(null); 
-          
-          const [obsMountNode, setObsMountNode] = useState(null);
-          const obsWindowRef = useRef(null);
-
-          const isGlobalMuted = useMemo(() => ['intro', 'outro', 'standby'].includes(activeMedia), [activeMedia]);
-          const camList = Object.values(cameras);
-          const cam1Id = camList.length > 0 ? camList[0].id : null;
+          const peerRef = useRef(null);
+          const videoPeerRef = useRef(null);
+          const directorConnRef = useRef(null);
+          const obsClientsRef = useRef([]);
 
           const notify = (msg, type = 'success') => { 
               const id = Date.now(); 
@@ -687,477 +568,228 @@
               setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000); 
               if (directorConnRef.current?.open) directorConnRef.current.send({ type: 'toast', msg, toastType: type });
           };
-          
-          // LOGICA DE CARGA RESILIENTE DE ASSETS (Background)
+
+          // --- CONEXIÓN OBS WEBSOCKET ---
           useEffect(() => {
-              const loadAsset = async (key, url, retriesLeft = 3) => {
-                  setAssetStatus(prev => ({ ...prev, [key]: 'loading' }));
+              const connectObs = async () => {
+                  if (obsRef.current && obsRef.current.identified) return;
+                  const obs = new window.OBSWebSocket();
+                  obsRef.current = obs;
                   try {
-                      const response = await fetch(url);
-                      if (!response.ok) throw new Error("404 Not Found");
-                      const blob = await response.blob(); // Check integrity
-                      if (blob.size < 100) throw new Error("Empty file");
-                      setAssetStatus(prev => ({ ...prev, [key]: 'ready' }));
-                      console.log(`Asset Loaded: ${key}`);
-                  } catch (e) {
-                      console.warn(`Asset fail: ${key} (${retriesLeft} retries)`);
-                      if (retriesLeft > 0) {
-                          setTimeout(() => loadAsset(key, url, retriesLeft - 1), 1000);
-                      } else {
-                          setAssetStatus(prev => ({ ...prev, [key]: 'error' }));
-                          notify(`Fallo carga: ${key.toUpperCase()}`, 'error');
-                      }
-                  }
+                      await obs.connect('ws://127.0.0.1:4455', undefined, { rpcVersion: 1 });
+                      setObsConnected(true);
+                      obs.on('StreamStateChanged', data => setObsStreaming(data.outputActive));
+                      obs.on('RecordStateChanged', data => setObsRecording(data.outputActive));
+                      obs.on('ConnectionClosed', () => { setObsConnected(false); });
+                  } catch (e) { setObsConnected(false); }
               };
-
-              Object.entries(STUDIO_ASSETS).forEach(([key, url]) => {
-                  loadAsset(key, url);
-              });
-          }, []);
-
-          // OBS LOGIC CONEXIÓN QUIRÚRGICA: BUCLE PERSISTENTE Y AUTH NULA
-          useEffect(() => {
-              let obs = null;
-              let isMounted = true;
-              let connectInterval = null;
-
-              const connectOBS = async () => {
-                  if (obsRef.current && obsRef.current.identified) return; // Ya conectado
-                  
-                  try {
-                       // Si no existe instancia, crearla
-                       if (!obsRef.current) {
-                           if (window.OBSWebSocket) {
-                               obsRef.current = new window.OBSWebSocket();
-                           } else {
-                               console.warn("Librería OBS WS no cargada");
-                               return;
-                           }
-                       }
-                       
-                       obs = obsRef.current;
-
-                       // Configurar listeners SOLO UNA VEZ si es posible, o limpiar antes
-                       // (OBS WS JS maneja múltiples listeners bien, pero idealmente limpiar)
-                       obs.removeAllListeners(); 
-                       
-                       obs.on('StreamStateChanged', (data) => {
-                          setObsStreaming(data.outputActive);
-                          if(data.outputActive) notify("OBS: STREAM INICIADO", "warning");
-                          else notify("OBS: STREAM DETENIDO");
-                       });
-                      
-                       obs.on('RecordStateChanged', (data) => {
-                          setObsRecording(data.outputActive);
-                          if(data.outputActive) notify("OBS: GRABACIÓN INICIADA", "warning");
-                          else notify("OBS: GRABACIÓN DETENIDA");
-                       });
-
-                       obs.on('ConnectionClosed', () => {
-                          if(isMounted) {
-                              setObsConnected(false);
-                              setObsStreaming(false);
-                              setObsRecording(false);
-                              // La reconexión la maneja el intervalo
-                          }
-                       });
-
-                       // INTENTO DE CONEXIÓN EXPLÍCITO SIN PASSWORD (undefined)
-                       await obs.connect('ws://localhost:4455', undefined, { rpcVersion: 1 });
-                       
-                       if(isMounted) {
-                           setObsConnected(true);
-                           notify("OBS CONECTADO OK");
-                           // Obtener estados iniciales
-                           try {
-                               const streamStatus = await obs.call('GetStreamStatus');
-                               setObsStreaming(streamStatus.outputActive);
-                               const recordStatus = await obs.call('GetRecordStatus');
-                               setObsRecording(recordStatus.outputActive);
-                           } catch(e) {}
-                       }
-
-                  } catch (e) {
-                      // Silencioso, el intervalo reintentará
-                  }
-              };
-
-              // Bucle de intento de conexión cada 3s si no está conectado
-              connectInterval = setInterval(() => {
-                  if (!obsConnected && isMounted) {
-                      connectOBS();
-                  }
-              }, 3000);
-              
-              // Primer intento inmediato
-              connectOBS();
-
-              return () => {
-                  isMounted = false;
-                  clearInterval(connectInterval);
-                  if(obsRef.current) {
-                      obsRef.current.disconnect();
-                      obsRef.current = null;
-                  }
-              };
-          }, [obsConnected]); // Dependencia para reiniciar si se desconecta manualmente
+              const interval = setInterval(() => { if (!obsConnected) connectObs(); }, 5000);
+              connectObs();
+              return () => { clearInterval(interval); if(obsRef.current) obsRef.current.disconnect(); };
+          }, [obsConnected]);
 
           const sendToOBS = async (action) => {
-             if (!obsRef.current || !obsConnected) {
-                 notify("OBS NO CONECTADO", "error");
-                 return;
-             }
+             if (!obsRef.current || !obsConnected) return;
              try {
                  if (action === 'start-stream') await obsRef.current.call('StartStream');
                  if (action === 'stop-stream') await obsRef.current.call('StopStream');
                  if (action === 'start-record') await obsRef.current.call('StartRecord');
                  if (action === 'stop-record') await obsRef.current.call('StopRecord');
-             } catch (e) {
-                 notify(`Error OBS: ${e.message}`, "error");
-             }
+             } catch (e) {}
           };
 
-          const handleTimeUpdate = (duration, currentTime) => {
-              const remaining = duration - currentTime;
-              const newTimers = { intro: activeMedia === 'intro' ? remaining : 0, outro: activeMedia === 'outro' ? remaining : 0, banner: activeMedia === 'banner' ? remaining : 0, standby: activeMedia === 'standby' ? 1 : 0 };
-              setMediaTimers(newTimers);
-              if (directorConnRef.current?.open && activeMedia) { directorConnRef.current.send({ type: 'media-time', timers: newTimers }); }
-          };
-
-          const speakText = (text) => {
-              if('speechSynthesis' in window) {
-                  window.speechSynthesis.cancel();
-                  const u = new SpeechSynthesisUtterance(text); u.lang = 'es-MX'; u.pitch = 1.1; u.rate = 0.95;
-                  window.speechSynthesis.speak(u);
-              }
-          };
-
-          const generateSnapshots = () => {
-             Object.values(camerasRef.current).forEach(cam => {
-                 const vid = document.getElementById(cam.id);
-                 if(vid && !vid.paused && !vid.ended) {
-                     const cv = snapshotCanvasRef.current;
-                     cv.width = 160; cv.height = 90;
-                     const cx = cv.getContext('2d');
-                     cx.drawImage(vid, 0, 0, 160, 90);
-                     updateCameraState(cam.id, { snapshot: cv.toDataURL('image/jpeg', 0.5) });
-                 }
-             });
-          };
-
-          // FIX: PREVENIR CONGELAMIENTO EN SEGUNDO PLANO (KEEP ALIVE DUAL)
-          useEffect(() => {
-              let cleanup = () => {};
-              const initAudio = () => {
-                  try {
-                      const AudioContext = window.AudioContext || window.webkitAudioContext;
-                      if (!AudioContext) return;
-                      const ac = new AudioContext();
-                      const osc = ac.createOscillator();
-                      const gain = ac.createGain();
-                      osc.connect(gain);
-                      gain.connect(ac.destination);
-                      gain.gain.value = 0.0001; // Inaudible
-                      osc.start();
-                      
-                      // Monitor de Estado: Si el navegador suspende el audio, forzar reanudación
-                      const interval = setInterval(() => {
-                          if (ac.state === 'suspended') ac.resume().catch(()=>{});
-                      }, 1000);
-                      cleanup = () => { clearInterval(interval); ac.close().catch(()=>{}); };
-                  } catch(e) { console.log("Audio KA failed", e); }
-              };
-              initAudio();
-              return cleanup;
-          }, []);
-          
-          // FIX VENTANA OBS: AUTOPLAY FORZADO, TAMAÑO AJUSTABLE Y KEEP ALIVE
-          useEffect(() => {
-            if (obsWindowOpen) {
-                if (!obsWindowRef.current || obsWindowRef.current.closed) {
-                    const win = window.open('', 'OBS_OUTPUT', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no');
-                    if (win) {
-                        obsWindowRef.current = win;
-                        try {
-                            // CSS CRÍTICO PARA AJUSTE DE TAMAÑO (RESPONSIVO) Y FONDO NEGRO
-                            win.document.documentElement.style.backgroundColor = 'black';
-                            win.document.body.style.cssText = 'margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:black; display:flex; align-items:center; justify-content:center;';
-
-                            // KEEP ALIVE EN VENTANA FLOTANTE
-                            const AC = win.AudioContext || win.webkitAudioContext;
-                            if(AC) {
-                                const ac = new AC();
-                                const os = ac.createOscillator();
-                                const gn = ac.createGain();
-                                os.connect(gn); gn.connect(ac.destination);
-                                gn.gain.value = 0.0001; os.start();
-                                // Monitor anti-throttling en ventana hija
-                                const resumeInt = win.setInterval(() => {
-                                    if(ac.state === 'suspended') ac.resume().catch(e=>{});
-                                }, 1000);
-                                win.addEventListener('unload', () => clearInterval(resumeInt));
-                            }
-                            
-                            // SCRIPT DE AUTOPLAY FORZADO PARA VIDEO INYECTADO
-                            const autoplayScript = win.document.createElement('script');
-                            autoplayScript.textContent = `
-                                setInterval(() => {
-                                    const v = document.querySelector('video');
-                                    if(v) {
-                                        if(v.paused) v.play().catch(e => {});
-                                        if(v.muted && !v.dataset.manualMute) v.muted = false; // Desmutear si no es intencional
-                                        // Asegurar ajuste visual
-                                        if(v.style.objectFit !== 'contain') v.style.objectFit = 'contain';
-                                        if(v.style.width !== '100%') v.style.width = '100%';
-                                        if(v.style.height !== '100%') v.style.height = '100%';
-                                    }
-                                }, 1000);
-                            `;
-                            win.document.head.appendChild(autoplayScript);
-
-                        } catch(e){}
-
-                        const script = win.document.createElement('script');
-                        script.src = "https://cdn.tailwindcss.com";
-                        win.document.head.appendChild(script);
-
-                        Array.from(document.querySelectorAll('style')).forEach(style => {
-                            win.document.head.appendChild(style.cloneNode(true));
-                        });
-
-                        win.document.title = "SALIDA OBS | PRODOCK (CLEAN FEED)";
-
-                        // CONTENEDOR FLEXIBLE PARA VIDEO RESPONSIVO
-                        const container = win.document.createElement('div');
-                        container.style.height = '100%';
-                        container.style.width = '100%';
-                        container.style.display = 'flex';
-                        container.style.alignItems = 'center';
-                        container.style.justifyContent = 'center';
-                        container.style.backgroundColor = 'black';
-                        win.document.body.appendChild(container);
-                        setObsMountNode(container);
-
-                        win.onbeforeunload = () => {
-                            setObsWindowOpen(false);
-                            setObsMountNode(null);
-                        };
-                    }
-                }
-            } else {
-                if (obsWindowRef.current) {
-                    obsWindowRef.current.close();
-                    obsWindowRef.current = null;
-                    setObsMountNode(null);
-                }
-            }
-          }, [obsWindowOpen]);
-
-          useEffect(() => {
-              const isFullMedia = ['intro', 'outro', 'standby'].includes(activeMedia);
-              if (activeMedia === 'banner' || activeMedia === 'transicion' || isFullMedia) setHeaderHidden(true);
-              else setHeaderHidden(false);
-              if (directorConnRef.current?.open) directorConnRef.current.send({ type: 'dock-status', activeMedia });
-          }, [activeMedia]);
-
-          useEffect(() => { camerasRef.current = cameras; }, [cameras]);
-
+          // --- PEERJS & LOGIC ---
           useEffect(() => {
             let baseId = preferredId;
             if (baseId?.endsWith("-8889")) baseId = baseId.slice(0, -5);
             baseId = baseId ? baseId.replace(/\./g, '-') : null;
-
             if (!baseId) return;
 
-            const peerCmd = new window.Peer(baseId, { ...PEER_CONFIG, debug: 1 });
+            const peerCmd = new window.Peer(baseId, PEER_CONFIG);
             peerRef.current = peerCmd;
 
-            peerCmd.on('open', (id) => {
-                setMyId(id);
-            });
-
+            peerCmd.on('open', (id) => setMyId(id));
             peerCmd.on('connection', (conn) => {
                 conn.on('data', (data) => {
                     if (data.type === 'register') { 
-                        updateCameraState(data.name, { 
-                            id: data.name, 
-                            conn: conn, 
-                            name: data.name, 
-                            tally: 'idle', 
-                            hasAI: data.hasAI 
-                        }); 
-                        notify(`CÁMARA CONECTADA: ${data.name.toUpperCase()}`); 
+                        setCameras(prev => ({ ...prev, [data.name]: { id: data.name, conn, name: data.name, tally: 'idle', hasAI: data.hasAI } })); 
+                        notify(`CAMARA: ${data.name}`); 
                     }
-                    if (data.type === 'register-director') { directorConnRef.current = conn; notify("DIRECTOR REMOTO ENLAZADO"); }
+                    if (data.type === 'register-director') { directorConnRef.current = conn; notify("DIRECTOR CONECTADO"); }
+                    if (data.type === 'register-obs-client') { 
+                        obsClientsRef.current.push(conn.peer);
+                        conn.send({ type: 'program-update', activeMedia });
+                    }
                     if (data.type === 'director-cmd') handleDirectorCommand(data);
-                    if (data.type === 'ai-speech') speakText(data.text);
                 });
-                conn.on('error', () => notify("Error de enlace datos", "error"));
             });
 
-            peerCmd.on('error', (err) => console.error("PeerCMD Error", err));
-
             const videoId = baseId + "-8889";
-            const peerVid = new window.Peer(videoId, { ...PEER_CONFIG, debug: 1 });
+            const peerVid = new window.Peer(videoId, PEER_CONFIG);
             videoPeerRef.current = peerVid;
-
-            peerVid.on('open', (id) => console.log("Video Peer Open:", id));
             
             peerVid.on('call', (call) => { 
                 call.answer(); 
                 call.on('stream', (stream) => { 
                     const name = call.metadata?.name || call.peer; 
-                    updateCameraState(name, { stream: stream }); 
-                    notify(`VIDEO RECIBIDO DE ${name.toUpperCase()}`); 
+                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } })); 
                 }); 
             });
-
-            peerVid.on('error', (err) => console.error("PeerVID Error", err));
             
-            const interval = setInterval(() => { 
-                generateSnapshots();
-                if (directorConnRef.current?.open) { 
-                    directorConnRef.current.send({ 
-                        type: 'camera-list-update', 
-                        cameras: Object.values(camerasRef.current).map(c => ({ 
-                            id: c.id, 
-                            name: c.name, 
-                            tally: c.tally, 
-                            hasAI: c.hasAI, 
-                            filter: c.filter,
-                            snapshot: c.snapshot 
-                        })) 
-                    }); 
-                    // FIX: USAR REF PARA LEER ESTADO OBS ACTUAL (EVITA STALE CLOSURE)
-                    directorConnRef.current.send({ type: 'obs-state-update', state: obsStateRef.current });
-                } 
+            const statusInterval = setInterval(() => {
+                 if (directorConnRef.current?.open) {
+                     directorConnRef.current.send({ 
+                         type: 'dock-status', 
+                         activeMedia, 
+                         assetStatus
+                     });
+                     directorConnRef.current.send({ type: 'obs-state-update', state: { streaming: obsStreaming, recording: obsRecording, connected: obsConnected } });
+                 }
             }, 1000);
 
-            return () => { 
-                peerCmd.destroy(); 
-                peerVid.destroy();
-                clearInterval(interval); 
-            };
-          }, []); 
+            return () => { peerCmd.destroy(); peerVid.destroy(); clearInterval(statusInterval); };
+          }, [assetStatus, activeMedia, obsStreaming, obsRecording, obsConnected]);
 
-          const updateCameraState = (key, data) => setCameras(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...data } }));
-          
-          const sendTallyUpdate = (pId, pvId) => { 
-            Object.values(camerasRef.current).forEach(cam => { 
-                if (!cam.conn) return; 
-                const state = cam.id === pId ? 'program' : (cam.id === pvId ? 'preview' : 'idle'); 
-                if (cam.tally !== state) { cam.conn.send({ type: 'tally', state }); updateCameraState(cam.id, { tally: state }); } 
-            }); 
-          };
-
-          const handleDirectorCommand = (cmd) => {
-              if (cmd.category === 'obs') {
-                  sendToOBS(cmd.action);
-              }
-              if (cmd.category === 'cam') {
-                  const targetCamId = cmd.target || previewRef.current || programRef.current;
-                  if (targetCamId) {
-                      camerasRef.current[targetCamId]?.conn?.send({ type: 'cmd', action: cmd.action, value: cmd.value });
-                      if(cmd.action === 'filter') updateCameraState(targetCamId, { filter: cmd.value });
+          // --- WATCHDOG: FAILOVER AUTOMATICO ---
+          // Monitorea si la cámara en Programa pierde stream o conexión
+          useEffect(() => {
+              if (programId && !activeMedia) {
+                  const currentCam = cameras[programId];
+                  // Condición de fallo: Cámara no existe O no tiene stream activo
+                  const isSignalLost = !currentCam || !currentCam.stream || !currentCam.stream.active;
+                  
+                  if (isSignalLost) {
+                      notify("⚠️ SEÑAL PERDIDA: INICIANDO FAILOVER", "error");
+                      handleFailover();
                   }
               }
-              if (cmd.category === 'media') handlePlayLocal(cmd.value);
-              if (cmd.category === 'mixer') {
-                    const pId = previewRef.current;
-                    const prId = programRef.current;
-                    
-                    if(cmd.action === 'cut' && pId) switchProgram(pId);
-                    if(cmd.action === 'auto') {
-                        if (cmd.value && camerasRef.current[cmd.value]) { 
-                             setPreviewId(cmd.value); 
-                             sendTallyUpdate(prId, cmd.value); 
-                             setTimeout(() => handleAuto(), 50); 
-                        } 
-                        else if (pId) { handleAuto(); }
-                    }
-                    if(cmd.action === 'preview') { setPreviewId(cmd.value); sendTallyUpdate(prId, cmd.value); }
-                    if(cmd.action === 'program') switchProgram(cmd.value);
-              }
-              if (cmd.category === 'peek' && directorConnRef.current?.peer) {
-                  if (cmd.action === 'start') {
-                      const stream = camerasRef.current[cmd.value]?.stream;
-                      if(stream && videoPeerRef.current) {
-                           peekCallRef.current = videoPeerRef.current.call(directorConnRef.current.peer, stream);
-                      }
-                  } else if (peekCallRef.current) { peekCallRef.current.close(); peekCallRef.current = null; }
+          }, [programId, cameras, activeMedia]);
+
+          const handleFailover = () => {
+              // 1. Verificar si transicion está lista, si no, corte directo a Backup
+              const transReady = assetStatus['transicion'] === 'ready';
+              
+              if(transReady) {
+                  setActiveMedia('transicion');
+                  setHeaderHidden(true);
+                  // 2. Esperar transición y lanzar Backup Rotativo
+                  setTimeout(() => {
+                       playNextBackup();
+                  }, 1200);
+              } else {
+                  playNextBackup();
               }
           };
 
-          const switchProgram = (id, keepMedia = false) => { 
-              setProgramId(id); 
-              setPreviewId(null); 
-              sendTallyUpdate(id, null); 
-              if (!keepMedia) setActiveMedia(null); 
-              setHeaderHidden(false); 
+          const playNextBackup = () => {
+              const backups = ['backup1', 'backup2'];
+              // Buscar el siguiente backup disponible
+              let nextIdx = backupIndex;
+              let found = false;
+              let attempts = 0;
+
+              while(attempts < 2) {
+                  const key = backups[nextIdx];
+                  if (assetStatus[key] === 'ready') {
+                      setActiveMedia(key);
+                      setBackupIndex((nextIdx + 1) % 2); // Rotar indice
+                      notify(`REPRODUCIENDO RESPALDO: ${key.toUpperCase()}`, "warning");
+                      found = true;
+                      break;
+                  }
+                  nextIdx = (nextIdx + 1) % 2;
+                  attempts++;
+              }
+
+              if (!found) {
+                  notify("⚠️ NO HAY VIDEOS DE RESPALDO DISPONIBLES", "error");
+                  setActiveMedia('standby'); // Fallback final
+              }
+          };
+
+          // Sincronización Clean Feed OBS Local
+          useEffect(() => {
+              if (programId && cameras[programId]?.stream && videoPeerRef.current) {
+                  obsClientsRef.current.forEach(clientId => {
+                      try { videoPeerRef.current.call(clientId, cameras[programId].stream); } catch(e){}
+                  });
+              }
+              if(peerRef.current) {
+                  Object.values(peerRef.current.connections).forEach(conns => conns.forEach(c => {
+                      if(c.open) c.send({ type: 'program-update', activeMedia });
+                  }));
+              }
+          }, [programId, activeMedia, cameras]);
+
+          const handleDirectorCommand = (cmd) => {
+              if (cmd.category === 'media') handlePlayLocal(cmd.value);
+              if (cmd.category === 'mixer') {
+                    if(cmd.action === 'cut') switchProgram(previewId);
+                    if(cmd.action === 'auto') handleAuto();
+                    if(cmd.action === 'preview') setPreviewId(cmd.value);
+                    if(cmd.action === 'program') switchProgram(cmd.value);
+              }
+              if (cmd.category === 'obs') sendToOBS(cmd.action);
+          };
+
+          const switchProgram = (id) => { 
+              setProgramId(id); setPreviewId(null); setActiveMedia(null); setHeaderHidden(false); 
+              Object.values(cameras).forEach(c => {
+                  if(c.conn) c.conn.send({ type: 'tally', state: c.id === id ? 'program' : 'idle' });
+              });
           };
           
-          const handleAuto = () => { 
+          const handleAuto = () => {
+              if(assetStatus['transicion'] !== 'ready') {
+                  notify("TRANSICIÓN NO DISPONIBLE", "error");
+                  return;
+              }
               handlePlayLocal('transicion'); 
-              setTimeout(() => {
-                  if(previewRef.current) switchProgram(previewRef.current, true); 
-              }, 1200); 
+              setTimeout(() => { if(previewId) switchProgram(previewId); }, 1200); 
           };
           
           const handlePlayLocal = (type) => { 
+              if(assetStatus[type] !== 'ready') return;
               if(activeMedia === type && type === 'banner') { setActiveMedia(null); return; } 
-              if(type === 'outro') setIsOutroTriggered(true); else setIsOutroTriggered(false); 
               setActiveMedia(type); 
+              if(type === 'intro' || type === 'transicion') setHeaderHidden(true);
           };
           
           const handleMediaFinish = () => {
-              if (activeMedia === 'outro' && isOutroTriggered) {
-                  sendToOBS('stop-stream'); 
-                  sendToOBS('stop-record'); 
-                  notify("FIN DE TRANSMISIÓN (AUTO)", "warning");
-                  setIsOutroTriggered(false);
+              if (activeMedia === 'outro') { sendToOBS('stop-stream'); sendToOBS('stop-record'); }
+              
+              // Si terminamos un backup, verificar si la señal volvió
+              if (activeMedia.startsWith('backup')) {
+                  const cam = cameras[programId];
+                  if (cam && cam.stream && cam.stream.active) {
+                      notify("SEÑAL RECUPERADA - VOLVIENDO AL AIRE", "success");
+                      setActiveMedia(null); // Volver a cámara
+                  } else {
+                      notify("SEÑAL AÚN PERDIDA - ROTANDO BACKUP", "warning");
+                      handleFailover(); // Intentar siguiente backup
+                      return;
+                  }
               }
-              if (activeMedia === 'transicion' || activeMedia === 'banner') { setActiveMedia(null); setHeaderHidden(false); return; }
-              const target = previewId || cam1Id;
-              if (target) switchProgram(target); else setActiveMedia(null);
+
+              setActiveMedia(null); setHeaderHidden(false);
           };
 
-          const removeCamera = (id) => {
-              setCameras(prev => { const next = { ...prev }; delete next[id]; return next; });
-              if(programId === id) setProgramId(null); if(previewId === id) setPreviewId(null);
-              notify(`CÁMARA ELIMINADA: ${id.toUpperCase()}`, 'warning');
-          };
-          
-          // --- GESTIÓN DE LONG PRESS PARA ZOOM ---
-          const handleGridPointerDown = (e, camId) => {
-              e.preventDefault(); // Evitar comportamientos por defecto
-              longPressTimerRef.current = setTimeout(() => {
-                  if (navigator.vibrate) navigator.vibrate(50);
-                  setZoomedCamId(camId);
-                  longPressTimerRef.current = null;
-              }, 600); // 600ms = Long Press
-          };
-
-          const handleGridPointerUp = (e, camId) => {
-              // Si el timer sigue existiendo, significa que NO fue long press (fue un click corto)
-              if (longPressTimerRef.current) {
-                  clearTimeout(longPressTimerRef.current);
-                  longPressTimerRef.current = null;
-                  setPreviewId(camId); // Acción normal de click: seleccionar preview
-              }
-              // Si el timer es null, significa que YA se disparó el zoom, no hacemos nada más
-          };
-
-          const handleGridPointerLeave = () => {
-              if (longPressTimerRef.current) {
-                  clearTimeout(longPressTimerRef.current);
-                  longPressTimerRef.current = null;
-              }
+          const generateObsLink = () => {
+              const url = `${window.location.href.split('?')[0]}?mode=obs-clean&target=${myId}`;
+              navigator.clipboard.writeText(url);
+              notify("LINK OBS COPIADO");
+              alert("ENLACE LOCAL GENERADO:\n\n1. Ve a OBS en esta PC.\n2. Agrega 'Navegador'.\n3. Pega el enlace.\n\n" + url);
           };
 
           const previewCam = previewId ? cameras[previewId] : null;
+          const camList = Object.values(cameras);
+          const isTransicionReady = assetStatus['transicion'] === 'ready';
+
+          // Detector visual de modo emergencia
+          const isFailoverMode = activeMedia && activeMedia.startsWith('backup');
 
           return (
-            <div className="h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden select-none">
+            <div className={`h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden select-none ${isFailoverMode ? 'emergency-mode' : ''}`}>
                 <ToastContainer notifications={notifications} />
                 {isShareModalOpen && <ShareModal onClose={() => setIsShareModalOpen(false)} dockId={myId} />}
                 {zoomedCamId && cameras[zoomedCamId] && <ZoomModal stream={cameras[zoomedCamId].stream} name={cameras[zoomedCamId].name} onClose={() => setZoomedCamId(null)} />}
@@ -1165,27 +797,28 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.20</span>
-                        <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} />
-                        {!obsConnected && <span className="ml-4 text-[9px] font-bold text-neutral-600 animate-pulse tracking-widest uppercase">BUSCANDO OBS...</span>}
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.26</span>
+                        <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} isFailover={isFailoverMode} />
                     </div>
                     
                     <div className="flex items-center gap-4">
-                        {obsConnected && (
-                            <>
-                                <button onClick={() => sendToOBS(obsStreaming ? 'stop-stream' : 'start-stream')} className={`px-4 py-1 rounded text-[10px] font-bold uppercase transition-all ${obsStreaming ? 'bg-red-600 text-white animate-pulse' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}>
-                                    {obsStreaming ? 'DETENER LIVE' : 'INICIAR LIVE'}
-                                </button>
-                                <button onClick={() => sendToOBS(obsRecording ? 'stop-record' : 'start-record')} className={`px-4 py-1 rounded text-[10px] font-bold uppercase transition-all ${obsRecording ? 'bg-yellow-600 text-black' : 'bg-neutral-800 text-neutral-400 hover:text-white'}`}>
-                                    {obsRecording ? 'PARAR REC' : 'GRABAR'}
-                                </button>
-                            </>
-                        )}
+                        <button 
+                            onClick={() => sendToOBS(obsStreaming ? 'stop-stream' : 'start-stream')} 
+                            disabled={!obsConnected}
+                            className={`px-4 py-1 rounded text-[10px] font-bold uppercase transition-all ${obsStreaming ? 'bg-red-600 text-white animate-pulse' : 'bg-neutral-800 text-neutral-400 hover:text-white'} ${!obsConnected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                            {obsStreaming ? 'STOP LIVE' : 'GO LIVE'}
+                        </button>
+                        <button 
+                            onClick={() => sendToOBS(obsRecording ? 'stop-record' : 'start-record')} 
+                            disabled={!obsConnected}
+                            className={`px-4 py-1 rounded text-[10px] font-bold uppercase transition-all ${obsRecording ? 'bg-white text-black' : 'bg-neutral-800 text-neutral-400 hover:text-white'} ${!obsConnected ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                            {obsRecording ? 'STOP REC' : 'REC'}
+                        </button>
                     </div>
 
                     <div className="absolute right-4 flex items-center gap-4">
-                        <div className="font-mono text-cyan-400 text-[10px] bg-[#111] px-2 py-1 border border-[#333] rounded cursor-copy uppercase tracking-widest uppercase" onClick={() => { navigator.clipboard.writeText(myId); notify("Copiado al portapapeles"); }}>Dock ID: {myId || '---'}</div>
-                        <button onClick={() => setObsWindowOpen(true)} className="text-[10px] bg-white text-black px-3 py-1 rounded font-bold uppercase flex items-center gap-1 shadow-lg active:scale-95 transition-all"><Maximize size={12}/> Salida OBS</button>
+                        <div className="font-mono text-cyan-400 text-[10px] bg-[#111] px-2 py-1 border border-[#333] rounded cursor-pointer uppercase tracking-widest" onClick={() => { navigator.clipboard.writeText(myId); notify("Copiado"); }}>ID: {myId || '---'}</div>
+                        <button onClick={generateObsLink} className="text-[10px] bg-blue-900/30 text-blue-200 border border-blue-800 px-3 py-1 rounded font-bold uppercase flex items-center gap-1 shadow-lg active:scale-95 transition-all"><Link size={12}/> Link Local OBS</button>
                     </div>
                 </div>
 
@@ -1193,86 +826,99 @@
                     <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                         <div className="h-[55%] flex gap-4">
                             <div className="flex-1 bg-black rounded-xl border border-neutral-800 relative overflow-hidden shadow-2xl">
-                                <div className="absolute top-3 left-3 bg-green-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest uppercase tracking-widest">Preview</div>
-                                {previewCam?.stream ? (
-                                    <VideoPeer key={`preview-${previewId}`} stream={previewCam.stream} className="w-full h-full object-contain" />
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 opacity-10">
-                                        <Monitor size={48} />
-                                        <span className="text-[10px] font-bold uppercase tracking-widest uppercase tracking-widest">Sin Selección</span>
-                                    </div>
-                                )}
+                                <div className="absolute top-3 left-3 bg-green-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest">Preview</div>
+                                {previewCam?.stream ? ( <VideoPeer stream={previewCam.stream} className="w-full h-full object-contain" /> ) : ( <div className="w-full h-full flex items-center justify-center opacity-10"><Monitor size={48} /></div> )}
                             </div>
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/40 relative overflow-hidden shadow-2xl">
-                                 <div className="absolute top-3 left-3 bg-red-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest uppercase tracking-widest">Program</div>
+                                 <div className="absolute top-3 left-3 bg-red-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest">Program</div>
                                  <div className="relative w-full h-full bg-[#050505]">
-                                    {!obsMountNode ? (
-                                        <VideoPeer key={`prog-${programId}`} stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={isGlobalMuted || obsWindowOpen} />
-                                    ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 animate-pulse">
-                                             <ExternalLink size={48} className="mb-4 text-red-500"/>
-                                             <span className="font-bold tracking-widest uppercase text-xs">VISUALIZANDO EN SALIDA OBS</span>
-                                        </div>
-                                    )}
+                                    <VideoPeer stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={true} />
                                     <BroadcastHUD hidden={headerHidden} />
-                                    <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} onTimeUpdate={handleTimeUpdate} />
+                                    <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={handleMediaFinish} />
                                  </div>
                             </div>
                         </div>
                         <div className="h-16 bg-[#111] rounded-xl border border-neutral-800 flex items-center justify-center gap-8 shadow-inner border-t-2 border-neutral-900/50">
-                             <button onClick={() => previewId && switchProgram(previewId)} className="h-10 px-10 bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded uppercase text-[10px] active:translate-y-0.5 shadow-md border-b-2 border-neutral-900 tracking-widest font-bold tracking-widest uppercase">Cut</button>
-                             <button onClick={handleAuto} className="h-12 px-16 bg-red-800 hover:bg-red-700 text-white font-bold rounded uppercase text-xs active:translate-y-0.5 shadow-xl border-b-4 border-red-950 tracking-[0.3em] font-bold tracking-widest uppercase">Auto Mix</button>
-                             <button onClick={() => handlePlayLocal('standby')} className={`h-10 px-6 bg-black border border-neutral-800 text-neutral-500 hover:text-white rounded text-[10px] uppercase font-bold tracking-widest transition-colors font-bold tracking-widest uppercase ${activeMedia === 'standby' ? 'border-yellow-600 text-yellow-500' : ''}`}>Pausar</button>
+                             <button onClick={() => previewId && switchProgram(previewId)} className="h-10 px-10 bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded uppercase text-[10px] active:translate-y-0.5 shadow-md border-b-2 border-neutral-900 tracking-widest">Cut</button>
+                             <button onClick={handleAuto} disabled={!isTransicionReady} className={`h-12 px-16 bg-red-800 hover:bg-red-700 text-white font-bold rounded uppercase text-xs active:translate-y-0.5 shadow-xl border-b-4 border-red-950 tracking-[0.3em] ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
+                             <button onClick={() => handlePlayLocal('standby')} disabled={assetStatus['standby'] !== 'ready'} className={`h-10 px-6 bg-black border border-neutral-800 text-neutral-500 hover:text-white rounded text-[10px] uppercase font-bold tracking-widest transition-colors ${activeMedia === 'standby' ? 'border-yellow-600 text-yellow-500' : ''} ${assetStatus['standby'] !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''}`}>Pausar</button>
                         </div>
                         <div className="flex-1 bg-[#080808] rounded-xl p-3 border border-neutral-800 overflow-y-auto">
                             <div className="grid grid-cols-4 lg:grid-cols-5 gap-3 content-start">
                                 {camList.map(cam => (
                                     <div key={cam.id} 
-                                        onPointerDown={(e) => handleGridPointerDown(e, cam.id)}
-                                        onPointerUp={(e) => handleGridPointerUp(e, cam.id)}
-                                        onPointerLeave={handleGridPointerLeave}
-                                        className={`aspect-video bg-black rounded-lg border-2 cursor-pointer relative overflow-hidden transition-all group ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : cam.tally === 'preview' ? 'preview-selected border-green-600 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-neutral-800 hover:border-neutral-600'}`}>
-                                        
-                                        {cam.stream && <VideoPeer id={cam.id} stream={cam.stream} className="w-full h-full object-cover opacity-60 pointer-events-none" />}
-                                        <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1 text-[9px] font-bold uppercase tracking-tighter flex items-center justify-between border-t border-white/5 uppercase tracking-widest uppercase pointer-events-none">
-                                            <span className="truncate max-w-[70%]">{cam.name}</span>
-                                            <button onClick={(e) => { e.stopPropagation(); removeCamera(cam.id); }} className="p-1 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 pointer-events-auto"><Trash2 size={12}/></button>
-                                        </div>
+                                        onClick={() => setPreviewId(cam.id)}
+                                        className={`aspect-video bg-black rounded-lg border-2 cursor-pointer relative overflow-hidden transition-all group ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'border-neutral-800 hover:border-neutral-600'}`}>
+                                        {cam.stream && <VideoPeer stream={cam.stream} className="w-full h-full object-cover opacity-60 pointer-events-none" />}
+                                        <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1 text-[9px] font-bold uppercase tracking-tighter truncate">{cam.name}</div>
                                     </div>
                                 ))}
-                                {camList.length === 0 && <div className="col-span-full py-10 text-center text-neutral-800 text-[10px] font-bold uppercase tracking-[0.5em] opacity-30 uppercase tracking-widest uppercase tracking-widest">Sin cámaras activas</div>}
+                                {camList.length === 0 && <div className="col-span-full py-10 text-center text-neutral-800 text-[10px] font-bold uppercase tracking-[0.5em] opacity-30">Sin cámaras activas</div>}
                             </div>
                         </div>
                     </div>
                     <div className="w-64 bg-[#111] border-l border-neutral-800 flex flex-col shrink-0 shadow-2xl">
                         <div className="p-4 border-b border-neutral-800 space-y-3">
-                            <button onClick={() => setIsShareModalOpen(true)} className="w-full bg-green-900/20 text-green-500 text-[10px] py-2 rounded border border-green-800 uppercase font-bold hover:bg-green-900/40 transition-colors tracking-widest font-bold tracking-widest uppercase">Compartir Acceso</button>
-                            <button onClick={() => setForceCam1Audio(!forceCam1Audio)} className={`w-full text-xs py-2 rounded border flex items-center justify-center gap-2 transition-colors font-bold font-bold tracking-widest uppercase ${forceCam1Audio ? 'bg-blue-900 text-white border-blue-500' : 'bg-neutral-800 text-gray-400 border-neutral-700'}`}><Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: MEZCLA AUTO'}</button>
+                            <button onClick={() => setIsShareModalOpen(true)} className="w-full bg-green-900/20 text-green-500 text-[10px] py-2 rounded border border-green-800 uppercase font-bold hover:bg-green-900/40 transition-colors tracking-widest">Compartir Acceso</button>
                         </div>
                         <MediaPanel onPlay={handlePlayLocal} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
-                        <DirectorPanel activeCam={previewCam || cameras[programId]} onCommand={handleDirectorCommand} isOffline={false} currentFilter={previewCam?.filter || cameras[programId]?.filter || 'normal'} />
+                        <DirectorPanel activeCam={previewCam || cameras[programId]} onCommand={()=>{}} isOffline={false} currentFilter={previewCam?.filter || 'normal'} />
                     </div>
                 </div>
-                
-                {obsMountNode && createPortal(
-                    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
-                        <div className="relative w-full h-full bg-black flex items-center justify-center">
-                            {/* VIDEO DE VENTANA FLOTANTE: Instancia Independiente CLONADA */}
-                            {programId && cameras[programId]?.stream ? (
-                                <VideoPeer key={`obs-prog-${programId}`} stream={cameras[programId].stream} className="w-full h-full object-contain" muted={isGlobalMuted} />
-                            ) : (
-                                <div className="w-full h-full bg-black flex items-center justify-center">
-                                    <img src="./obr-logo.png" className="w-32 opacity-10" />
-                                </div>
-                            )}
-                            <BroadcastHUD hidden={headerHidden} />
-                            <MediaOverlay activeMedia={activeMedia} onFinish={handleMediaFinish} />
-                        </div>
-                    </div>,
-                    obsMountNode
-                )}
             </div>
           );
+        };
+
+        // --- ASSET LOADER (BLOQUEO INICIAL) ---
+        const AssetLoader = ({ onReady }) => {
+            const [status, setStatus] = useState({});
+            const [progress, setProgress] = useState(0);
+
+            useEffect(() => {
+                const loadAll = async () => {
+                    const loadedBlobs = {};
+                    const keys = Object.keys(STUDIO_ASSETS);
+                    let loadedCount = 0;
+
+                    for (const key of keys) {
+                        try {
+                            setStatus(prev => ({...prev, [key]: 'loading'}));
+                            const response = await fetch(STUDIO_ASSETS[key]);
+                            if (!response.ok) throw new Error('Error');
+                            const blob = await response.blob();
+                            loadedBlobs[key] = URL.createObjectURL(blob);
+                            setStatus(prev => ({...prev, [key]: 'ready'}));
+                        } catch (e) {
+                            console.error(e);
+                            setStatus(prev => ({...prev, [key]: 'error'}));
+                        }
+                        loadedCount++;
+                        setProgress(Math.round((loadedCount / keys.length) * 100));
+                    }
+                    setTimeout(() => onReady(loadedBlobs), 800);
+                };
+                loadAll();
+            }, []);
+
+            return (
+                <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white font-mono z-[9999]">
+                    <img src="./obr-logo.png" className="w-20 h-20 mb-6 animate-pulse drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
+                    <div className="text-xs tracking-[0.5em] text-red-500 mb-2 font-bold uppercase">Descargando Medios...</div>
+                    <div className="w-64 h-1 bg-neutral-900 rounded overflow-hidden mb-6 border border-neutral-800">
+                        <div className="h-full bg-red-600 transition-all duration-300" style={{width: `${progress}%`}}></div>
+                    </div>
+                    <div className="text-[9px] text-neutral-500 flex flex-col gap-1 items-start min-w-[200px]">
+                        {Object.keys(STUDIO_ASSETS).map(k => (
+                            <div key={k} className="flex justify-between w-full uppercase tracking-widest">
+                                <span className="opacity-50">{k}</span>
+                                <span className={status[k] === 'ready' ? 'text-green-500 font-bold' : 'text-neutral-600'}>
+                                    {status[k] === 'ready' ? 'OK' : status[k] === 'error' ? 'ERR' : '...'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
         };
 
         const Lobby = ({ onCreate, onRemote }) => {
@@ -1284,15 +930,15 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold tracking-widest uppercase tracking-widest">Motor de Dirección v6.0.20</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.26</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
-                    <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest uppercase tracking-widest">ID (Tailscale IP)</label>
-                    <input value={customId} onChange={e => setCustomId(e.target.value)} placeholder="Ej: 100.80.20.14" className="w-full bg-transparent text-white font-mono text-center outline-none border-b border-gray-700 focus:border-red-500 text-sm py-1 uppercase font-bold tracking-widest uppercase"/>
+                    <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest">ID (Tailscale IP)</label>
+                    <input value={customId} onChange={e => setCustomId(e.target.value)} placeholder="Ej: 100.80.20.14" className="w-full bg-transparent text-white font-mono text-center outline-none border-b border-gray-700 focus:border-red-500 text-sm py-1 uppercase font-bold tracking-widest"/>
                 </div>
-                <button onClick={() => onCreate(customId)} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-[1.02] transition-all uppercase tracking-widest font-bold uppercase tracking-widest"><Monitor size={20} /> Crear Estudio</button>
+                <button onClick={() => onCreate(customId)} className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:scale-[1.02] transition-all uppercase tracking-widest"><Monitor size={20} /> Crear Estudio</button>
                 <div className="h-px bg-[#333] w-full"></div>
-                <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-all uppercase tracking-widest font-bold uppercase tracking-widest"><Smartphone size={20} /> Conectar Director</button>
+                <button onClick={onRemote} className="w-full bg-[#222] text-gray-300 font-bold py-4 rounded-xl flex items-center justify-center gap-3 border border-[#333] hover:bg-[#333] hover:text-white transition-all uppercase tracking-widest"><Smartphone size={20} /> Conectar Director</button>
               </div>
             </div>
           );
@@ -1302,17 +948,30 @@
           const loaded = usePeerJS();
           const [mode, setMode] = useState('lobby');
           const [id, setId] = useState("");
+          const [assets, setAssets] = useState(null);
           
-          if(!loaded) return (
-            <div className="h-screen w-screen bg-black flex flex-col items-center justify-center gap-4">
-                <div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Iniciando v6.0.20...</div>
-            </div>
-          );
+          useEffect(() => {
+              const params = new URLSearchParams(window.location.search);
+              if (params.get('mode') === 'obs-clean' && params.get('target')) {
+                  setId(params.get('target'));
+                  setMode('loading-assets-obs');
+              }
+          }, []);
+
+          const handleAssetsReady = (loadedBlobs) => {
+              setAssets(loadedBlobs);
+              if (mode === 'loading-assets-obs') setMode('obs-clean');
+              else setMode('dock');
+          };
+
+          if(!loaded) return <div className="h-screen w-screen bg-black flex items-center justify-center"><div className="text-red-600 animate-pulse font-bold text-xs tracking-[0.5em] uppercase">Cargando Sistema...</div></div>;
 
           return (
             <>
-              {mode === 'lobby' && <Lobby onCreate={(val) => { setId(val); setMode('dock'); }} onRemote={() => setMode('remote-director')} />}
-              {mode === 'dock' && <DockMode preferredId={id} />}
+              {mode === 'lobby' && <Lobby onCreate={(val) => { setId(val); setMode('loading-assets-dock'); }} onRemote={() => setMode('remote-director')} />}
+              {(mode === 'loading-assets-dock' || mode === 'loading-assets-obs') && <AssetLoader onReady={handleAssetsReady} />}
+              {mode === 'dock' && <DockMode preferredId={id} initialBlobAssets={assets} />}
+              {mode === 'obs-clean' && <ObsCleanFeed targetId={id} blobAssets={assets} />}
               {mode === 'remote-director' && <RemoteDirector onBack={() => setMode('lobby')} />}
             </>
           );
