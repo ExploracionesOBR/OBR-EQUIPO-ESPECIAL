@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.28</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.30</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -150,10 +150,12 @@
             const videoRef = useRef(null);
             useEffect(() => { 
                 const vid = videoRef.current;
-                if (vid && stream) { 
-                    vid.srcObject = stream; 
+                if (vid) { 
                     vid.muted = muted;
-                    vid.play().catch(e => {});
+                    if (stream && vid.srcObject !== stream) {
+                        vid.srcObject = stream; 
+                        vid.play().catch(e => {});
+                    }
                 } 
             }, [stream, muted]);
             return <video id={id} ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
@@ -172,17 +174,6 @@
                 ))}
             </div>
         );
-
-        const BroadcastHUD = ({ hidden }) => {
-             return (
-                <div className={`absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30 transition-all duration-500 ${hidden ? 'opacity-0' : 'opacity-100'}`}>
-                    <div className="absolute top-4 left-4 flex items-center gap-2 opacity-80">
-                         <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_#dc2626]"></div>
-                         <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">OBR LIVE FEED</span>
-                    </div>
-                </div>
-             );
-        };
 
         const MediaOverlay = ({ activeMedia, blobAssets, onFinish, onTimeUpdate }) => {
             if (!activeMedia || !blobAssets[activeMedia]) return null;
@@ -227,7 +218,6 @@
 
         const DirectorPanel = ({ activeCam, onCommand, isOffline, currentFilter }) => {
             const handleFilterToggle = (filterName) => { 
-                // ENVIAR COMANDO DIRECTO A LA CÁMARA ACTIVA
                 onCommand({ category: 'cam', action: 'filter', value: currentFilter === filterName ? 'normal' : filterName, target: activeCam?.id }); 
             };
             const canUseAI = activeCam?.hasAI || false;
@@ -277,7 +267,6 @@
                 if (type === 'intro') return activeMedia === 'intro' ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-cyan-900/10 text-cyan-400 border-cyan-900/50 hover:bg-cyan-900/30';
                 if (type === 'banner') return activeMedia === 'banner' ? 'bg-blue-600 text-white border-blue-400' : 'bg-blue-900/10 text-blue-400 border-blue-900/50 hover:bg-blue-900/30';
                 if (type === 'outro') return activeMedia === 'outro' ? 'bg-red-600 text-white border-red-400' : 'bg-red-900/10 text-red-400 border-red-900/50 hover:bg-red-900/30';
-                // Estilo para Backups
                 if (type.startsWith('backup')) return activeMedia === type ? 'bg-yellow-700 text-white border-yellow-500 animate-pulse' : 'bg-neutral-900 text-yellow-700 border-yellow-900/30';
 
                 return 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white';
@@ -297,11 +286,10 @@
                                     {(assetStatus?.[key] === 'loading' || !assetStatus?.[key]) ? <><Loader2 className="animate-spin" size={12}/> CARGANDO...</> : 
                                      assetStatus?.[key] === 'error' ? 'NO DISPONIBLE' :
                                      (key === 'standby' ? (activeMedia === 'standby' ? 'PAUSADO' : 'PAUSA') : 
-                                     (timers && timers[key] > 0 ? formatTime(timers[key]) : key))}
+                                     (timers && timers[key] > 0 ? formatTime(timers[key]) : key.toUpperCase()))}
                                 </span>
                             </button>
                         ))}
-                        {/* Indicadores de Backup (Solo lectura o activacion manual) */}
                         {['backup1', 'backup2'].map(key => (
                             <button key={key} disabled={isDisabled(key)} onClick={() => onPlay(key)} className={`col-span-1 relative text-[10px] py-2 rounded border flex items-center justify-center gap-1 font-bold ${getButtonStyle(key)}`}>
                                 <ShieldAlert size={10}/> {key.toUpperCase()}
@@ -312,7 +300,6 @@
             );
         };
         
-        // --- CLEAN FEED OBS (LOCAL) ---
         const ObsCleanFeed = ({ targetId, blobAssets }) => {
             const [stream, setStream] = useState(null);
             const [activeMedia, setActiveMedia] = useState(null);
@@ -360,17 +347,16 @@
             const [activeMedia, setActiveMedia] = useState(null);
             const [peekStream, setPeekStream] = useState(null);
             const [peekName, setPeekName] = useState("");
+            // --- NUEVO ESTADO AUDIO MIX ---
+            const [forceCam1Audio, setForceCam1Audio] = useState(false);
             
-            // ASSET STATUS SYNC FROM DOCK
             const [assetStatus, setAssetStatus] = useState({intro:'loading', outro:'loading', banner:'loading', standby:'loading', transicion:'loading', backup1: 'loading', backup2: 'loading'});
             
             const peerRef = useRef(null);
             const connRef = useRef(null);
             
-            // LOGICA INTELIGENTE DE SELECCIÓN DE CÁMARA PARA CONTROL
             const activeProgramCam = cameraList.find(c => c.tally === 'program');
             const activePreviewCam = cameraList.find(c => c.tally === 'preview');
-            // Prioridad: Previo (Grid Verde) -> Programa (Rojo)
             const activeControlCam = activePreviewCam || activeProgramCam;
             
             const peekTimeoutRef = useRef(null);
@@ -407,6 +393,8 @@
                         if (data.type === 'dock-status') { 
                             setActiveMedia(data.activeMedia); 
                             if (data.assetStatus) setAssetStatus(data.assetStatus);
+                            // --- SYNC AUDIO STATE ---
+                            if (typeof data.forceCam1Audio !== 'undefined') setForceCam1Audio(data.forceCam1Audio);
                         }
                         if (data.type === 'toast') notify(data.msg, data.toastType);
                     });
@@ -500,6 +488,11 @@
                                 <button onClick={() => send('mixer', 'cut', null)} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold uppercase">Cut</button>
                                 <button onClick={() => send('mixer', 'auto', null)} disabled={!isTransicionReady} className={`bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold uppercase ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
                             </div>
+
+                            {/* --- BOTÓN AUDIO MIX AGREGADO AQUÍ --- */}
+                            <button onClick={() => send('mixer', 'toggle-audio-mix', null)} className={`w-full mt-4 text-[10px] py-3 rounded border-b-4 flex items-center justify-center gap-2 transition-colors font-bold uppercase tracking-widest ${forceCam1Audio ? 'bg-blue-900 border-blue-950 text-white' : 'bg-neutral-800 border-neutral-900 text-gray-400'}`}>
+                                <Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: AUTO MIX'}
+                            </button>
                         </div>
                         
                         <div className="space-y-2">
@@ -554,7 +547,10 @@
           const [obsRecording, setObsRecording] = useState(false);
           const [obsConnected, setObsConnected] = useState(false);
           const [zoomedCamId, setZoomedCamId] = useState(null);
-          const [backupIndex, setBackupIndex] = useState(0); 
+          const [backupIndex, setBackupIndex] = useState(0);
+          
+          // --- AUDIO FIX ---
+          const [forceCam1Audio, setForceCam1Audio] = useState(false);
           
           const [blobAssets, setBlobAssets] = useState(initialBlobAssets || {}); 
           const [assetStatus, setAssetStatus] = useState(() => {
@@ -570,24 +566,49 @@
           const activeMediaRef = useRef(null);
           const assetStatusRef = useRef({});
           const obsStateRef = useRef({ streaming: false, recording: false, connected: false });
+          // NUEVA REFERENCIA PARA AUDIO
+          const forceCam1AudioRef = useRef(false);
+          
           const directorConnRef = useRef(null);
           const obsClientsRef = useRef([]);
 
           const obsRef = useRef(null); 
           const peerRef = useRef(null);
           const videoPeerRef = useRef(null);
+          
+          // REFERENCIAS PARA AUTO-SWITCH
+          const previewRef = useRef(null);
+          const programRef = useRef(null);
 
           // Sincronizar State -> Ref
           useEffect(() => { camerasRef.current = cameras; }, [cameras]);
           useEffect(() => { activeMediaRef.current = activeMedia; }, [activeMedia]);
           useEffect(() => { assetStatusRef.current = assetStatus; }, [assetStatus]);
           useEffect(() => { obsStateRef.current = { streaming: obsStreaming, recording: obsRecording, connected: obsConnected }; }, [obsStreaming, obsRecording, obsConnected]);
+          useEffect(() => { previewRef.current = previewId; }, [previewId]);
+          useEffect(() => { programRef.current = programId; }, [programId]);
+          useEffect(() => { forceCam1AudioRef.current = forceCam1Audio; }, [forceCam1Audio]);
 
           const notify = (msg, type = 'success') => { 
               const id = Date.now(); 
               setNotifications(prev => [...prev, { id, msg, type }]); 
               setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000); 
               if (directorConnRef.current?.open) directorConnRef.current.send({ type: 'toast', msg, toastType: type });
+          };
+          
+          // --- TIME UPDATE FIX ---
+          const handleTimeUpdate = (duration, currentTime) => {
+              const remaining = duration - currentTime;
+              const newTimers = { 
+                  intro: activeMedia === 'intro' ? remaining : 0, 
+                  outro: activeMedia === 'outro' ? remaining : 0, 
+                  banner: activeMedia === 'banner' ? remaining : 0, 
+                  standby: activeMedia === 'standby' ? 1 : 0 
+              };
+              setMediaTimers(newTimers);
+              if (directorConnRef.current?.open && activeMedia) { 
+                  directorConnRef.current.send({ type: 'media-time', timers: newTimers }); 
+              }
           };
 
           // --- CONEXIÓN OBS WEBSOCKET ---
@@ -671,7 +692,9 @@
                      directorConnRef.current.send({ 
                          type: 'dock-status', 
                          activeMedia: activeMediaRef.current, 
-                         assetStatus: assetStatusRef.current
+                         assetStatus: assetStatusRef.current,
+                         // --- NUEVO SYNC: Audio State ---
+                         forceCam1Audio: forceCam1AudioRef.current
                      });
                      directorConnRef.current.send({ type: 'obs-state-update', state: obsStateRef.current });
                  }
@@ -679,6 +702,7 @@
                  // Heartbeat a Cámaras (Blindaje)
                  Object.values(camerasRef.current).forEach(cam => {
                      if(cam.conn && cam.conn.open) {
+                         // ENVIO DE PING SILENCIOSO
                          cam.conn.send({ type: 'ping' });
                      }
                  });
@@ -708,6 +732,7 @@
               if(transReady) {
                   setActiveMedia('transicion');
                   setHeaderHidden(true);
+                  // En failover mantenemos el temporizador para no depender del evento 'ended' si el archivo falla
                   setTimeout(() => { playNextBackup(); }, 1200);
               } else {
                   playNextBackup();
@@ -754,15 +779,16 @@
           const handleDirectorCommand = (cmd) => {
               // Corrección de Filtros Local
               if (cmd.category === 'cam') {
-                  const targetCamId = cmd.target; // Usar el objetivo explícito
+                  const targetCamId = cmd.target; 
                   if (targetCamId && camerasRef.current[targetCamId]?.conn) {
                       camerasRef.current[targetCamId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
                       if(cmd.action === 'filter') {
-                          // Actualizar estado local para reflejar cambio
+                          // ACTUALIZACION DE ESTADO CON NOMBRE DE FILTRO
                           setCameras(prev => ({...prev, [targetCamId]: {...prev[targetCamId], filter: cmd.value}}));
+                          notify(`FILTRO ACTIVADO: ${cmd.value.toUpperCase()}`);
                       }
                   } else {
-                      notify("Error: Cámara no encontrada para comando", "error");
+                      notify("Error: Cámara no encontrada", "error");
                   }
               }
 
@@ -772,6 +798,8 @@
                     if(cmd.action === 'auto') handleAuto();
                     if(cmd.action === 'preview') setPreviewId(cmd.value);
                     if(cmd.action === 'program') switchProgram(cmd.value);
+                    // --- COMANDO REMOTO DE AUDIO ---
+                    if(cmd.action === 'toggle-audio-mix') setForceCam1Audio(prev => !prev);
               }
               if (cmd.category === 'obs') sendToOBS(cmd.action);
           };
@@ -788,8 +816,8 @@
                   notify("TRANSICIÓN NO DISPONIBLE", "error");
                   return;
               }
-              handlePlayLocal('transicion'); 
-              setTimeout(() => { if(previewId) switchProgram(previewId); }, 1200); 
+              handlePlayLocal('transicion');
+              // AHORA ESPERAMOS AL EVENTO ONENDED EN handleMediaFinish
           };
           
           const handlePlayLocal = (type) => { 
@@ -801,7 +829,15 @@
           
           const handleMediaFinish = () => {
               if (activeMedia === 'outro') { sendToOBS('stop-stream'); sendToOBS('stop-record'); }
-              if (activeMedia.startsWith('backup')) {
+              
+              // LOGICA TRANSICIÓN: CORTE AL TERMINAR VIDEO
+              if (activeMedia === 'transicion') {
+                   if(previewRef.current) switchProgram(previewRef.current);
+                   else { setActiveMedia(null); setHeaderHidden(false); }
+                   return;
+              }
+
+              if (activeMedia && activeMedia.startsWith('backup')) {
                   const cam = cameras[programId];
                   if (cam && cam.stream && cam.stream.active) {
                       notify("SEÑAL RECUPERADA - VOLVIENDO AL AIRE", "success");
@@ -827,7 +863,12 @@
           const isTransicionReady = assetStatus['transicion'] === 'ready';
           const isFailoverMode = activeMedia && activeMedia.startsWith('backup');
           
-          // Panel Director Local usa handleDirectorCommand
+          // Audio Logic Program
+          // Si ForceCam1Audio es TRUE, el Program SOLO suena si es la Cam 1.
+          // Si ForceCam1Audio es FALSE, el Program suena siempre (Auto Mix).
+          const cam1Id = camList.length > 0 ? camList[0].id : null;
+          const isProgramMuted = forceCam1Audio ? (programId !== cam1Id) : false;
+
           const activeCamForPanel = previewCam || cameras[programId];
 
           return (
@@ -839,7 +880,7 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.28</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.30</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} isFailover={isFailoverMode} />
                     </div>
                     
@@ -874,9 +915,10 @@
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/40 relative overflow-hidden shadow-2xl">
                                  <div className="absolute top-3 left-3 bg-red-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest">Program</div>
                                  <div className="relative w-full h-full bg-[#050505]">
-                                    <VideoPeer stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={true} />
-                                    <BroadcastHUD hidden={headerHidden} />
-                                    <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={handleMediaFinish} />
+                                    {/* VIDEO PROGRAM: MUTED CORREGIDO */}
+                                    <VideoPeer stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={isProgramMuted} />
+                                    {/* LEYENDA HUD ELIMINADA */}
+                                    <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={handleMediaFinish} onTimeUpdate={handleTimeUpdate} />
                                  </div>
                             </div>
                         </div>
@@ -902,6 +944,7 @@
                     <div className="w-64 bg-[#111] border-l border-neutral-800 flex flex-col shrink-0 shadow-2xl">
                         <div className="p-4 border-b border-neutral-800 space-y-3">
                             <button onClick={() => setIsShareModalOpen(true)} className="w-full bg-green-900/20 text-green-500 text-[10px] py-2 rounded border border-green-800 uppercase font-bold hover:bg-green-900/40 transition-colors tracking-widest">Compartir Acceso</button>
+                            <button onClick={() => setForceCam1Audio(!forceCam1Audio)} className={`w-full text-[10px] py-2 rounded border flex items-center justify-center gap-2 transition-colors font-bold uppercase tracking-widest ${forceCam1Audio ? 'bg-blue-900 text-white border-blue-500' : 'bg-neutral-800 text-gray-400 border-neutral-700'}`}><Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: AUTO MIX'}</button>
                         </div>
                         <MediaPanel onPlay={handlePlayLocal} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
                         <DirectorPanel activeCam={activeCamForPanel} onCommand={handleDirectorCommand} isOffline={false} currentFilter={activeCamForPanel?.filter || 'normal'} />
@@ -972,7 +1015,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.28</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.30</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest">ID (Tailscale IP)</label>
