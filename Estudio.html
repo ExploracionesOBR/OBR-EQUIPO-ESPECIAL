@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.26</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.28</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -69,15 +69,14 @@
             Aperture, Radio, Film, Layers, Zap, Smartphone, Clapperboard, Power, ExternalLink, Edit2, Trash2, Disc, Video, AlertTriangle, CheckCircle, Signal, Globe, Box, Link2, Info, Share2, Music, UserPlus, RefreshCw, ScanLine, RotateCcw, Database, Copy, AlertOctagon, Loader2, Link, ShieldAlert
         } from 'lucide-react';
         
-        // --- AGREGADOS VIDEOS DE RESPALDO (HIGHTLIGHTS) ---
         const STUDIO_ASSETS = {
             intro: './INTRO_1.mp4',
             outro: './FIN_DIRECTO.mp4',
             banner: './BANNER_1.mp4',
             standby: './VIDEO-ESPERA.mp4',
             transicion: './transicion.mp4',
-            backup1: './BACKUP_1.mp4', // Archivo local
-            backup2: './BACKUP_2.mp4'  // Archivo local
+            backup1: './BACKUP_1.mp4', 
+            backup2: './BACKUP_2.mp4'  
         };
 
         const PEER_CONFIG = {
@@ -86,11 +85,11 @@
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' }
                 ],
-                sdpSemantics: 'unified-plan'
+                sdpSemantics: 'unified-plan',
+                pingInterval: 5000 
             }
         };
 
-        // --- COMPONENTES AUXILIARES (MODALES) ---
         const ShareModal = ({ onClose, dockId }) => (
             <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-[#111] p-6 rounded-2xl border border-red-900/30 max-w-sm w-full text-center relative shadow-2xl">
@@ -179,6 +178,7 @@
                 <div className={`absolute inset-0 pointer-events-none overflow-hidden select-none font-sans z-30 transition-all duration-500 ${hidden ? 'opacity-0' : 'opacity-100'}`}>
                     <div className="absolute top-4 left-4 flex items-center gap-2 opacity-80">
                          <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_#dc2626]"></div>
+                         <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">OBR LIVE FEED</span>
                     </div>
                 </div>
              );
@@ -226,7 +226,10 @@
         );
 
         const DirectorPanel = ({ activeCam, onCommand, isOffline, currentFilter }) => {
-            const handleFilterToggle = (filterName) => { onCommand({ category: 'cam', action: 'filter', value: currentFilter === filterName ? 'normal' : filterName, target: activeCam?.id }); };
+            const handleFilterToggle = (filterName) => { 
+                // ENVIAR COMANDO DIRECTO A LA CÁMARA ACTIVA
+                onCommand({ category: 'cam', action: 'filter', value: currentFilter === filterName ? 'normal' : filterName, target: activeCam?.id }); 
+            };
             const canUseAI = activeCam?.hasAI || false;
             return (
                 <div className="h-full flex flex-col">
@@ -237,6 +240,7 @@
                             <>
                                 <div className="pb-2 border-b border-neutral-800 mb-2">
                                     <h3 className="text-white font-bold text-sm flex items-center gap-2 uppercase tracking-tighter"><Settings size={14} className="text-red-500" /> CAM: {activeCam?.name || 'SIMULADOR'}</h3>
+                                    <div className="text-[9px] text-gray-500 uppercase tracking-widest">{activeCam?.tally === 'preview' ? 'EN PREVIO' : 'AL AIRE'}</div>
                                 </div>
                                 <section>
                                     <label className="text-[10px] font-bold text-neutral-500 mb-2 block uppercase tracking-widest">Filtros Avanzados</label>
@@ -362,7 +366,13 @@
             
             const peerRef = useRef(null);
             const connRef = useRef(null);
+            
+            // LOGICA INTELIGENTE DE SELECCIÓN DE CÁMARA PARA CONTROL
             const activeProgramCam = cameraList.find(c => c.tally === 'program');
+            const activePreviewCam = cameraList.find(c => c.tally === 'preview');
+            // Prioridad: Previo (Grid Verde) -> Programa (Rojo)
+            const activeControlCam = activePreviewCam || activeProgramCam;
+            
             const peekTimeoutRef = useRef(null);
 
             const notify = (msg, type = 'success') => {
@@ -523,7 +533,7 @@
                                 </div>
                              ))}
                         </div>
-                        <DirectorPanel activeCam={activeProgramCam} onCommand={send} isOffline={false} currentFilter="normal" />
+                        <DirectorPanel activeCam={activeControlCam} onCommand={send} isOffline={false} currentFilter={activeControlCam?.filter || 'normal'} />
                     </div>
                     <MediaPanel onPlay={(type) => send('media', 'play', type)} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
                 </div>
@@ -544,7 +554,7 @@
           const [obsRecording, setObsRecording] = useState(false);
           const [obsConnected, setObsConnected] = useState(false);
           const [zoomedCamId, setZoomedCamId] = useState(null);
-          const [backupIndex, setBackupIndex] = useState(0); // Indice para rotar backups
+          const [backupIndex, setBackupIndex] = useState(0); 
           
           const [blobAssets, setBlobAssets] = useState(initialBlobAssets || {}); 
           const [assetStatus, setAssetStatus] = useState(() => {
@@ -555,11 +565,23 @@
               return status;
           });
 
+          // --- REFS PARA BLINDAJE DE ESTADO (EVITA REINICIOS DE PEER) ---
+          const camerasRef = useRef({});
+          const activeMediaRef = useRef(null);
+          const assetStatusRef = useRef({});
+          const obsStateRef = useRef({ streaming: false, recording: false, connected: false });
+          const directorConnRef = useRef(null);
+          const obsClientsRef = useRef([]);
+
           const obsRef = useRef(null); 
           const peerRef = useRef(null);
           const videoPeerRef = useRef(null);
-          const directorConnRef = useRef(null);
-          const obsClientsRef = useRef([]);
+
+          // Sincronizar State -> Ref
+          useEffect(() => { camerasRef.current = cameras; }, [cameras]);
+          useEffect(() => { activeMediaRef.current = activeMedia; }, [activeMedia]);
+          useEffect(() => { assetStatusRef.current = assetStatus; }, [assetStatus]);
+          useEffect(() => { obsStateRef.current = { streaming: obsStreaming, recording: obsRecording, connected: obsConnected }; }, [obsStreaming, obsRecording, obsConnected]);
 
           const notify = (msg, type = 'success') => { 
               const id = Date.now(); 
@@ -597,13 +619,14 @@
              } catch (e) {}
           };
 
-          // --- PEERJS & LOGIC ---
+          // --- CORE PEERJS: INICIALIZACIÓN ÚNICA (BLINDAJE DE CONEXIÓN) ---
           useEffect(() => {
             let baseId = preferredId;
             if (baseId?.endsWith("-8889")) baseId = baseId.slice(0, -5);
             baseId = baseId ? baseId.replace(/\./g, '-') : null;
             if (!baseId) return;
 
+            // 1. Peer de Comandos
             const peerCmd = new window.Peer(baseId, PEER_CONFIG);
             peerRef.current = peerCmd;
 
@@ -617,12 +640,18 @@
                     if (data.type === 'register-director') { directorConnRef.current = conn; notify("DIRECTOR CONECTADO"); }
                     if (data.type === 'register-obs-client') { 
                         obsClientsRef.current.push(conn.peer);
-                        conn.send({ type: 'program-update', activeMedia });
+                        conn.send({ type: 'program-update', activeMedia: activeMediaRef.current });
                     }
                     if (data.type === 'director-cmd') handleDirectorCommand(data);
                 });
+                conn.on('error', (err) => console.error("Conn Error", err));
+            });
+            peerCmd.on('error', (err) => { 
+                console.error("Peer Error", err);
+                if(err.type === 'disconnected') peerCmd.reconnect();
             });
 
+            // 2. Peer de Video
             const videoId = baseId + "-8889";
             const peerVid = new window.Peer(videoId, PEER_CONFIG);
             videoPeerRef.current = peerVid;
@@ -634,29 +663,39 @@
                     setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } })); 
                 }); 
             });
-            
+
+            // 3. Loop de Estado y Heartbeat (Usa Refs para no reiniciar)
             const statusInterval = setInterval(() => {
+                 // Sincronizar Director
                  if (directorConnRef.current?.open) {
                      directorConnRef.current.send({ 
                          type: 'dock-status', 
-                         activeMedia, 
-                         assetStatus
+                         activeMedia: activeMediaRef.current, 
+                         assetStatus: assetStatusRef.current
                      });
-                     directorConnRef.current.send({ type: 'obs-state-update', state: { streaming: obsStreaming, recording: obsRecording, connected: obsConnected } });
+                     directorConnRef.current.send({ type: 'obs-state-update', state: obsStateRef.current });
                  }
+                 
+                 // Heartbeat a Cámaras (Blindaje)
+                 Object.values(camerasRef.current).forEach(cam => {
+                     if(cam.conn && cam.conn.open) {
+                         cam.conn.send({ type: 'ping' });
+                     }
+                 });
             }, 1000);
 
-            return () => { peerCmd.destroy(); peerVid.destroy(); clearInterval(statusInterval); };
-          }, [assetStatus, activeMedia, obsStreaming, obsRecording, obsConnected]);
+            return () => { 
+                peerCmd.destroy(); 
+                peerVid.destroy(); 
+                clearInterval(statusInterval); 
+            };
+          }, []); // DEPENDENCIAS VACÍAS = NO SE REINICIA JAMÁS
 
-          // --- WATCHDOG: FAILOVER AUTOMATICO ---
-          // Monitorea si la cámara en Programa pierde stream o conexión
+          // --- FAILOVER LOGIC ---
           useEffect(() => {
               if (programId && !activeMedia) {
                   const currentCam = cameras[programId];
-                  // Condición de fallo: Cámara no existe O no tiene stream activo
                   const isSignalLost = !currentCam || !currentCam.stream || !currentCam.stream.active;
-                  
                   if (isSignalLost) {
                       notify("⚠️ SEÑAL PERDIDA: INICIANDO FAILOVER", "error");
                       handleFailover();
@@ -665,16 +704,11 @@
           }, [programId, cameras, activeMedia]);
 
           const handleFailover = () => {
-              // 1. Verificar si transicion está lista, si no, corte directo a Backup
               const transReady = assetStatus['transicion'] === 'ready';
-              
               if(transReady) {
                   setActiveMedia('transicion');
                   setHeaderHidden(true);
-                  // 2. Esperar transición y lanzar Backup Rotativo
-                  setTimeout(() => {
-                       playNextBackup();
-                  }, 1200);
+                  setTimeout(() => { playNextBackup(); }, 1200);
               } else {
                   playNextBackup();
               }
@@ -682,16 +716,14 @@
 
           const playNextBackup = () => {
               const backups = ['backup1', 'backup2'];
-              // Buscar el siguiente backup disponible
               let nextIdx = backupIndex;
               let found = false;
               let attempts = 0;
-
               while(attempts < 2) {
                   const key = backups[nextIdx];
                   if (assetStatus[key] === 'ready') {
                       setActiveMedia(key);
-                      setBackupIndex((nextIdx + 1) % 2); // Rotar indice
+                      setBackupIndex((nextIdx + 1) % 2);
                       notify(`REPRODUCIENDO RESPALDO: ${key.toUpperCase()}`, "warning");
                       found = true;
                       break;
@@ -699,14 +731,13 @@
                   nextIdx = (nextIdx + 1) % 2;
                   attempts++;
               }
-
               if (!found) {
                   notify("⚠️ NO HAY VIDEOS DE RESPALDO DISPONIBLES", "error");
-                  setActiveMedia('standby'); // Fallback final
+                  setActiveMedia('standby');
               }
           };
 
-          // Sincronización Clean Feed OBS Local
+          // Clean Feed Sync
           useEffect(() => {
               if (programId && cameras[programId]?.stream && videoPeerRef.current) {
                   obsClientsRef.current.forEach(clientId => {
@@ -721,6 +752,20 @@
           }, [programId, activeMedia, cameras]);
 
           const handleDirectorCommand = (cmd) => {
+              // Corrección de Filtros Local
+              if (cmd.category === 'cam') {
+                  const targetCamId = cmd.target; // Usar el objetivo explícito
+                  if (targetCamId && camerasRef.current[targetCamId]?.conn) {
+                      camerasRef.current[targetCamId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
+                      if(cmd.action === 'filter') {
+                          // Actualizar estado local para reflejar cambio
+                          setCameras(prev => ({...prev, [targetCamId]: {...prev[targetCamId], filter: cmd.value}}));
+                      }
+                  } else {
+                      notify("Error: Cámara no encontrada para comando", "error");
+                  }
+              }
+
               if (cmd.category === 'media') handlePlayLocal(cmd.value);
               if (cmd.category === 'mixer') {
                     if(cmd.action === 'cut') switchProgram(previewId);
@@ -756,20 +801,17 @@
           
           const handleMediaFinish = () => {
               if (activeMedia === 'outro') { sendToOBS('stop-stream'); sendToOBS('stop-record'); }
-              
-              // Si terminamos un backup, verificar si la señal volvió
               if (activeMedia.startsWith('backup')) {
                   const cam = cameras[programId];
                   if (cam && cam.stream && cam.stream.active) {
                       notify("SEÑAL RECUPERADA - VOLVIENDO AL AIRE", "success");
-                      setActiveMedia(null); // Volver a cámara
+                      setActiveMedia(null); 
                   } else {
                       notify("SEÑAL AÚN PERDIDA - ROTANDO BACKUP", "warning");
-                      handleFailover(); // Intentar siguiente backup
+                      handleFailover(); 
                       return;
                   }
               }
-
               setActiveMedia(null); setHeaderHidden(false);
           };
 
@@ -783,9 +825,10 @@
           const previewCam = previewId ? cameras[previewId] : null;
           const camList = Object.values(cameras);
           const isTransicionReady = assetStatus['transicion'] === 'ready';
-
-          // Detector visual de modo emergencia
           const isFailoverMode = activeMedia && activeMedia.startsWith('backup');
+          
+          // Panel Director Local usa handleDirectorCommand
+          const activeCamForPanel = previewCam || cameras[programId];
 
           return (
             <div className={`h-screen flex flex-col bg-[#0a0a0a] text-neutral-300 font-sans overflow-hidden select-none ${isFailoverMode ? 'emergency-mode' : ''}`}>
@@ -796,7 +839,7 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.26</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.28</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} isFailover={isFailoverMode} />
                     </div>
                     
@@ -861,7 +904,7 @@
                             <button onClick={() => setIsShareModalOpen(true)} className="w-full bg-green-900/20 text-green-500 text-[10px] py-2 rounded border border-green-800 uppercase font-bold hover:bg-green-900/40 transition-colors tracking-widest">Compartir Acceso</button>
                         </div>
                         <MediaPanel onPlay={handlePlayLocal} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
-                        <DirectorPanel activeCam={previewCam || cameras[programId]} onCommand={()=>{}} isOffline={false} currentFilter={previewCam?.filter || 'normal'} />
+                        <DirectorPanel activeCam={activeCamForPanel} onCommand={handleDirectorCommand} isOffline={false} currentFilter={activeCamForPanel?.filter || 'normal'} />
                     </div>
                 </div>
             </div>
@@ -929,7 +972,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.26</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.28</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest">ID (Tailscale IP)</label>
