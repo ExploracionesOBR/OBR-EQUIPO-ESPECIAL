@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.33 (4K OPTIMIZED)</title> 
+    <title>CAMARA OBR PRO v6.1.34 (STREAM FIXED)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -46,8 +46,7 @@
         
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
         
-        /* CANVAS DE STREAMING (QUEMADO): Invisible al ojo (0.01 opacity) pero activo para el stream */
-        /* IMPORTANTE: Opacidad baja para no interferir visualmente, pero el contexto 2D dibuja full color */
+        /* CANVAS DE STREAMING (QUEMADO): Opacidad 0.01 para forzar renderizado en GPU sin ser visible */
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; opacity: 0.01 !important; }
         
         /* CANVAS LOCAL (VISUALIZACIÓN): Visible para el usuario (HUD sobre CSS) */
@@ -195,7 +194,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.33 (4K OPTIMIZED)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.34 (STREAM FIXED)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -773,7 +772,7 @@
             audioLayerCtx.clearRect(0, 0, cW, cH);
             
             // APLICACIÓN DE FILTROS AL CANVAS (QUEMADO PARA STREAM) - FIX ESTRICTO
-            // Se asegura que ctx.filter coincida 1:1 con CSS del usuario
+            // Se asegura que ctx.filter coincida 1:1 con CSS del usuario y se aplique ANTES del drawImage
             ctx.filter = 'none'; // Reset por defecto
 
             if(state.filter === 'night') { 
@@ -792,10 +791,11 @@
                 if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
                 
                 // DIBUJAR VIDEO FILTRADO EN EL CANVAS
+                // El filtro establecido arriba se aplica a esta operación
                 ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
                 window.drawCoords = { dW, dH, dX, dY, vW, vH };
                 
-                // RESETEAR FILTRO PARA CAPAS SUPERIORES (HUD, SLS, ETC)
+                // RESETEAR FILTRO PARA CAPAS SUPERIORES (HUD, SLS, ETC) - IMPORTANTE PARA QUE EL HUD NO SE FILTRE
                 ctx.filter = 'none'; 
                 
                 // EFECTOS ADICIONALES PARA STREAM Y VISUALIZACIÓN
@@ -966,6 +966,9 @@
     }
 
     function handleCommand(cmd) {
+        // FIX: Ignorar notificaciones de PING para no saturar la pantalla
+        if(cmd.type === 'ping' || cmd.action === 'ping') return;
+
         showToast(`CMD: ${cmd.action?.toUpperCase() || cmd.type?.toUpperCase()}`);
         if(cmd.type === 'cmd' || cmd.category === 'cam') {
             const action = cmd.action; const value = cmd.value;
