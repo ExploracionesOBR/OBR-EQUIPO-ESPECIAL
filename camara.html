@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.38 (FILTER BURN RESTORED)</title> 
+    <title>CAMARA OBR PRO v6.1.36 (AUDIO SYNC)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -194,7 +194,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.38 (FILTER BURN RESTORED)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.36 (AUDIO SYNC)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -944,13 +944,7 @@
         
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            connection.on('open', () => { 
-                conn = connection; 
-                // FIX: Validación dinámica de la Key
-                const validKey = (GEMINI_API_KEY && GEMINI_API_KEY.length > 5);
-                conn.send({ type: 'register', name: name, hasAI: validKey }); 
-                showToast("Enlace Comandos OK", false); 
-            });
+            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
             connection.on('data', handleCommand);
             connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; });
             connection.on('error', (e) => { console.error("Data error", e); });
