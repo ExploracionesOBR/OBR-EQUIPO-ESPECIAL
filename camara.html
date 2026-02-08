@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.37 (AUDIO SCAN BTN)</title> 
+    <title>CAMARA OBR PRO v6.1.38 (FPS + LOGO FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -178,7 +178,7 @@
         </div>
 
         <div id="menu-left" class="menu-container left-side">
-            <!-- AUDIO SCAN BUTTON ADDED -->
+            <!-- AUDIO SCAN BUTTON -->
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="toggleAudioScanner()" id="btn-audioscan"><i class="fas fa-wave-square"></i></div><div class="menu-label">AUDIO</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
@@ -196,7 +196,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.37 (AUDIO SCAN BTN)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.38 (FPS + LOGO FIX)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -289,7 +289,7 @@
     };
 
     // MEJORA 3: CONTEXTO DE BAJA LATENCIA (GAMING MODE HINT)
-    // FIX: Eliminar desynchronized: true para el canvas principal, ya que puede evitar que se apliquen filtros en el pipeline de composición
+    // FIX: Eliminar desynchronized: true para el canvas principal para asegurar que los filtros se procesen antes del streaming
     const ctx = el.canvas.getContext('2d', { alpha: true });
     
     // Mantener desynchronized para capas UI que requieren baja latencia de dibujo pero no filtros complejos
@@ -426,7 +426,9 @@
         try {
             updateProgress(10, "INICIANDO SENSOR...");
             // MEJORA 4: AUDIO NO INVASIVO (Evita secuestro de micrófono en iOS/TikTok)
-            // MEJORA 5: RESOLUCION 4K / 1080P @ 60FPS
+            // MEJORA 5: RESOLUCION Y FPS (Optimizado para 60FPS)
+            // NOTA: Se eliminó el "max: 3840" para evitar que el navegador limite a 30fps en 4K.
+            // Se prioriza 1080p a 60fps.
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { 
                     echoCancellation: false, 
@@ -435,9 +437,9 @@
                 }, 
                 video: { 
                     facingMode: 'environment', 
-                    width: { ideal: 1920, max: 3840 }, 
-                    height: { ideal: 1080, max: 2160 }, 
-                    frameRate: { ideal: 60, min: 30 } 
+                    width: { ideal: 1920 }, // Eliminado 'max' para evitar cuellos de botella 4K@30fps
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 60, min: 30 } // Prioridad a 60fps
                 } 
             });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
@@ -527,7 +529,7 @@
 
     function toggleAudioScanner() {
         state.isAudioScan = !state.isAudioScan;
-        const btn = document.getElementById('btn-audioscan'); // Updated ID check
+        const btn = document.getElementById('btn-audioscan'); 
         const btn2 = document.getElementById('mic-btn');
         if (state.isAudioScan) {
             if(btn) btn.classList.add('active-state');
@@ -681,7 +683,15 @@
         const centerX = 20 + 80; const centerY = 20 + 20; 
         ctx.translate(centerX, centerY); ctx.scale(scale, scale); ctx.translate(-centerX, -centerY);
         ctx.shadowColor = "black"; ctx.shadowBlur = 4;
-        if(logoImg.complete) ctx.drawImage(logoImg, 20, 20, 40, 40);
+        
+        // FIX LOGO DISTORSION: Calcular proporción
+        if(logoImg.complete && logoImg.naturalWidth > 0) {
+            const logoRatio = logoImg.naturalWidth / logoImg.naturalHeight;
+            const logoW = 40;
+            const logoH = logoW / logoRatio;
+            ctx.drawImage(logoImg, 20, 20, logoW, logoH);
+        }
+        
         ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif";
         ctx.fillText("EXPLORACIONES OBR", 70, 40);
         const now = new Date();
