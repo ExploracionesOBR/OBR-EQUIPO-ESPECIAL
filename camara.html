@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.32 (GAMING MODE)</title> 
+    <title>CAMARA OBR PRO v6.1.33 (4K OPTIMIZED)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
     
-    <!-- MEJORA 1: MANIFIESTO TIPO JUEGO (Categoría Games + Fullscreen) -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"fullscreen","orientation":"landscape","categories":["games","entertainment"],"background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,6 +24,7 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
+        // Fallbacks CDN si los locales fallan
         if(!window.tf) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"><\/script>');
         if(!window.poseDetection) document.write('<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3"><\/script>');
         if(!window.FaceMesh) document.write('<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"><\/script>');
@@ -47,6 +47,7 @@
         #shared-video-element { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 1; pointer-events: none; }
         
         /* CANVAS DE STREAMING (QUEMADO): Invisible al ojo (0.01 opacity) pero activo para el stream */
+        /* IMPORTANTE: Opacidad baja para no interferir visualmente, pero el contexto 2D dibuja full color */
         #sls-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 2; pointer-events: none; opacity: 0.01 !important; }
         
         /* CANVAS LOCAL (VISUALIZACIÓN): Visible para el usuario (HUD sobre CSS) */
@@ -60,7 +61,7 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
 
-        /* FILTROS CSS (SOLO PARA USUARIO LOCAL) */
+        /* FILTROS CSS (SOLO PARA USUARIO LOCAL) - REPLICA EXACTA EN JS */
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
         body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
         
@@ -161,7 +162,6 @@
                 <i class="fas fa-wifi"></i>
                 <span id="network-type">LINK</span>
             </div>
-            <!-- BOTÓN DE PIP (VENTANA FLOTANTE) FORZADO -->
             <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-blue-500 transition-colors backdrop-blur-sm" onclick="togglePiP()" title="Ventana Flotante">
                 <i class="fas fa-images text-xl"></i>
             </div>
@@ -195,7 +195,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.32 (GAMING MODE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.33 (4K OPTIMIZED)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -273,7 +273,7 @@
 
     // GUARDIAN DE IMAGEN (FRAME PACING)
     let lastFrameTime = 0;
-    const fpsInterval = 1000 / 30; // Limitar a 30 FPS estables
+    const fpsInterval = 1000 / 60; // FIX: Objetivo 60 FPS
 
     const animState = { hudScale: 1.0, hudTarget: 1.0, aiScale: 0.0, aiTarget: 0.0 };
     const el = { 
@@ -344,9 +344,7 @@
         if (document.visibilityState === "hidden" && el.video.readyState === 4) {
              try {
                 if (el.video !== document.pictureInPictureElement && document.pictureInPictureEnabled) {
-                     // Intento automático, pero en móvil suele fallar sin interacción
-                     // El botón manual togglePiP es la solución segura
-                     await el.video.requestPictureInPicture(); 
+                      await el.video.requestPictureInPicture(); 
                 }
              } catch(e) {}
         }
@@ -424,13 +422,19 @@
         try {
             updateProgress(10, "INICIANDO SENSOR...");
             // MEJORA 4: AUDIO NO INVASIVO (Evita secuestro de micrófono en iOS/TikTok)
+            // MEJORA 5: RESOLUCION 4K / 1080P @ 60FPS
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { 
                     echoCancellation: false, 
                     autoGainControl: false, 
                     noiseSuppression: false 
                 }, 
-                video: { facingMode: 'environment', width: 1280, height: 720, frameRate: 30 } 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 1920, max: 3840 }, 
+                    height: { ideal: 1080, max: 2160 }, 
+                    frameRate: { ideal: 60, min: 30 } 
+                } 
             });
             videoStream = stream; el.video.srcObject = stream; el.video.play();
         } catch(e) {
@@ -756,7 +760,7 @@
         if (!now) now = performance.now();
         const elapsed = now - lastFrameTime;
         
-        // Limitar a ~30FPS para estabilidad
+        // Limitar a ~60FPS para estabilidad
         if (elapsed > fpsInterval) {
             lastFrameTime = now - (elapsed % fpsInterval);
             
@@ -768,11 +772,19 @@
             // LIMPIAR CANVAS DE AUDIO INDEPENDIENTE
             audioLayerCtx.clearRect(0, 0, cW, cH);
             
-            // APLICACIÓN DE FILTROS AL CANVAS (QUEMADO PARA STREAM)
-            if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; } 
-            else if(state.filter === 'thermal') { ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; } 
-            else if(state.filter === 'urbex') { ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; } 
-            else { ctx.filter = 'none'; }
+            // APLICACIÓN DE FILTROS AL CANVAS (QUEMADO PARA STREAM) - FIX ESTRICTO
+            // Se asegura que ctx.filter coincida 1:1 con CSS del usuario
+            ctx.filter = 'none'; // Reset por defecto
+
+            if(state.filter === 'night') { 
+                ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; 
+            } 
+            else if(state.filter === 'thermal') { 
+                ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; 
+            } 
+            else if(state.filter === 'urbex') { 
+                ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; 
+            } 
             
             if (vW && vH) {
                 const vRatio = vW / vH, cRatio = cW / cH;
@@ -1101,19 +1113,17 @@
                         const targetZoom = state.zoom === 1 ? caps.zoom.min : Math.min(caps.zoom.max, 2.0);
                         await track.applyConstraints({ advanced: [{ zoom: targetZoom }] });
                         hardwareZoomSuccess = true;
-                        // ZOOM SILENCIOSO: No mostrar notificación
                     } catch (err) {
                         console.log("Hardware zoom failed, falling back to digital");
                     }
                 }
             }
 
-            // FALLBACK A ZOOM DIGITAL (CSS) MEJORADO
+            // FALLBACK A ZOOM DIGITAL (CSS)
             if (!hardwareZoomSuccess) {
                 const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; 
                 el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; 
                 el.zoom.style.transform = `scale(${state.zoom})`; 
-                // ZOOM SILENCIOSO: No mostrar notificación
             }
             
             const ind = document.getElementById('zoom-target-indicator'); 
