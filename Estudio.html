@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.0.30</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.1.2 PRO (NATIVE OBS)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -14,7 +14,8 @@
     <link rel="manifest" href='data:application/manifest+json,{"name":"PRODOCK STUDIO","short_name":"PRODOCK","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"./obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"./obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/obs-websocket-js@5.0.5/dist/obs-websocket.min.js"></script>
+    
+    <!-- OBS LIBRARY REMOVED: USING NATIVE WEBSOCKET -->
 
     <script type="importmap">
     {
@@ -54,13 +55,19 @@
             -webkit-mask-image: -webkit-linear-gradient(top, transparent 0%, black 15%, black 85%, transparent 100%), -webkit-linear-gradient(left, transparent 0%, black 10%, black 90%, transparent 100%);
             -webkit-mask-composite: source-in;
         }
+        
+        /* FIX CALIDAD VIDEO */
+        video {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: high-quality;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel" data-type="module" data-presets="react">
-        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
         import { createPortal } from 'react-dom';
         import { 
@@ -90,6 +97,36 @@
             }
         };
 
+        // --- IMPROVEMENT: HAPTIC ENGINE ---
+        // Pequeño helper para vibración física
+        const triggerHaptic = (pattern = 15) => {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(pattern); } catch(e) {}
+            }
+        };
+
+        // --- IMPROVEMENT: WAKE LOCK HOOK ---
+        // Mantiene la pantalla encendida
+        const useWakeLock = (active = true) => {
+            const wakeLock = useRef(null);
+            useEffect(() => {
+                if (!active || !('wakeLock' in navigator)) return;
+                const requestWakeLock = async () => {
+                    try { wakeLock.current = await navigator.wakeLock.request('screen'); } catch (err) {}
+                };
+                requestWakeLock();
+                const handleVisibilityChange = () => {
+                    if (document.visibilityState === 'visible' && wakeLock.current === null) requestWakeLock();
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                return () => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    if (wakeLock.current) wakeLock.current.release();
+                    wakeLock.current = null;
+                };
+            }, [active]);
+        };
+
         const ShareModal = ({ onClose, dockId }) => (
             <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-[#111] p-6 rounded-2xl border border-red-900/30 max-w-sm w-full text-center relative shadow-2xl">
@@ -99,7 +136,7 @@
                          <div className="text-3xl font-mono font-bold text-white mb-2 tracking-widest">{dockId}</div>
                          <div className="text-[10px] text-gray-500 uppercase tracking-widest">ID Único de Sesión</div>
                     </div>
-                    <button onClick={() => { navigator.clipboard.writeText(dockId); onClose(); }} className="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-4 rounded-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+                    <button onClick={() => { navigator.clipboard.writeText(dockId); triggerHaptic(20); onClose(); }} className="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-4 rounded-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
                         <Copy size={16}/> Copiar ID
                     </button>
                 </div>
@@ -180,12 +217,18 @@
             const src = blobAssets[activeMedia];
             
             const isBanner = activeMedia === 'banner';
-            const isTransicion = activeMedia === 'transicion';
+            // MEJORA: Por defecto object-cover para que INTRO/OUTRO llenen la pantalla
+            // Excepto si es banner que requiere masking especial
             let containerStyle = "absolute inset-0 z-50 bg-black flex items-center justify-center";
-            let videoStyle = "w-full h-full object-contain";
+            let videoStyle = "w-full h-full object-cover"; // FIX: AJUSTE AL RECUADRO (COVER)
             
-            if (isBanner) { containerStyle = "absolute bottom-0 left-0 w-full h-[150px] z-40 flex items-center justify-center pointer-events-none pb-0 bg-transparent soft-mask"; videoStyle = "w-full h-full object-cover opacity-95"; } 
-            else if (isTransicion) { containerStyle = "absolute inset-0 z-[60] flex items-center justify-center pointer-events-none bg-transparent"; videoStyle = "w-full h-full object-cover"; }
+            if (isBanner) { 
+                containerStyle = "absolute bottom-0 left-0 w-full h-[150px] z-40 flex items-center justify-center pointer-events-none pb-0 bg-transparent soft-mask"; 
+                videoStyle = "w-full h-full object-cover opacity-95"; 
+            } else if (activeMedia === 'transicion') { 
+                containerStyle = "absolute inset-0 z-[60] flex items-center justify-center pointer-events-none bg-transparent"; 
+                // Transición también cover
+            }
             
             const shouldLoop = activeMedia === 'standby'; 
             return (
@@ -218,6 +261,7 @@
 
         const DirectorPanel = ({ activeCam, onCommand, isOffline, currentFilter }) => {
             const handleFilterToggle = (filterName) => { 
+                triggerHaptic(10);
                 onCommand({ category: 'cam', action: 'filter', value: currentFilter === filterName ? 'normal' : filterName, target: activeCam?.id }); 
             };
             const canUseAI = activeCam?.hasAI || false;
@@ -240,8 +284,8 @@
                                         <button onClick={() => handleFilterToggle('urbex')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'urbex' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-orange-500 border-orange-900/30'}`}><Box size={16}/> URBEX</button>
                                         <button onClick={() => handleFilterToggle('lidar')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'lidar' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-teal-400 border-teal-900/30'}`}><ScanLine size={16}/> LIDAR</button>
                                         <button onClick={() => handleFilterToggle('sls')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'sls' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-purple-400 border-purple-900/30'}`}><Ghost size={16}/> SLS</button>
-                                        <button onClick={() => onCommand({ category: 'cmd', action: 'toggle', value: 'pareidolia', target: activeCam?.id })} disabled={!canUseAI} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${canUseAI ? (currentFilter === 'pareidolia' ? 'bg-white text-black border-white' : 'bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border-red-900/50') : 'bg-[#151515] text-gray-600 border-gray-800 opacity-50 cursor-not-allowed'}`}><Eye size={16}/> {canUseAI ? 'VISION IA' : 'IA N/A'}</button>
-                                        <button onClick={() => onCommand({ category: 'cmd', action: 'reset', value: '', target: activeCam?.id })} className="col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-gray-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 uppercase font-bold tracking-widest"><RotateCcw size={12}/> Reset</button>
+                                        <button onClick={() => { triggerHaptic(10); onCommand({ category: 'cmd', action: 'toggle', value: 'pareidolia', target: activeCam?.id }); }} disabled={!canUseAI} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${canUseAI ? (currentFilter === 'pareidolia' ? 'bg-white text-black border-white' : 'bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border-red-900/50') : 'bg-[#151515] text-gray-600 border-gray-800 opacity-50 cursor-not-allowed'}`}><Eye size={16}/> {canUseAI ? 'VISION IA' : 'IA N/A'}</button>
+                                        <button onClick={() => { triggerHaptic(10); onCommand({ category: 'cmd', action: 'reset', value: '', target: activeCam?.id }); }} className="col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-gray-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 uppercase font-bold tracking-widest"><RotateCcw size={12}/> Reset</button>
                                     </div>
                                 </section>
                             </>
@@ -281,7 +325,7 @@
                      <h3 className="text-white font-bold text-[10px] flex items-center gap-2 mb-2 uppercase tracking-widest text-gray-500"><Film size={12} className="text-red-500" /> Media Control (Blob Only)</h3>
                      <div className="grid grid-cols-2 gap-2">
                         {['intro', 'standby', 'banner', 'outro'].map(key => (
-                            <button key={key} disabled={isDisabled(key)} onClick={() => onPlay(key)} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle(key)}`}>
+                            <button key={key} disabled={isDisabled(key)} onClick={() => { triggerHaptic(15); onPlay(key); }} className={`relative text-xs py-3 rounded border flex items-center justify-center gap-1 overflow-hidden transition-colors font-bold ${getButtonStyle(key)}`}>
                                 <span className="z-10 relative flex items-center gap-2 font-bold tracking-tighter uppercase">
                                     {(assetStatus?.[key] === 'loading' || !assetStatus?.[key]) ? <><Loader2 className="animate-spin" size={12}/> CARGANDO...</> : 
                                      assetStatus?.[key] === 'error' ? 'NO DISPONIBLE' :
@@ -291,7 +335,7 @@
                             </button>
                         ))}
                         {['backup1', 'backup2'].map(key => (
-                            <button key={key} disabled={isDisabled(key)} onClick={() => onPlay(key)} className={`col-span-1 relative text-[10px] py-2 rounded border flex items-center justify-center gap-1 font-bold ${getButtonStyle(key)}`}>
+                            <button key={key} disabled={isDisabled(key)} onClick={() => { triggerHaptic(25); onPlay(key); }} className={`col-span-1 relative text-[10px] py-2 rounded border flex items-center justify-center gap-1 font-bold ${getButtonStyle(key)}`}>
                                 <ShieldAlert size={10}/> {key.toUpperCase()}
                             </button>
                         ))}
@@ -301,6 +345,7 @@
         };
         
         const ObsCleanFeed = ({ targetId, blobAssets }) => {
+            useWakeLock(true); // WAKE LOCK ACTIVADO
             const [stream, setStream] = useState(null);
             const [activeMedia, setActiveMedia] = useState(null);
             const peerRef = useRef(null);
@@ -328,7 +373,8 @@
             return (
                 <div className="w-screen h-screen bg-black overflow-hidden relative flex items-center justify-center">
                     {stream ? (
-                        <video ref={v => {if(v) v.srcObject = stream}} autoPlay playsInline className="w-full h-full object-contain" />
+                        // FIX: object-cover para maximizar calidad visual en OBS
+                        <video ref={v => {if(v) v.srcObject = stream}} autoPlay playsInline className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-neutral-800 font-bold text-2xl animate-pulse tracking-widest font-mono">ESPERANDO SEÑAL OBR...</div>
                     )}
@@ -338,6 +384,7 @@
         };
 
         const RemoteDirector = ({ onBack }) => {
+            useWakeLock(true); // WAKE LOCK ACTIVADO
             const [dockId, setDockId] = useState('');
             const [isConnected, setIsConnected] = useState(false);
             const [cameraList, setCameraList] = useState([]); 
@@ -375,6 +422,7 @@
 
             const connect = () => {
                 if(!dockId) return;
+                triggerHaptic(20);
                 const peer = new window.Peer(null, { ...PEER_CONFIG });
                 peerRef.current = peer;
                 
@@ -393,7 +441,6 @@
                         if (data.type === 'dock-status') { 
                             setActiveMedia(data.activeMedia); 
                             if (data.assetStatus) setAssetStatus(data.assetStatus);
-                            // --- SYNC AUDIO STATE ---
                             if (typeof data.forceCam1Audio !== 'undefined') setForceCam1Audio(data.forceCam1Audio);
                         }
                         if (data.type === 'toast') notify(data.msg, data.toastType);
@@ -408,11 +455,14 @@
             };
 
             const send = (category, action, value) => {
+                triggerHaptic(10);
                 if(connRef.current) connRef.current.send({ type: 'director-cmd', category, action, value }); 
             };
             
             const handlePointerDown = (camId, camName) => {
+                triggerHaptic(10);
                 peekTimeoutRef.current = setTimeout(() => {
+                    triggerHaptic(30); // Long press feedback
                     setPeekName(camName);
                     send('peek', 'start', camId);
                 }, 600); 
@@ -457,13 +507,13 @@
                             <h3 className="text-[9px] text-red-500 font-bold tracking-[0.3em] border-b border-red-900/40 pb-1 uppercase">Control de Emisión {obsState.connected ? '' : '(OBS OFFLINE)'}</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <button 
-                                    onClick={() => send('obs', 'start-stream', null)} 
+                                    onClick={() => { triggerHaptic([30,30,30]); send('obs', 'start-stream', null); }} 
                                     disabled={!obsState.connected}
                                     className={`bg-green-700 border-b-4 border-green-900 text-white py-6 rounded-lg font-bold text-lg uppercase ${obsState.streaming ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
                                     Iniciar Live
                                 </button>
                                 <button 
-                                    onClick={() => send('obs', 'stop-stream', null)} 
+                                    onClick={() => { triggerHaptic([50,50]); send('obs', 'stop-stream', null); }} 
                                     disabled={!obsState.connected}
                                     className={`bg-red-700 border-b-4 border-red-900 text-white py-6 rounded-lg font-bold text-lg uppercase ${!obsState.streaming ? 'opacity-50' : ''} ${!obsState.connected ? 'opacity-30 cursor-not-allowed' : ''}`}>
                                     Cortar Live
@@ -485,11 +535,10 @@
                             </div>
 
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <button onClick={() => send('mixer', 'cut', null)} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold uppercase">Cut</button>
-                                <button onClick={() => send('mixer', 'auto', null)} disabled={!isTransicionReady} className={`bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold uppercase ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
+                                <button onClick={() => { triggerHaptic(20); send('mixer', 'cut', null); }} className="bg-neutral-800 border-b-4 border-neutral-900 text-white py-4 rounded-lg font-bold uppercase">Cut</button>
+                                <button onClick={() => { triggerHaptic(20); send('mixer', 'auto', null); }} disabled={!isTransicionReady} className={`bg-gradient-to-r from-red-700 to-red-900 border-b-4 border-red-950 text-white py-4 rounded-lg font-bold uppercase ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
                             </div>
 
-                            {/* --- BOTÓN AUDIO MIX AGREGADO AQUÍ --- */}
                             <button onClick={() => send('mixer', 'toggle-audio-mix', null)} className={`w-full mt-4 text-[10px] py-3 rounded border-b-4 flex items-center justify-center gap-2 transition-colors font-bold uppercase tracking-widest ${forceCam1Audio ? 'bg-blue-900 border-blue-950 text-white' : 'bg-neutral-800 border-neutral-900 text-gray-400'}`}>
                                 <Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: AUTO MIX'}
                             </button>
@@ -504,7 +553,7 @@
                                 <div key={cam.id} 
                                     className={`flex items-center border rounded-lg p-2 gap-3 transition-all active:scale-[0.98] ${cam.tally === 'program' ? 'bg-red-900/20 border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'bg-[#151515] border-gray-800'}`} 
                                     onPointerDown={() => handlePointerDown(cam.id, cam.name)}
-                                    onClick={()=>send('mixer', 'preview', cam.id)}>
+                                    onClick={()=>{ send('mixer', 'preview', cam.id) }}>
                                     
                                     <div className="w-14 aspect-video bg-black rounded border border-neutral-800 flex items-center justify-center overflow-hidden shrink-0 pointer-events-none relative">
                                         {cam.snapshot ? <img src={cam.snapshot} className="w-full h-full object-cover opacity-80" /> : <Monitor size={12} className="opacity-20 text-white"/>}
@@ -520,8 +569,8 @@
                                     </div>
 
                                     <div className="flex gap-1">
-                                        <button onClick={(e) => { e.stopPropagation(); send('mixer', 'auto', cam.id); }} className="px-2 py-3 bg-red-800 hover:bg-red-600 text-white rounded text-[8px] font-bold uppercase border border-red-900 transition-colors uppercase tracking-widest">Auto</button>
-                                        <button onClick={(e)=>{e.stopPropagation(); send('mixer','program',cam.id)}} className="px-3 py-2 bg-red-800 text-white rounded text-[9px] font-bold">CUT</button>
+                                        <button onClick={(e) => { e.stopPropagation(); triggerHaptic(20); send('mixer', 'auto', cam.id); }} className="px-2 py-3 bg-red-800 hover:bg-red-600 text-white rounded text-[8px] font-bold uppercase border border-red-900 transition-colors uppercase tracking-widest">Auto</button>
+                                        <button onClick={(e)=>{e.stopPropagation(); triggerHaptic(20); send('mixer','program',cam.id)}} className="px-3 py-2 bg-red-800 text-white rounded text-[9px] font-bold">CUT</button>
                                     </div>
                                 </div>
                              ))}
@@ -534,6 +583,7 @@
         };
 
         const DockMode = ({ preferredId, initialBlobAssets }) => {
+          useWakeLock(true); // WAKE LOCK ACTIVADO
           const [myId, setMyId] = useState(null);
           const [cameras, setCameras] = useState({}); 
           const [programId, setProgramId] = useState(null);
@@ -549,7 +599,6 @@
           const [zoomedCamId, setZoomedCamId] = useState(null);
           const [backupIndex, setBackupIndex] = useState(0);
           
-          // --- AUDIO FIX ---
           const [forceCam1Audio, setForceCam1Audio] = useState(false);
           
           const [blobAssets, setBlobAssets] = useState(initialBlobAssets || {}); 
@@ -561,12 +610,10 @@
               return status;
           });
 
-          // --- REFS PARA BLINDAJE DE ESTADO (EVITA REINICIOS DE PEER) ---
           const camerasRef = useRef({});
           const activeMediaRef = useRef(null);
           const assetStatusRef = useRef({});
           const obsStateRef = useRef({ streaming: false, recording: false, connected: false });
-          // NUEVA REFERENCIA PARA AUDIO
           const forceCam1AudioRef = useRef(false);
           
           const directorConnRef = useRef(null);
@@ -576,11 +623,9 @@
           const peerRef = useRef(null);
           const videoPeerRef = useRef(null);
           
-          // REFERENCIAS PARA AUTO-SWITCH
           const previewRef = useRef(null);
           const programRef = useRef(null);
 
-          // Sincronizar State -> Ref
           useEffect(() => { camerasRef.current = cameras; }, [cameras]);
           useEffect(() => { activeMediaRef.current = activeMedia; }, [activeMedia]);
           useEffect(() => { assetStatusRef.current = assetStatus; }, [assetStatus]);
@@ -596,7 +641,6 @@
               if (directorConnRef.current?.open) directorConnRef.current.send({ type: 'toast', msg, toastType: type });
           };
           
-          // --- TIME UPDATE FIX ---
           const handleTimeUpdate = (duration, currentTime) => {
               const remaining = duration - currentTime;
               const newTimers = { 
@@ -611,43 +655,80 @@
               }
           };
 
-          // --- CONEXIÓN OBS WEBSOCKET ---
+          // --- SURGICAL REPLACEMENT: NATIVE OBS WEBSOCKET ---
           useEffect(() => {
-              const connectObs = async () => {
-                  if (obsRef.current && obsRef.current.identified) return;
-                  const obs = new window.OBSWebSocket();
-                  obsRef.current = obs;
+              let ws;
+              let reconnectInt;
+              
+              const connectOBS = () => {
                   try {
-                      await obs.connect('ws://127.0.0.1:4455', undefined, { rpcVersion: 1 });
-                      setObsConnected(true);
-                      obs.on('StreamStateChanged', data => setObsStreaming(data.outputActive));
-                      obs.on('RecordStateChanged', data => setObsRecording(data.outputActive));
-                      obs.on('ConnectionClosed', () => { setObsConnected(false); });
-                  } catch (e) { setObsConnected(false); }
+                      // Conexión Directa Nativa (Sin Librerías)
+                      ws = new WebSocket('ws://localhost:4455');
+                      obsRef.current = ws;
+
+                      ws.onopen = () => {
+                          setObsConnected(true);
+                          // Identificación v5 manual
+                          ws.send(JSON.stringify({ op: 1, d: { rpcVersion: 1 } }));
+                      };
+
+                      ws.onclose = () => {
+                          setObsConnected(false);
+                          setObsStreaming(false);
+                          setObsRecording(false);
+                          reconnectInt = setTimeout(connectOBS, 5000);
+                      };
+                      
+                      ws.onerror = (e) => {
+                          console.warn("OBS Error:", e);
+                          setObsConnected(false);
+                      };
+
+                      ws.onmessage = (msg) => {
+                          const data = JSON.parse(msg.data);
+                          // OpCode 5: Eventos
+                          if (data.op === 5) {
+                              if (data.d.eventType === 'StreamStateChanged') {
+                                  setObsStreaming(data.d.eventData.outputActive);
+                              }
+                              if (data.d.eventType === 'RecordStateChanged') {
+                                  setObsRecording(data.d.eventData.outputActive);
+                              }
+                          }
+                      };
+                  } catch (e) { console.error(e); }
               };
-              const interval = setInterval(() => { if (!obsConnected) connectObs(); }, 5000);
-              connectObs();
-              return () => { clearInterval(interval); if(obsRef.current) obsRef.current.disconnect(); };
-          }, [obsConnected]);
+
+              connectOBS();
+              return () => { if(ws) ws.close(); clearTimeout(reconnectInt); };
+          }, []);
 
           const sendToOBS = async (action) => {
-             if (!obsRef.current || !obsConnected) return;
-             try {
-                 if (action === 'start-stream') await obsRef.current.call('StartStream');
-                 if (action === 'stop-stream') await obsRef.current.call('StopStream');
-                 if (action === 'start-record') await obsRef.current.call('StartRecord');
-                 if (action === 'stop-record') await obsRef.current.call('StopRecord');
-             } catch (e) {}
+             triggerHaptic(20);
+             if (!obsRef.current || obsRef.current.readyState !== WebSocket.OPEN) return;
+             
+             let requestType = '';
+             if (action === 'start-stream') requestType = 'StartStream';
+             if (action === 'stop-stream') requestType = 'StopStream';
+             if (action === 'start-record') requestType = 'StartRecord';
+             if (action === 'stop-record') requestType = 'StopRecord';
+             
+             if(requestType) {
+                 const reqId = Math.random().toString(36).substring(7);
+                 obsRef.current.send(JSON.stringify({ 
+                     op: 6, 
+                     d: { requestType: requestType, requestId: reqId } 
+                 }));
+             }
           };
+          // --- END SURGICAL REPLACEMENT ---
 
-          // --- CORE PEERJS: INICIALIZACIÓN ÚNICA (BLINDAJE DE CONEXIÓN) ---
           useEffect(() => {
             let baseId = preferredId;
             if (baseId?.endsWith("-8889")) baseId = baseId.slice(0, -5);
             baseId = baseId ? baseId.replace(/\./g, '-') : null;
             if (!baseId) return;
 
-            // 1. Peer de Comandos
             const peerCmd = new window.Peer(baseId, PEER_CONFIG);
             peerRef.current = peerCmd;
 
@@ -672,7 +753,6 @@
                 if(err.type === 'disconnected') peerCmd.reconnect();
             });
 
-            // 2. Peer de Video
             const videoId = baseId + "-8889";
             const peerVid = new window.Peer(videoId, PEER_CONFIG);
             videoPeerRef.current = peerVid;
@@ -685,24 +765,18 @@
                 }); 
             });
 
-            // 3. Loop de Estado y Heartbeat (Usa Refs para no reiniciar)
             const statusInterval = setInterval(() => {
-                 // Sincronizar Director
                  if (directorConnRef.current?.open) {
                      directorConnRef.current.send({ 
                          type: 'dock-status', 
                          activeMedia: activeMediaRef.current, 
                          assetStatus: assetStatusRef.current,
-                         // --- NUEVO SYNC: Audio State ---
                          forceCam1Audio: forceCam1AudioRef.current
                      });
                      directorConnRef.current.send({ type: 'obs-state-update', state: obsStateRef.current });
                  }
-                 
-                 // Heartbeat a Cámaras (Blindaje)
                  Object.values(camerasRef.current).forEach(cam => {
                      if(cam.conn && cam.conn.open) {
-                         // ENVIO DE PING SILENCIOSO
                          cam.conn.send({ type: 'ping' });
                      }
                  });
@@ -713,9 +787,8 @@
                 peerVid.destroy(); 
                 clearInterval(statusInterval); 
             };
-          }, []); // DEPENDENCIAS VACÍAS = NO SE REINICIA JAMÁS
+          }, []); 
 
-          // --- FAILOVER LOGIC ---
           useEffect(() => {
               if (programId && !activeMedia) {
                   const currentCam = cameras[programId];
@@ -728,11 +801,11 @@
           }, [programId, cameras, activeMedia]);
 
           const handleFailover = () => {
+              triggerHaptic([50, 50, 50]);
               const transReady = assetStatus['transicion'] === 'ready';
               if(transReady) {
                   setActiveMedia('transicion');
                   setHeaderHidden(true);
-                  // En failover mantenemos el temporizador para no depender del evento 'ended' si el archivo falla
                   setTimeout(() => { playNextBackup(); }, 1200);
               } else {
                   playNextBackup();
@@ -762,7 +835,6 @@
               }
           };
 
-          // Clean Feed Sync
           useEffect(() => {
               if (programId && cameras[programId]?.stream && videoPeerRef.current) {
                   obsClientsRef.current.forEach(clientId => {
@@ -777,13 +849,11 @@
           }, [programId, activeMedia, cameras]);
 
           const handleDirectorCommand = (cmd) => {
-              // Corrección de Filtros Local
               if (cmd.category === 'cam') {
                   const targetCamId = cmd.target; 
                   if (targetCamId && camerasRef.current[targetCamId]?.conn) {
                       camerasRef.current[targetCamId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
                       if(cmd.action === 'filter') {
-                          // ACTUALIZACION DE ESTADO CON NOMBRE DE FILTRO
                           setCameras(prev => ({...prev, [targetCamId]: {...prev[targetCamId], filter: cmd.value}}));
                           notify(`FILTRO ACTIVADO: ${cmd.value.toUpperCase()}`);
                       }
@@ -798,13 +868,13 @@
                     if(cmd.action === 'auto') handleAuto();
                     if(cmd.action === 'preview') setPreviewId(cmd.value);
                     if(cmd.action === 'program') switchProgram(cmd.value);
-                    // --- COMANDO REMOTO DE AUDIO ---
                     if(cmd.action === 'toggle-audio-mix') setForceCam1Audio(prev => !prev);
               }
               if (cmd.category === 'obs') sendToOBS(cmd.action);
           };
 
           const switchProgram = (id) => { 
+              triggerHaptic(25);
               setProgramId(id); setPreviewId(null); setActiveMedia(null); setHeaderHidden(false); 
               Object.values(cameras).forEach(c => {
                   if(c.conn) c.conn.send({ type: 'tally', state: c.id === id ? 'program' : 'idle' });
@@ -812,12 +882,12 @@
           };
           
           const handleAuto = () => {
+              triggerHaptic(20);
               if(assetStatus['transicion'] !== 'ready') {
                   notify("TRANSICIÓN NO DISPONIBLE", "error");
                   return;
               }
               handlePlayLocal('transicion');
-              // AHORA ESPERAMOS AL EVENTO ONENDED EN handleMediaFinish
           };
           
           const handlePlayLocal = (type) => { 
@@ -830,11 +900,10 @@
           const handleMediaFinish = () => {
               if (activeMedia === 'outro') { sendToOBS('stop-stream'); sendToOBS('stop-record'); }
               
-              // LOGICA TRANSICIÓN: CORTE AL TERMINAR VIDEO
               if (activeMedia === 'transicion') {
-                   if(previewRef.current) switchProgram(previewRef.current);
-                   else { setActiveMedia(null); setHeaderHidden(false); }
-                   return;
+                    if(previewRef.current) switchProgram(previewRef.current);
+                    else { setActiveMedia(null); setHeaderHidden(false); }
+                    return;
               }
 
               if (activeMedia && activeMedia.startsWith('backup')) {
@@ -863,9 +932,6 @@
           const isTransicionReady = assetStatus['transicion'] === 'ready';
           const isFailoverMode = activeMedia && activeMedia.startsWith('backup');
           
-          // Audio Logic Program
-          // Si ForceCam1Audio es TRUE, el Program SOLO suena si es la Cam 1.
-          // Si ForceCam1Audio es FALSE, el Program suena siempre (Auto Mix).
           const cam1Id = camList.length > 0 ? camList[0].id : null;
           const isProgramMuted = forceCam1Audio ? (programId !== cam1Id) : false;
 
@@ -880,7 +946,7 @@
                 <div className="h-12 bg-black border-b border-[#222] flex items-center justify-center relative shrink-0">
                     <div className="absolute left-4 flex items-center">
                         <img src="./obr-logo.png" className="w-6 h-6 object-contain mr-3" />
-                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.0.30</span>
+                        <span className="font-bold text-white tracking-widest text-[10px] uppercase hidden sm:block">Exploraciones OBR | Studio v6.1.2 PRO</span>
                         <StatusIndicators isLive={obsStreaming} isRec={obsRecording} isObs={obsConnected} isFailover={isFailoverMode} />
                     </div>
                     
@@ -915,15 +981,13 @@
                             <div className="flex-1 bg-black rounded-xl border-2 border-red-900/40 relative overflow-hidden shadow-2xl">
                                  <div className="absolute top-3 left-3 bg-red-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest">Program</div>
                                  <div className="relative w-full h-full bg-[#050505]">
-                                    {/* VIDEO PROGRAM: MUTED CORREGIDO */}
                                     <VideoPeer stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={isProgramMuted} />
-                                    {/* LEYENDA HUD ELIMINADA */}
                                     <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={handleMediaFinish} onTimeUpdate={handleTimeUpdate} />
                                  </div>
                             </div>
                         </div>
                         <div className="h-16 bg-[#111] rounded-xl border border-neutral-800 flex items-center justify-center gap-8 shadow-inner border-t-2 border-neutral-900/50">
-                             <button onClick={() => previewId && switchProgram(previewId)} className="h-10 px-10 bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded uppercase text-[10px] active:translate-y-0.5 shadow-md border-b-2 border-neutral-900 tracking-widest">Cut</button>
+                             <button onClick={() => { triggerHaptic(25); previewId && switchProgram(previewId); }} className="h-10 px-10 bg-neutral-700 hover:bg-neutral-600 text-white font-bold rounded uppercase text-[10px] active:translate-y-0.5 shadow-md border-b-2 border-neutral-900 tracking-widest">Cut</button>
                              <button onClick={handleAuto} disabled={!isTransicionReady} className={`h-12 px-16 bg-red-800 hover:bg-red-700 text-white font-bold rounded uppercase text-xs active:translate-y-0.5 shadow-xl border-b-4 border-red-950 tracking-[0.3em] ${!isTransicionReady ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>{isTransicionReady ? 'Auto Mix' : 'No Trans.'}</button>
                              <button onClick={() => handlePlayLocal('standby')} disabled={assetStatus['standby'] !== 'ready'} className={`h-10 px-6 bg-black border border-neutral-800 text-neutral-500 hover:text-white rounded text-[10px] uppercase font-bold tracking-widest transition-colors ${activeMedia === 'standby' ? 'border-yellow-600 text-yellow-500' : ''} ${assetStatus['standby'] !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''}`}>Pausar</button>
                         </div>
@@ -931,7 +995,7 @@
                             <div className="grid grid-cols-4 lg:grid-cols-5 gap-3 content-start">
                                 {camList.map(cam => (
                                     <div key={cam.id} 
-                                        onClick={() => setPreviewId(cam.id)}
+                                        onClick={() => { triggerHaptic(10); setPreviewId(cam.id); }}
                                         className={`aspect-video bg-black rounded-lg border-2 cursor-pointer relative overflow-hidden transition-all group ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'border-neutral-800 hover:border-neutral-600'}`}>
                                         {cam.stream && <VideoPeer stream={cam.stream} className="w-full h-full object-cover opacity-60 pointer-events-none" />}
                                         <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1 text-[9px] font-bold uppercase tracking-tighter truncate">{cam.name}</div>
@@ -944,7 +1008,7 @@
                     <div className="w-64 bg-[#111] border-l border-neutral-800 flex flex-col shrink-0 shadow-2xl">
                         <div className="p-4 border-b border-neutral-800 space-y-3">
                             <button onClick={() => setIsShareModalOpen(true)} className="w-full bg-green-900/20 text-green-500 text-[10px] py-2 rounded border border-green-800 uppercase font-bold hover:bg-green-900/40 transition-colors tracking-widest">Compartir Acceso</button>
-                            <button onClick={() => setForceCam1Audio(!forceCam1Audio)} className={`w-full text-[10px] py-2 rounded border flex items-center justify-center gap-2 transition-colors font-bold uppercase tracking-widest ${forceCam1Audio ? 'bg-blue-900 text-white border-blue-500' : 'bg-neutral-800 text-gray-400 border-neutral-700'}`}><Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: AUTO MIX'}</button>
+                            <button onClick={() => { triggerHaptic(10); setForceCam1Audio(!forceCam1Audio); }} className={`w-full text-[10px] py-2 rounded border flex items-center justify-center gap-2 transition-colors font-bold uppercase tracking-widest ${forceCam1Audio ? 'bg-blue-900 text-white border-blue-500' : 'bg-neutral-800 text-gray-400 border-neutral-700'}`}><Music size={14}/> {forceCam1Audio ? 'AUDIO: SOLO CAM 1' : 'AUDIO: AUTO MIX'}</button>
                         </div>
                         <MediaPanel onPlay={handlePlayLocal} timers={mediaTimers} activeMedia={activeMedia} assetStatus={assetStatus} />
                         <DirectorPanel activeCam={activeCamForPanel} onCommand={handleDirectorCommand} isOffline={false} currentFilter={activeCamForPanel?.filter || 'normal'} />
@@ -954,7 +1018,6 @@
           );
         };
 
-        // --- ASSET LOADER (BLOQUEO INICIAL) ---
         const AssetLoader = ({ onReady }) => {
             const [status, setStatus] = useState({});
             const [progress, setProgress] = useState(0);
@@ -1015,7 +1078,7 @@
                 <div className="text-center">
                     <img src="./obr-logo.png" className="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
                     <h1 className="text-2xl font-bold text-white tracking-widest uppercase">Estudio <span className="text-red-600">OBR</span></h1>
-                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.0.30</p>
+                    <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-[0.4em] opacity-50 font-bold">v6.1.2 PRO</p>
                 </div>
                 <div className="bg-black/50 p-4 rounded border border-gray-800">
                     <label className="text-[10px] text-gray-500 font-bold mb-1 block uppercase tracking-widest">ID (Tailscale IP)</label>
