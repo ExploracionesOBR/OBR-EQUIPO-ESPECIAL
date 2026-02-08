@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.34 (STREAM FIXED)</title> 
+    <title>CAMARA OBR PRO v6.1.37 (API VALIDATION FIXED)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -194,7 +194,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.34 (STREAM FIXED)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.37 (API VALIDATION FIXED)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -287,7 +287,10 @@
     };
 
     // MEJORA 3: CONTEXTO DE BAJA LATENCIA (GAMING MODE HINT)
-    const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: true });
+    // FIX: Eliminar desynchronized: true para el canvas principal, ya que puede evitar que se apliquen filtros en el pipeline de composición
+    const ctx = el.canvas.getContext('2d', { alpha: true });
+    
+    // Mantener desynchronized para capas UI que requieren baja latencia de dibujo pero no filtros complejos
     const audioLayerCtx = el.audioCanvas.getContext('2d', { alpha: true, desynchronized: true });
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true, desynchronized: true });
     
@@ -766,52 +769,55 @@
             frameCount++;
             const vW = el.video.videoWidth, vH = el.video.videoHeight;
             const cW = el.canvas.width, cH = el.canvas.height;
-            ctx.save(); ctx.clearRect(0, 0, cW, cH);
             
-            // LIMPIAR CANVAS DE AUDIO INDEPENDIENTE
+            // 1. Limpieza inicial
+            ctx.clearRect(0, 0, cW, cH);
             audioLayerCtx.clearRect(0, 0, cW, cH);
-            
-            // APLICACIÓN DE FILTROS AL CANVAS (QUEMADO PARA STREAM) - FIX ESTRICTO
-            // Se asegura que ctx.filter coincida 1:1 con CSS del usuario y se aplique ANTES del drawImage
-            ctx.filter = 'none'; // Reset por defecto
-
-            if(state.filter === 'night') { 
-                ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; 
-            } 
-            else if(state.filter === 'thermal') { 
-                ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; 
-            } 
-            else if(state.filter === 'urbex') { 
-                ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; 
-            } 
             
             if (vW && vH) {
                 const vRatio = vW / vH, cRatio = cW / cH;
                 let dW, dH, dX, dY;
                 if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
-                
-                // DIBUJAR VIDEO FILTRADO EN EL CANVAS
-                // El filtro establecido arriba se aplica a esta operación
-                ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
                 window.drawCoords = { dW, dH, dX, dY, vW, vH };
                 
-                // RESETEAR FILTRO PARA CAPAS SUPERIORES (HUD, SLS, ETC) - IMPORTANTE PARA QUE EL HUD NO SE FILTRE
-                ctx.filter = 'none'; 
+                // 2. DIBUJAR VIDEO CON FILTROS (QUEMADO)
+                // Usamos save/restore para aislar completamente el estado del filtro
+                ctx.save();
                 
-                // EFECTOS ADICIONALES PARA STREAM Y VISUALIZACIÓN
-                if(state.filter === 'night') { ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); } }
+                // Aplicar filtros EXACTAMENTE igual que CSS
+                if(state.filter === 'night') { 
+                    ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; 
+                } 
+                else if(state.filter === 'thermal') { 
+                    ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; 
+                } 
+                else if(state.filter === 'urbex') { 
+                    ctx.filter = 'sepia(100%) hue-rotate(-20deg) saturate(2.5) contrast(1.3) brightness(0.7)'; 
+                } else {
+                    ctx.filter = 'none';
+                }
+                
+                ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
+                ctx.restore(); // Al restaurar, el filtro se elimina para las siguientes operaciones
+                
+                // 3. EFECTOS ADICIONALES (OVERLAYS)
+                // Estos efectos se dibujan encima del video ya filtrado
+                if(state.filter === 'night') { 
+                    ctx.fillStyle = 'rgba(0, 30, 0, 0.2)'; 
+                    for(let i=0; i<cH; i+=3) { ctx.fillRect(0, i, cW, 1); } 
+                }
+                
                 if (state.isLidar) { 
                     // EFECTO LIDAR EN STREAM
                     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); 
                     drawLidarEffect(ctx, cW, cH);
                     
-                    // EFECTO LIDAR EN VISTA LOCAL (RECUPERADO)
+                    // EFECTO LIDAR EN VISTA LOCAL
                     audioLayerCtx.fillStyle = 'rgba(0,0,0,0.25)'; 
                     audioLayerCtx.fillRect(0,0, cW, cH); 
                     drawLidarEffect(audioLayerCtx, cW, cH);
                 }
             }
-            ctx.restore(); 
 
             // SLS & LIDAR: DIBUJADO DOBLE (EN STREAM CTX Y EN LOCAL AUDIO LAYER)
             if (state.isSLS && !state.isLidar) {
@@ -938,7 +944,13 @@
         
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
+            connection.on('open', () => { 
+                conn = connection; 
+                // FIX: Validación dinámica de la Key
+                const validKey = (GEMINI_API_KEY && GEMINI_API_KEY.length > 5);
+                conn.send({ type: 'register', name: name, hasAI: validKey }); 
+                showToast("Enlace Comandos OK", false); 
+            });
             connection.on('data', handleCommand);
             connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; });
             connection.on('error', (e) => { console.error("Data error", e); });
@@ -966,8 +978,9 @@
     }
 
     function handleCommand(cmd) {
-        // FIX: Ignorar notificaciones de PING para no saturar la pantalla
+        // FIX: Supresión completa de mensajes PING en cualquier formato
         if(cmd.type === 'ping' || cmd.action === 'ping') return;
+        if(cmd.type === 'cmd' && cmd.action === 'ping') return; // Cobertura extra
 
         showToast(`CMD: ${cmd.action?.toUpperCase() || cmd.type?.toUpperCase()}`);
         if(cmd.type === 'cmd' || cmd.category === 'cam') {
@@ -1050,7 +1063,17 @@
             let text = success ? (data.candidates?.[0]?.content?.parts?.[0]?.text || "ANOMALIA DETECTADA").replace(/[*_]/g, '').trim() : "SEÑAL DEBIL...";
             stopScanningEffect(); currentAiText = text; currentAiImage = snapshot; 
             clearTimeout(aiTextTimer); aiTextTimer = setTimeout(() => { currentAiText = ""; currentAiImage = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
-            if (conn && conn.open) { conn.send({ type: 'ai-speech', text: text }); }
+            
+            // --- ENVÍO PRIORITARIO AL ESTUDIO ---
+            if (conn && conn.open) { 
+                conn.send({ 
+                    type: 'ai-speech', 
+                    text: text,
+                    forcePlay: true, // Forzar reproducción en estudio
+                    source: 'vision' // Identificar origen
+                }); 
+            }
+            
             speakText(text);
         } catch(e) { isAIProcessing = false; currentAiText = "error de señal"; setTimeout(() => { if(currentAiText === "error de señal") { currentAiText = ""; if (state.isPareidolia) startScanningEffect(); } }, 3000); }
         isAIProcessing = false; 
