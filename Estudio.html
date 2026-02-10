@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.1.2 PRO</title>
+    <title>ESTUDIO EXPLORACIONES OBR | STUDIO v6.1.2 PRO (NATIVE OBS FIX)</title>
     
     <link rel="icon" type="image/png" href="./obr-logo.png">
     <link rel="apple-touch-icon" href="./obr-logo.png">
@@ -14,7 +14,8 @@
     <link rel="manifest" href='data:application/manifest+json,{"name":"PRODOCK STUDIO","short_name":"PRODOCK","start_url":".","display":"standalone","background_color":"#000000","theme_color":"#000000","icons":[{"src":"./obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"./obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/obs-websocket-js@5.0.5/dist/obs-websocket.min.js"></script>
+    
+    <!-- OBS LIBRARY REMOVED: STRICTLY NATIVE WEBSOCKET -->
 
     <script type="importmap">
     {
@@ -96,16 +97,12 @@
             }
         };
 
-        // --- IMPROVEMENT: HAPTIC ENGINE ---
-        // Pequeño helper para vibración física
         const triggerHaptic = (pattern = 15) => {
             if (navigator.vibrate) {
                 try { navigator.vibrate(pattern); } catch(e) {}
             }
         };
 
-        // --- IMPROVEMENT: WAKE LOCK HOOK ---
-        // Mantiene la pantalla encendida
         const useWakeLock = (active = true) => {
             const wakeLock = useRef(null);
             useEffect(() => {
@@ -284,7 +281,6 @@
                                         <button onClick={() => handleFilterToggle('lidar')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 transition-colors font-bold ${currentFilter === 'lidar' ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'bg-[#1a1a1a] text-teal-400 border-teal-900/30'}`}><ScanLine size={16}/> LIDAR</button>
                                         <button onClick={() => handleFilterToggle('sls')} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${currentFilter === 'sls' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] text-purple-400 border-purple-900/30'}`}><Ghost size={16}/> SLS</button>
                                         <button onClick={() => { triggerHaptic(10); onCommand({ category: 'cmd', action: 'toggle', value: 'pareidolia', target: activeCam?.id }); }} disabled={!canUseAI} className={`text-xs py-4 rounded-lg border flex flex-col items-center justify-center gap-2 font-bold ${canUseAI ? (currentFilter === 'pareidolia' ? 'bg-white text-black border-white' : 'bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border-red-900/50') : 'bg-[#151515] text-gray-600 border-gray-800 opacity-50 cursor-not-allowed'}`}><Eye size={16}/> {canUseAI ? 'VISION IA' : 'IA N/A'}</button>
-                                        <button onClick={() => { triggerHaptic(10); onCommand({ category: 'cmd', action: 'toggle', value: 'audioscan', target: activeCam?.id }); }} className={`col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-cyan-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 uppercase font-bold tracking-widest`}><Activity size={12}/> Audio Scan</button>
                                         <button onClick={() => { triggerHaptic(10); onCommand({ category: 'cmd', action: 'reset', value: '', target: activeCam?.id }); }} className="col-span-2 mt-2 bg-neutral-900 hover:bg-neutral-800 text-gray-400 text-[10px] py-3 rounded-lg border border-neutral-800 flex items-center justify-center gap-2 uppercase font-bold tracking-widest"><RotateCcw size={12}/> Reset</button>
                                     </div>
                                 </section>
@@ -640,35 +636,6 @@
               setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000); 
               if (directorConnRef.current?.open) directorConnRef.current.send({ type: 'toast', msg, toastType: type });
           };
-
-          // --- GARBAGE COLLECTOR: Elimina cámaras inactivas > 2 mins ---
-          useEffect(() => {
-              const gcInterval = setInterval(() => {
-                  const now = Date.now();
-                  setCameras(prev => {
-                      const next = { ...prev };
-                      let changed = false;
-                      Object.keys(next).forEach(key => {
-                          if (now - next[key].lastSeen > 120000) { // 2 minutos
-                              console.log(`Eliminando cámara inactiva: ${key}`);
-                              delete next[key];
-                              changed = true;
-                          }
-                      });
-                      return changed ? next : prev;
-                  });
-              }, 10000); // Chequear cada 10s
-              return () => clearInterval(gcInterval);
-          }, []);
-
-          // --- SPEECH SYNTHESIS HELPER ---
-          const speakText = (text) => {
-             if('speechSynthesis' in window) {
-                const u = new SpeechSynthesisUtterance(text);
-                u.lang = 'es-MX'; u.rate = 1.0;
-                window.speechSynthesis.speak(u);
-             }
-          };
           
           const handleTimeUpdate = (duration, currentTime) => {
               const remaining = duration - currentTime;
@@ -684,46 +651,77 @@
               }
           };
 
-          // FIX: CONEXIÓN OBS WEBSOCKET MEJORADA
+          // --- SURGICAL REPLACEMENT: NATIVE OBS WEBSOCKET (NO LIBRARY) ---
           useEffect(() => {
-              const connectObs = async () => {
-                  if (obsRef.current && obsRef.current.identified) return;
-                  const obs = new window.OBSWebSocket();
-                  obsRef.current = obs;
+              let ws;
+              let reconnectTimer;
+              
+              const connect = () => {
                   try {
-                      // Versión v5: No enviar rpcVersion ni password vacío si no se requiere
-                      await obs.connect('ws://127.0.0.1:4455');
-                      setObsConnected(true);
-                      obs.on('StreamStateChanged', data => setObsStreaming(data.outputActive));
-                      obs.on('RecordStateChanged', data => setObsRecording(data.outputActive));
-                      obs.on('ConnectionClosed', () => { setObsConnected(false); });
-                  } catch (e) { setObsConnected(false); }
+                      ws = new WebSocket('ws://localhost:4455');
+                      obsRef.current = ws;
+
+                      ws.onopen = () => {
+                          setObsConnected(true);
+                          // IDENTIFY OP: 1 (NECESARIO PARA OBS V5)
+                          ws.send(JSON.stringify({ op: 1, d: { rpcVersion: 1 } }));
+                          
+                          // FIX: REQUEST INITIAL STATUS TO ENSURE GREEN LIGHTS IF ALREADY STREAMING
+                          setTimeout(() => {
+                              if(ws.readyState === 1) {
+                                  ws.send(JSON.stringify({ op: 6, d: { requestType: 'GetStreamStatus', requestId: 'init-stream' } }));
+                                  ws.send(JSON.stringify({ op: 6, d: { requestType: 'GetRecordStatus', requestId: 'init-rec' } }));
+                              }
+                          }, 500);
+                      };
+
+                      ws.onmessage = (event) => {
+                          const msg = JSON.parse(event.data);
+                          // EVENTS OP: 5
+                          if (msg.op === 5) {
+                              const type = msg.d.eventType;
+                              if (type === 'StreamStateChanged') setObsStreaming(msg.d.eventData.outputActive);
+                              if (type === 'RecordStateChanged') setObsRecording(msg.d.eventData.outputActive);
+                          }
+                          // REQUEST RESPONSE OP: 7
+                          if (msg.op === 7) {
+                              if(msg.d.requestType === 'GetStreamStatus') setObsStreaming(msg.d.responseData.outputActive);
+                              if(msg.d.requestType === 'GetRecordStatus') setObsRecording(msg.d.responseData.outputActive);
+                          }
+                      };
+
+                      ws.onclose = () => {
+                          setObsConnected(false);
+                          setObsStreaming(false);
+                          setObsRecording(false);
+                          reconnectTimer = setTimeout(connect, 3000); 
+                      };
+                  } catch (e) { console.error(e); }
               };
-              const interval = setInterval(() => { if (!obsConnected) connectObs(); }, 5000);
-              connectObs();
-              return () => { clearInterval(interval); if(obsRef.current) obsRef.current.disconnect(); };
-          }, [obsConnected]);
+              connect();
+              return () => { if(ws) ws.close(); clearTimeout(reconnectTimer); };
+          }, []);
 
-          const sendToOBS = async (action) => {
+          const sendToOBS = (action) => {
              triggerHaptic(20);
-             if (!obsRef.current || !obsConnected) return;
-             try {
-                 if (action === 'start-stream') await obsRef.current.call('StartStream');
-                 if (action === 'stop-stream') await obsRef.current.call('StopStream');
-                 if (action === 'start-record') await obsRef.current.call('StartRecord');
-                 if (action === 'stop-record') await obsRef.current.call('StopRecord');
-             } catch (e) {}
+             if (!obsRef.current || obsRef.current.readyState !== 1) return;
+             
+             // MAPPING SIMPLE COMMANDS TO OBS V5 REQUESTS
+             let reqType = "";
+             if (action === 'start-stream') reqType = "StartStream";
+             if (action === 'stop-stream') reqType = "StopStream";
+             if (action === 'start-record') reqType = "StartRecord";
+             if (action === 'stop-record') reqType = "StopRecord";
+             
+             if (reqType) {
+                 const reqId = Math.random().toString(36).substring(7);
+                 obsRef.current.send(JSON.stringify({
+                     op: 6, // REQUEST OP
+                     d: { requestType: reqType, requestId: reqId }
+                 }));
+             }
           };
-
-          const deleteCam = (camId) => {
-              if(confirm("¿Eliminar cámara del grid?")) {
-                  setCameras(prev => {
-                      const next = { ...prev };
-                      delete next[camId];
-                      return next;
-                  });
-              }
-          };
+          // --- END SURGICAL REPLACEMENT ---
 
           useEffect(() => {
             let baseId = preferredId;
@@ -737,27 +735,21 @@
             peerCmd.on('open', (id) => setMyId(id));
             peerCmd.on('connection', (conn) => {
                 conn.on('data', (data) => {
-                    // Update Last Seen on ANY data packet
-                    if (data.name) {
-                         setCameras(prev => prev[data.name] ? { ...prev, [data.name]: { ...prev[data.name], lastSeen: Date.now() } } : prev);
-                    }
-
                     if (data.type === 'register') { 
-                        setCameras(prev => ({ ...prev, [data.name]: { id: data.name, conn, name: data.name, tally: 'idle', hasAI: data.hasAI, lastSeen: Date.now() } })); 
+                        setCameras(prev => ({ ...prev, [data.name]: { id: data.name, conn, name: data.name, tally: 'idle', hasAI: data.hasAI } })); 
                         notify(`CAMARA: ${data.name}`); 
                     }
-                    if (data.type === 'register-director') { directorConnRef.current = conn; notify("DIRECTOR CONECTADO"); }
+                    if (data.type === 'register-director') { 
+                        directorConnRef.current = conn; 
+                        notify("DIRECTOR CONECTADO");
+                        // FIX: SEND STATE IMMEDIATELY ON CONNECT
+                        conn.send({ type: 'obs-state-update', state: obsStateRef.current });
+                    }
                     if (data.type === 'register-obs-client') { 
                         obsClientsRef.current.push(conn.peer);
                         conn.send({ type: 'program-update', activeMedia: activeMediaRef.current });
                     }
                     if (data.type === 'director-cmd') handleDirectorCommand(data);
-                    
-                    // --- IA SPEECH SYNTHESIS ---
-                    if (data.type === 'ai-speech' && data.text) {
-                        notify(`IA CAM: ${data.text.substring(0, 20)}...`, 'info');
-                        speakText(data.text);
-                    }
                 });
                 conn.on('error', (err) => console.error("Conn Error", err));
             });
@@ -774,7 +766,7 @@
                 call.answer(); 
                 call.on('stream', (stream) => { 
                     const name = call.metadata?.name || call.peer; 
-                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream, lastSeen: Date.now() } })); 
+                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } })); 
                 }); 
             });
 
@@ -862,7 +854,7 @@
           }, [programId, activeMedia, cameras]);
 
           const handleDirectorCommand = (cmd) => {
-              if (cmd.category === 'cam' || cmd.category === 'cmd') {
+              if (cmd.category === 'cam') {
                   const targetCamId = cmd.target; 
                   if (targetCamId && camerasRef.current[targetCamId]?.conn) {
                       camerasRef.current[targetCamId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
@@ -870,7 +862,6 @@
                           setCameras(prev => ({...prev, [targetCamId]: {...prev[targetCamId], filter: cmd.value}}));
                           notify(`FILTRO ACTIVADO: ${cmd.value.toUpperCase()}`);
                       }
-                      if(cmd.value === 'pareidolia') notify("COMANDO VISION ENVIADO", "info");
                   } else {
                       notify("Error: Cámara no encontrada", "error");
                   }
@@ -947,7 +938,6 @@
           const isFailoverMode = activeMedia && activeMedia.startsWith('backup');
           
           const cam1Id = camList.length > 0 ? camList[0].id : null;
-          // LOGICA AUDIO MIX: Si ForceCam1Audio esta ON, y CAM1 no es Program, MUTE Program (porque CAM1 suena en background)
           const isProgramMuted = forceCam1Audio ? (programId !== cam1Id) : false;
 
           const activeCamForPanel = previewCam || cameras[programId];
@@ -997,10 +987,6 @@
                                  <div className="absolute top-3 left-3 bg-red-600 text-[9px] px-2 py-1 rounded font-bold uppercase z-10 shadow-lg tracking-widest">Program</div>
                                  <div className="relative w-full h-full bg-[#050505]">
                                     <VideoPeer stream={cameras[programId]?.stream} className="w-full h-full object-cover" muted={isProgramMuted} />
-                                    {/* AUDIO FORCE CAM 1: Si esta activo, inyectar audio de CAM 1 si NO es program */}
-                                    {forceCam1Audio && programId !== cam1Id && cameras[cam1Id]?.stream && (
-                                        <VideoPeer stream={cameras[cam1Id].stream} className="hidden" muted={false} />
-                                    )}
                                     <MediaOverlay activeMedia={activeMedia} blobAssets={blobAssets} onFinish={handleMediaFinish} onTimeUpdate={handleTimeUpdate} />
                                  </div>
                             </div>
@@ -1014,12 +1000,10 @@
                             <div className="grid grid-cols-4 lg:grid-cols-5 gap-3 content-start">
                                 {camList.map(cam => (
                                     <div key={cam.id} 
+                                        onClick={() => { triggerHaptic(10); setPreviewId(cam.id); }}
                                         className={`aspect-video bg-black rounded-lg border-2 cursor-pointer relative overflow-hidden transition-all group ${cam.tally === 'program' ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : cam.tally === 'preview' ? 'preview-selected border-green-600' : 'border-neutral-800 hover:border-neutral-600'}`}>
-                                        <div onClick={() => { triggerHaptic(10); setPreviewId(cam.id); }} className="absolute inset-0 z-10"></div>
                                         {cam.stream && <VideoPeer stream={cam.stream} className="w-full h-full object-cover opacity-60 pointer-events-none" />}
                                         <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1 text-[9px] font-bold uppercase tracking-tighter truncate">{cam.name}</div>
-                                        {/* DELETE CAM BUTTON */}
-                                        <button onClick={(e) => { e.stopPropagation(); deleteCam(cam.id); }} className="absolute top-1 right-1 z-20 bg-red-900/50 hover:bg-red-600 text-white p-1 rounded transition-colors"><Trash2 size={10} /></button>
                                     </div>
                                 ))}
                                 {camList.length === 0 && <div className="col-span-full py-10 text-center text-neutral-800 text-[10px] font-bold uppercase tracking-[0.5em] opacity-30">Sin cámaras activas</div>}
