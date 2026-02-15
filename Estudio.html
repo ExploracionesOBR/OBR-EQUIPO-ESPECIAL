@@ -461,9 +461,17 @@
                 });
             };
 
-            const send = (category, action, value) => {
+            const send = (category, action, value, target) => {
                 triggerHaptic(10);
-                if(connRef.current) connRef.current.send({ type: 'director-cmd', category, action, value }); 
+                if(connRef.current) {
+                    if (typeof category === 'object') {
+                        // Caso donde DirectorPanel envía un objeto completo con target incluido
+                        connRef.current.send({ type: 'director-cmd', ...category });
+                    } else {
+                        // Caso estándar (obs, media, mixer)
+                        connRef.current.send({ type: 'director-cmd', category, action, value, target }); 
+                    }
+                }
             };
             
             const handlePointerDown = (camId, camName) => {
