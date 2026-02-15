@@ -722,6 +722,17 @@
              }
           };
           // --- END SURGICAL REPLACEMENT ---
+          
+          // --- FIX: HELPER TO SEND CAMERA LIST ---
+          const getSerializableCameras = () => {
+             return Object.values(camerasRef.current).map(c => ({
+                 id: c.id, 
+                 name: c.name, 
+                 tally: c.tally, 
+                 hasAI: c.hasAI, 
+                 snapshot: c.snapshot 
+             }));
+          };
 
           useEffect(() => {
             let baseId = preferredId;
@@ -744,6 +755,8 @@
                         notify("DIRECTOR CONECTADO");
                         // FIX: SEND STATE IMMEDIATELY ON CONNECT
                         conn.send({ type: 'obs-state-update', state: obsStateRef.current });
+                        // FIX: SEND CAMERAS IMMEDIATELY
+                        conn.send({ type: 'camera-list-update', cameras: getSerializableCameras() });
                     }
                     if (data.type === 'register-obs-client') { 
                         obsClientsRef.current.push(conn.peer);
@@ -779,6 +792,8 @@
                          forceCam1Audio: forceCam1AudioRef.current
                      });
                      directorConnRef.current.send({ type: 'obs-state-update', state: obsStateRef.current });
+                     // FIX: SEND CAMERA LIST PERIODICALLY
+                     directorConnRef.current.send({ type: 'camera-list-update', cameras: getSerializableCameras() });
                  }
                  Object.values(camerasRef.current).forEach(cam => {
                      if(cam.conn && cam.conn.open) {
