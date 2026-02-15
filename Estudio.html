@@ -415,6 +415,17 @@
                  setCameraList([ { id: 'sim1', name: 'CAM SIM', tally: 'program', hasAI: true } ]);
                  setIsConnected(true);
             };
+            
+            // --- FIX: AUTO-CLOSE PEEK AFTER 2 SECONDS ---
+            useEffect(() => {
+                if (peekStream) {
+                    const timer = setTimeout(() => {
+                        setPeekStream(null);
+                        send('peek', 'stop', null);
+                    }, 2000);
+                    return () => clearTimeout(timer);
+                }
+            }, [peekStream]);
 
             const connect = () => {
                 if(!dockId) return;
@@ -724,13 +735,16 @@
           // --- END SURGICAL REPLACEMENT ---
           
           // --- FIX: HELPER TO SEND CAMERA LIST ---
+          // --- NOW USING REFS TO ENSURE DYNAMIC TALLY & FILTER UPDATES ---
           const getSerializableCameras = () => {
              return Object.values(camerasRef.current).map(c => ({
                  id: c.id, 
                  name: c.name, 
-                 tally: c.tally, 
+                 // DYNAMIC TALLY CALCULATION BASED ON REFS
+                 tally: (c.id === programRef.current) ? 'program' : (c.id === previewRef.current ? 'preview' : 'idle'), 
                  hasAI: c.hasAI, 
-                 snapshot: c.snapshot 
+                 snapshot: c.snapshot,
+                 filter: c.filter || 'normal' // SYNC FILTER STATE
              }));
           };
 
@@ -769,18 +783,6 @@
             peerCmd.on('error', (err) => { 
                 console.error("Peer Error", err);
                 if(err.type === 'disconnected') peerCmd.reconnect();
-            });
-
-            const videoId = baseId + "-8889";
-            const peerVid = new window.Peer(videoId, PEER_CONFIG);
-            videoPeerRef.current = peerVid;
-            
-            peerVid.on('call', (call) => { 
-                call.answer(); 
-                call.on('stream', (stream) => { 
-                    const name = call.metadata?.name || call.peer; 
-                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } })); 
-                }); 
             });
 
             const statusInterval = setInterval(() => {
