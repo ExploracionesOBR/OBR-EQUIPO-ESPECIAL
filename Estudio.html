@@ -894,17 +894,41 @@
           }, [programId, activeMedia, cameras]);
 
           const handleDirectorCommand = (cmd) => {
-              if (cmd.category === 'cam') {
+              // --- FIX: MANEJO UNIFICADO DE COMANDOS DE CÁMARA (FILTROS Y COMANDOS GENERALES) ---
+              if (cmd.category === 'cam' || cmd.category === 'cmd') {
                   const targetCamId = cmd.target; 
-                  if (targetCamId && camerasRef.current[targetCamId]?.conn) {
-                      camerasRef.current[targetCamId].conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
+                  const cam = camerasRef.current[targetCamId];
+
+                  if (targetCamId && cam?.conn) {
+                      // Se normaliza el envío: DirectorPanel envía 'cam' para filtros, 'cmd' para reset/AI.
+                      // La cámara siempre espera { type: 'cmd' ... }
+                      cam.conn.send({ type: 'cmd', action: cmd.action, value: cmd.value });
+                      
+                      // Actualización local de estado para feedback inmediato en UI
                       if(cmd.action === 'filter') {
                           setCameras(prev => ({...prev, [targetCamId]: {...prev[targetCamId], filter: cmd.value}}));
                           notify(`FILTRO ACTIVADO: ${cmd.value.toUpperCase()}`);
                       }
                   } else {
-                      notify("Error: Cámara no encontrada", "error");
+                      notify("Error: Cámara no encontrada o desconectada", "error");
                   }
+              }
+
+              // --- FIX: LÓGICA DE PEEK (PREVISUALIZACIÓN VIDEO) ---
+              if (cmd.category === 'peek') {
+                   if (cmd.action === 'start') {
+                       const camId = cmd.value;
+                       const cam = camerasRef.current[camId];
+                       // Si la cámara existe y tiene stream, llamar al Director
+                       if (cam && cam.stream && directorConnRef.current) {
+                            try {
+                                // Usamos el peer de video dedicado para enviar el stream
+                                // El ID del director está en directorConnRef.current.peer
+                                videoPeerRef.current.call(directorConnRef.current.peer, cam.stream);
+                            } catch(e) { console.error("Error iniciando Peek", e); }
+                       }
+                   }
+                   // El 'stop' lo maneja el Director cerrando el stream localmente tras 2s
               }
 
               if (cmd.category === 'media') handlePlayLocal(cmd.value);
