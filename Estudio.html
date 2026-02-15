@@ -758,6 +758,17 @@
             peerRef.current = peerCmd;
 
             peerCmd.on('open', (id) => setMyId(id));
+            
+            // --- FIX: RESTORED VIDEO CALL LISTENER ON MAIN CHANNEL (BACKUP) ---
+            peerCmd.on('call', (call) => {
+                call.answer();
+                call.on('stream', (stream) => {
+                    const name = call.metadata?.name || call.peer;
+                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } }));
+                });
+            });
+            // -----------------------------------------------------------------
+
             peerCmd.on('connection', (conn) => {
                 conn.on('data', (data) => {
                     if (data.type === 'register') { 
@@ -783,6 +794,18 @@
             peerCmd.on('error', (err) => { 
                 console.error("Peer Error", err);
                 if(err.type === 'disconnected') peerCmd.reconnect();
+            });
+
+            const videoId = baseId + "-8889";
+            const peerVid = new window.Peer(videoId, PEER_CONFIG);
+            videoPeerRef.current = peerVid;
+            
+            peerVid.on('call', (call) => { 
+                call.answer(); 
+                call.on('stream', (stream) => { 
+                    const name = call.metadata?.name || call.peer; 
+                    setCameras(prev => ({ ...prev, [name]: { ...(prev[name] || {}), stream } })); 
+                }); 
             });
 
             const statusInterval = setInterval(() => {
