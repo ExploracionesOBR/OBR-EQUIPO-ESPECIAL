@@ -63,6 +63,20 @@
         }
     </style>
 </head>
+  <!-- REGISTRO DEL SERVICE WORKER (PWA) -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('🛡️ OBR Guardian Network (PWA) Activado:', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Fallo en OBR Guardian (PWA):', error);
+                });
+        });
+    }
+</script>
 <body>
     <div id="root"></div>
 
