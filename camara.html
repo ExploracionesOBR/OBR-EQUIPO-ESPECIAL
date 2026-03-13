@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.42 (SPOOKY EVP AUDIO)</title> 
+    <title>CAMARA OBR PRO v6.1.43 (SMART EVP ENGINE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -225,7 +225,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.42 (SPOOKY EVP AUDIO)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.43 (SMART EVP ENGINE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -315,6 +315,35 @@
 
     let aiScannerState = 0; 
     let aiScannerTimer = 0;
+
+    // --- ARRAYS Y LÓGICA SMART EVP (AUDIO SCAN) ---
+    const evpPalabrasSueltas = ["aqui", "ayuda", "frio", "oscuro", "silencio", "mira", "detras", "ven", "muerte", "luz", "duele", "sombras", "nosotros", "cerca", "sangre", "fuego", "miedo", "dolor", "solo", "niño", "madre", "padre", "agua"];
+    const evpFrasesCortas = ["te veo","te escucho","te siento","te sigo","te miro","te observo","te encontramos","te esperamos","te hablamos","te llamo","estoy aqui","aqui estoy","aqui seguimos","a tu lado","detras tuyo","muy cerca","muy lejos","sigue aqui","ven aqui","entra aqui","mira atras","mira arriba","mira abajo","mira aqui","mira cerca","mira oscuro","escucha bien","escucha ahora","escucha esto","oye bien","no estas solo","no estamos solos","somos muchos","somos sombras","somos energia","somos voz","somos antiguos","somos aqui","somos silencio","seguimos aqui","algo viene","algo mira","algo camina","algo respira","algo escucha","algo se mueve","algo te sigue","algo te mira","algo esta aqui","algo despierta","pasos cerca","pasos atras","ruido cerca","ruido atras","susurros aqui","susurros cerca","voz aqui","voz atras","voz cerca","eco aqui","puerta abierta","puerta cerrada","ventana rota","ventana abierta","pared fria","piso frio","techo oscuro","pasillo largo","sotano oscuro","lugar antiguo","sombras aqui","sombras cerca","sombras atras","figura aqui","figura oscura","rostro oscuro","ojos miran","ojos aqui","ojos cerca","ojos atras","energia aqui","energia fria","energia oscura","presencia aqui","presencia cerca","presencia atras","alma aqui","alma perdida","espiritu aqui","espiritu cerca","niebla aqui","niebla fria","niebla oscura","oscuridad aqui","oscuridad cerca","luz pequeña","luz debil","luz aqui","luz atras","luz cerca","frio aqui","frio cerca","frio atras","frio fuerte","mucho frio","siente frio","siente miedo","siente energia","siente presencia","siente sombra","te encontramos","te seguimos","te miramos","te rodeamos","te sentimos","te observamos","te buscamos","te escuchamos","te llamamos","te recordamos","ven despacio","ven ahora","entra despacio","entra ahora","mira despacio","escucha despacio","espera aqui","espera ahora","sigue caminando","sigue mirando"];
+    const evpAdvertencias = ["cuidado", "vete", "peligro", "huye", "corre", "no entres", "sal de aqui", "detente", "no mires atras", "es peligroso", "cuidado atras", "callate", "escondete", "alejate", "te hara daño", "vete ahora", "corre de aqui"];
+    const evpPreguntas = ["¿quien eres?", "¿por que estas aqui?", "¿quien es?", "¿que quieres?", "¿me escuchas?", "¿puedes verme?", "¿que haces?", "¿estas vivo?", "¿nos buscas?", "¿nos ayudas?", "¿cuando te vas?", "¿eres tu?"];
+    let evpHistorial = [];
+
+    function obtenerEVP() {
+        const r = Math.random();
+        let arr;
+        if (r < 0.60) arr = evpPalabrasSueltas;
+        else if (r < 0.85) arr = evpFrasesCortas;
+        else if (r < 0.95) arr = evpAdvertencias;
+        else arr = evpPreguntas;
+
+        let seleccion;
+        let intento = 0;
+        // Evitar repetición de las últimas 15 frases emitidas
+        do {
+            seleccion = arr[Math.floor(Math.random() * arr.length)];
+            intento++;
+        } while (evpHistorial.includes(seleccion) && intento < 10);
+
+        evpHistorial.push(seleccion);
+        if (evpHistorial.length > 15) evpHistorial.shift();
+        
+        return seleccion;
+    }
 
     // AUDIO SCANNER VARS (NON-INVASIVE MIC)
     let audioStream = null;
@@ -818,8 +847,9 @@
         // MOTOR DE PAREIDOLIA DE AUDIO (EVP)
         // Extremadamente sensible a picos de ruido/estática (> 10% de volumen)
         if (currentMaxVolume > 0.10 && !lastSpokenText && Math.random() > 0.90) {
-            const evpWords = ["aqui...", "ayuda", "frio...", "quien?", "vete", "oscuro", "silencio", "mira", "detras", "ven", "muerte", "luz", "duele", "sombras...", "nosotros", "cerca", "sangre", "fuego"];
-            lastSpokenText = evpWords[Math.floor(Math.random() * evpWords.length)]; // PREFIJO ROBÓTICO ELIMINADO
+            // LÓGICA SMART EVP (Decisión ponderada sin repetición reciente)
+            lastSpokenText = obtenerEVP();
+            
             clearTimeout(speechTimer);
             speechTimer = setTimeout(() => { lastSpokenText = ""; }, 2500);
             
@@ -1353,7 +1383,7 @@
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         
         try {
-            let attempts = 0, success = false, textResult = "SEÑAL DEBIL...";
+            let attempts = 0, success = false, textResult = "analizando nuevamente...";
             while(attempts < 3 && !success) {
                 try {
                     if (CURRENT_AI_PROVIDER === 'groq') {
