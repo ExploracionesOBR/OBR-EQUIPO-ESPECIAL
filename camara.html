@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.1.47 (SMART EVP ENGINE)</title> 
+    <title>CAMARA OBR PRO v6.1.49 (SMART EVP ENGINE)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -103,9 +103,10 @@
         .mic-toggle { pointer-events: auto; cursor: pointer; opacity: 0.5; transition: opacity 0.2s; }
         .mic-toggle.active { opacity: 1; color: #00ffff; text-shadow: 0 0 10px #00ffff; }
 
-        /* LOCAL MEDIA PLAYER STYLES (DISCRETOS Y CENTRADOS) */
-        #local-media-controls { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 80; pointer-events: none; }
-        .media-btn { pointer-events: auto; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; backdrop-filter: blur(2px); }
+        /* LOCAL MEDIA PLAYER STYLES (DISCRETOS Y OPACIDAD REDUCIDA) */
+        #local-media-controls { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 80; pointer-events: auto; opacity: 0.6; transition: opacity 0.3s; }
+        #local-media-controls:hover { opacity: 1.0; }
+        .media-btn { background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; backdrop-filter: blur(2px); }
         .media-btn:active { transform: scale(0.9); }
         .media-btn:hover { background: rgba(255,51,51,0.3); border-color: rgba(255,51,51,0.5); color: rgba(255,255,255,0.8); }
 
@@ -182,14 +183,6 @@
         </div>
 
         <div id="top-right-group" class="absolute top-4 right-4 flex items-center gap-3 z-50 pointer-events-auto">
-            <div id="battery-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
-                <i id="battery-icon" class="fas fa-bolt"></i>
-                <span id="battery-level">SYS OK</span>
-            </div>
-            <div id="network-indicator" class="flex items-center gap-2 text-gray-400 bg-black/60 border border-gray-700 px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300">
-                <i class="fas fa-wifi"></i>
-                <span id="network-type">LINK</span>
-            </div>
             <div class="interactive text-gray-400 p-2 bg-black/60 border border-gray-700 rounded-full hover:text-white hover:border-red-500 transition-colors backdrop-blur-sm" onclick="openSettings()">
                 <i class="fas fa-cog text-xl"></i>
             </div>
@@ -225,7 +218,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.47 (SMART EVP ENGINE)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.49 (SMART EVP ENGINE)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -379,10 +372,31 @@
     let audioAnalyser = null;
     let audioDataArray = null;
     let speechRec = null;
+    let isRecognizing = false; // <-- PROTECCIÓN QUIRÚRGICA: Evita colisiones de encendido de micrófono
     let lastSpokenText = "";
     let speechTimer = null;
     let isSpookySpeaking = false; // FLAG PARA BARRIDO DE ENERGIA
+    let isTtsPlaying = false; // LOCK PARA EVITAR REINICIO DEL MIC
     let lastQuestionTime = 0; // DETECCION DE SILENCIO / VENTANA DE EVP
+
+    // FUNCIONES DE CONTROL SEGURO DE MICRÓFONO
+    function safeStartSpeechRec() {
+        if (speechRec && state.isAudioScan && !isTtsPlaying && !isSpookySpeaking && !isRecognizing) {
+            try { 
+                isRecognizing = true; 
+                speechRec.start(); 
+            } catch(e) { 
+                isRecognizing = false; 
+            }
+        }
+    }
+
+    function safeStopSpeechRec() {
+        if (speechRec && isRecognizing) {
+            try { speechRec.abort(); } catch(e) {}
+            isRecognizing = false;
+        }
+    }
 
     // GUARDIAN DE IMAGEN (FRAME PACING)
     let lastFrameTime = 0;
@@ -400,7 +414,7 @@
         statusDot: document.getElementById('status-dot') 
     };
 
-    // MEJORA 3: CONTEXTO DE BAJA LATENCIA (GAMING MODE HINT)
+    // CONTEXTO DE BAJA LATENCIA (GAMING MODE HINT)
     const ctx = el.canvas.getContext('2d', { alpha: true });
     
     // Mantener desynchronized para capas UI que requieren baja latencia de dibujo pero no filtros complejos
@@ -533,7 +547,7 @@
         console.log("GUARDIAN: Fallo detectado. Reiniciando hardware de cámara...");
         try {
             if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); }
-            // MEJORA QUIRÚRGICA: channelCount: 2 para evitar perfil de llamada VoIP mono
+            // MEJORA QUIRÚRGICA: channelCount: 2 para engañar al perfil de llamada y usar modo Media
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }, 
                 video: { 
@@ -576,70 +590,16 @@
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; 
         document.getElementById('mtx-host').value = state.studioId; 
-        initSystemMonitors(); 
+        // Batería y red eliminados por petición para optimización iOS
     };
-
-    function initSystemMonitors() {
-        const baseClasses = "flex items-center gap-2 bg-black/60 border px-3 py-1 rounded-full text-[10px] font-mono backdrop-blur-sm transition-colors duration-300";
-        const batEl = document.getElementById('battery-indicator');
-        const batTxt = document.getElementById('battery-level');
-        const batIcon = document.getElementById('battery-icon');
-
-        if ('getBattery' in navigator) {
-            navigator.getBattery().then(function(battery) {
-                function updateBattery() {
-                    const level = Math.round(battery.level * 100);
-                    batTxt.innerText = level + '%';
-                    batEl.className = baseClasses;
-                    batIcon.className = 'fas'; 
-                    if (battery.charging) { batIcon.classList.add('fa-bolt'); batEl.classList.add('text-yellow-400', 'border-yellow-600'); }
-                    else if (level > 20) { batIcon.classList.add('fa-battery-full'); batEl.classList.add('text-green-400', 'border-green-800'); }
-                    else { batIcon.classList.add('fa-battery-empty'); batEl.classList.add('text-red-500', 'border-red-600', 'animate-pulse'); }
-                }
-                updateBattery();
-                battery.addEventListener('levelchange', updateBattery);
-                battery.addEventListener('chargingchange', updateBattery);
-            }).catch(() => {
-                batTxt.innerText = "BAT ERR"; batEl.classList.add('text-red-500', 'border-red-800');
-            });
-        } else {
-             batTxt.innerText = "BAT N/A"; batEl.classList.add('text-gray-400', 'border-gray-800'); batIcon.className = 'fas fa-battery-half';
-        }
-
-        const netEl = document.getElementById('network-indicator');
-        const netTxt = document.getElementById('network-type');
-        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-
-        function updateNetwork() {
-            let type = "ONLINE";
-            netEl.className = baseClasses;
-            
-            if (!navigator.onLine) {
-                type = "OFFLINE"; netEl.classList.add('text-red-500', 'border-red-800', 'animate-pulse');
-            } else if (connection && connection.effectiveType) {
-                type = connection.effectiveType.toUpperCase();
-                if (type === '4G' || type === '5G') netEl.classList.add('text-green-400', 'border-green-800');
-                else netEl.classList.add('text-yellow-400', 'border-yellow-700');
-            } else {
-                type = "WIFI/NET"; netEl.classList.add('text-cyan-400', 'border-cyan-800');
-            }
-            netTxt.innerText = type;
-        }
-
-        updateNetwork();
-        if (connection) connection.addEventListener('change', updateNetwork);
-        window.addEventListener('online', updateNetwork);
-        window.addEventListener('offline', updateNetwork);
-    }
 
     async function initApp() {
         document.querySelector('.load-btn').style.display = 'none';
-        initSystemMonitors(); 
         requestWakeLock(); 
         
         try {
             updateProgress(10, "INICIANDO SENSOR 4K...");
-            // MEJORA QUIRÚRGICA: channelCount: 2 para evitar perfil de llamada VoIP mono
+            // MEJORA QUIRÚRGICA: channelCount: 2 para forzar perfil estéreo multimedia en lugar de llamada
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }, 
                 video: { 
@@ -698,7 +658,6 @@
     async function initAudioEngine() {
         if (!audioStream) {
             try {
-                // MEJORA QUIRÚRGICA: channelCount: 2 para evitar perfil de llamada
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
                     audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false, channelCount: 2 } 
                 });
@@ -718,6 +677,9 @@
                 speechRec.continuous = true; 
                 speechRec.interimResults = true; 
                 speechRec.lang = 'es-MX';
+                
+                speechRec.onstart = () => { isRecognizing = true; };
+                speechRec.onerror = (e) => { isRecognizing = false; };
                 
                 speechRec.onresult = (event) => {
                     const lastIndex = event.results.length - 1;
@@ -740,7 +702,7 @@
                             lastQuestionTime = Date.now(); // Activa la ventana de silencio para mayor probabilidad EVP
                         }
 
-                        if (isQuestion && state.isAudioScan && !isSpookySpeaking) {
+                        if (isQuestion && state.isAudioScan && !isSpookySpeaking && !isTtsPlaying) {
                             setTimeout(() => {
                                 lastSpokenText = obtenerEVP();
                                 clearTimeout(speechTimer);
@@ -753,9 +715,10 @@
                 };
                 
                 speechRec.onend = () => {
-                    // MEJORA QUIRÚRGICA: Solo reactivar si NO estamos reproduciendo TTS
-                    if(state.isAudioScan && !isSpookySpeaking && !window.speechSynthesis.speaking) {
-                         setTimeout(() => { try { speechRec.start(); } catch(e) {} }, 1000);
+                    isRecognizing = false;
+                    // MEJORA QUIRÚRGICA: Reinicio súper seguro
+                    if(state.isAudioScan && !isTtsPlaying && !isSpookySpeaking) {
+                         setTimeout(() => { safeStartSpeechRec(); }, 1000);
                     }
                 };
             }
@@ -777,11 +740,10 @@
         if (state.isAudioScan) {
             btn.classList.add('active');
             await initAudioEngine(); 
-            // MEJORA QUIRÚRGICA: Respetar si la IA está hablando
-            if(speechRec && !isSpookySpeaking && !window.speechSynthesis.speaking) try { speechRec.start(); } catch(e){}
+            safeStartSpeechRec();
         } else {
             btn.classList.remove('active');
-            if(speechRec) try { speechRec.stop(); } catch(e){}
+            safeStopSpeechRec();
         }
     }
 
@@ -792,9 +754,9 @@
         audioAnalyser.getByteTimeDomainData(audioDataArray);
         
         const bufferLength = audioAnalyser.frequencyBinCount;
-        const bottomY = h * 0.88; 
-        const waveHeight = 62; 
-        const sensitivity = 7.3; 
+        const bottomY = h * 0.85; 
+        const waveHeight = 71; // MEJORA: Altura incrementada un 15%
+        const sensitivity = 8.4; // MEJORA: Sensibilidad acorde
 
         let currentMaxVolume = 0;
 
@@ -802,11 +764,11 @@
         
         // 1. Subtítulos (ROJO ESPECTRAL CON TRANSPARENCIA)
         if (lastSpokenText) {
-            c.font = "bold 20px 'Share Tech Mono'";
+            c.font = "bold 23px 'Share Tech Mono'"; // MEJORA: Texto +15%
             c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
             c.textAlign = "center";
             c.shadowColor = "rgba(255, 0, 0, 0.5)"; c.shadowBlur = 10; 
-            c.fillText(`"${lastSpokenText.toUpperCase()}"`, w/2, bottomY - 75); 
+            c.fillText(`"${lastSpokenText.toUpperCase()}"`, w/2, bottomY - 86); 
         }
 
         // 2. ONDAS (Con Clamp)
@@ -817,7 +779,7 @@
         const startX = (w - displayWidth) / 2;
         const displaySliceWidth = displayWidth / bufferLength;
 
-        const clampY = (val) => Math.max(-62, Math.min(62, val));
+        const clampY = (val) => Math.max(-71, Math.min(71, val));
 
         // CAPA CIAN
         c.beginPath();
@@ -1369,67 +1331,80 @@
 
     function speakText(text) {
         if('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); const cleanText = text.replace(/[\.,;:-]{2,}/g, '. ').replace(/[\n\r]/g, ' ');
-            const u = new SpeechSynthesisUtterance(cleanText); u.lang = 'es-MX'; u.rate = 1.0; u.pitch = 1.1; 
-            const voices = window.speechSynthesis.getVoices();
-            const femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female')));
-            if (femaleVoice) u.voice = femaleVoice; 
+            isTtsPlaying = true; // Activar cerrojo de seguridad
             
-            // MEJORA QUIRÚRGICA: Auto-Ducking (Pausar micrófono para que no se mutee la voz)
-            u.onstart = () => {
-                if (speechRec && state.isAudioScan) { try { speechRec.abort(); } catch(e){} }
-            };
-            u.onend = () => {
-                if (speechRec && state.isAudioScan) { setTimeout(() => { try { speechRec.start(); } catch(e){} }, 500); }
-            };
-            u.onerror = () => {
-                if (speechRec && state.isAudioScan) { setTimeout(() => { try { speechRec.start(); } catch(e){} }, 500); }
-            };
+            // MEJORA QUIRÚRGICA: Apagar micrófono con seguridad antes de hablar
+            safeStopSpeechRec();
             
-            window.speechSynthesis.speak(u);
+            setTimeout(() => {
+                window.speechSynthesis.cancel(); 
+                const cleanText = text.replace(/[\.,;:-]{2,}/g, '. ').replace(/[\n\r]/g, ' ');
+                const u = new SpeechSynthesisUtterance(cleanText); 
+                u.lang = 'es-MX'; u.rate = 1.0; u.pitch = 1.1; u.volume = 1.0;
+                
+                const voices = window.speechSynthesis.getVoices();
+                const femaleVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Paulina') || v.name.includes('Sabina') || v.name.includes('Mexico') || v.name.toLowerCase().includes('female')));
+                if (femaleVoice) u.voice = femaleVoice; 
+                
+                u.onend = () => {
+                    isTtsPlaying = false; // Quitar cerrojo
+                    setTimeout(() => { safeStartSpeechRec(); }, 500); 
+                };
+                u.onerror = () => {
+                    isTtsPlaying = false; // Quitar cerrojo
+                    setTimeout(() => { safeStartSpeechRec(); }, 500);
+                };
+                
+                window.speechSynthesis.speak(u);
+            }, 300); // 300ms de retraso clave para engañar a iOS/Android y devolver el audio a los medios.
         }
     }
 
     // VOZ ANÓMALA DEDICADA PARA EL EVP (AUDIO SCAN) LIMPÍSIMA PERO TÉTRICA
     function speakSpooky(text) {
         if('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
+            isTtsPlaying = true; // Activar cerrojo de seguridad
+            isSpookySpeaking = true; 
             
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'es-MX';
+            // MEJORA QUIRÚRGICA: Apagar micrófono con seguridad
+            safeStopSpeechRec();
             
-            // Alteración de frecuencia y volumen sin ensuciar el texto
-            if (Math.random() > 0.5) {
-                u.pitch = 0.1 + (Math.random() * 0.3); // Gutural / Grave
-                u.rate = 0.5 + (Math.random() * 0.3); // Lento
-                u.volume = 0.6 + (Math.random() * 0.4); 
-            } else {
-                u.pitch = 1.6 + (Math.random() * 0.4); // Estridente / Agudo
-                u.rate = 1.1 + (Math.random() * 0.4); // Rápido
-                u.volume = 0.5 + (Math.random() * 0.5); 
-            }
+            setTimeout(() => {
+                window.speechSynthesis.cancel();
+                
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'es-MX';
+                
+                // Alteración de frecuencia y volumen sin ensuciar el texto
+                if (Math.random() > 0.5) {
+                    u.pitch = 0.1 + (Math.random() * 0.3); // Gutural / Grave
+                    u.rate = 0.5 + (Math.random() * 0.3); // Lento
+                    u.volume = 0.8 + (Math.random() * 0.2); 
+                } else {
+                    u.pitch = 1.6 + (Math.random() * 0.4); // Estridente / Agudo
+                    u.rate = 1.1 + (Math.random() * 0.4); // Rápido
+                    u.volume = 0.8 + (Math.random() * 0.2); 
+                }
 
-            const voices = window.speechSynthesis.getVoices();
-            const esVoices = voices.filter(v => v.lang.includes('es'));
-            if (esVoices.length > 0) {
-                u.voice = esVoices[Math.floor(Math.random() * esVoices.length)];
-            }
-            
-            // MEJORA QUIRÚRGICA: Auto-Ducking (Evitar conflicto Modo Llamada en móviles)
-            u.onstart = () => { 
-                isSpookySpeaking = true; 
-                if (speechRec && state.isAudioScan) { try { speechRec.abort(); } catch(e){} }
-            };
-            u.onend = () => { 
-                isSpookySpeaking = false; 
-                if (speechRec && state.isAudioScan) { setTimeout(() => { try { speechRec.start(); } catch(e){} }, 500); }
-            };
-            u.onerror = () => { 
-                isSpookySpeaking = false; 
-                if (speechRec && state.isAudioScan) { setTimeout(() => { try { speechRec.start(); } catch(e){} }, 500); }
-            };
+                const voices = window.speechSynthesis.getVoices();
+                const esVoices = voices.filter(v => v.lang.includes('es'));
+                if (esVoices.length > 0) {
+                    u.voice = esVoices[Math.floor(Math.random() * esVoices.length)];
+                }
+                
+                u.onend = () => { 
+                    isSpookySpeaking = false; 
+                    isTtsPlaying = false; // Quitar cerrojo
+                    setTimeout(() => { safeStartSpeechRec(); }, 500); 
+                };
+                u.onerror = () => { 
+                    isSpookySpeaking = false; 
+                    isTtsPlaying = false; // Quitar cerrojo
+                    setTimeout(() => { safeStartSpeechRec(); }, 500); 
+                };
 
-            window.speechSynthesis.speak(u);
+                window.speechSynthesis.speak(u);
+            }, 300); // Retraso estratégico
         }
     }
 
