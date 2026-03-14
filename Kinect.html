@@ -1,0 +1,393 @@
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { 
+  Camera as CameraIcon, Video, StopCircle, 
+  Zap, Activity, Mic, ShieldAlert, Focus, Layers, Ghost
+} from 'lucide-react';
+
+const App = () => {
+  // --- REFERENCIAS DE ALTO RENDIMIENTO (PIPELINE OPTIMIZADO) ---
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const aiBufferCanvasRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioStreamRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  // Motor de Inteligencia y Seguimiento
+  const detectorRef = useRef(null);
+  const skeletonsRef = useRef([]); 
+  const isoRef = useRef(3200);
+  const telemetryRef = useRef({ emf: 0.15, temp: 22.4, signal: 98, ghz: 2.41 });
+  const lastAiTime = useRef(0);
+  const requestRef = useRef();
+  const isCameraReadyRef = useRef(false);
+
+  // --- ESTADOS DE UI (BAJA FRECUENCIA) ---
+  const [uiState, setUiState] = useState({
+    mode: 'NVG',
+    isRecording: false,
+    recTime: 0,
+    isAiLoading: true,
+    error: "",
+    entities: 0,
+    iso: 3200
+  });
+
+  // --- CONFIGURACIÓN DE TENSORFLOW / GPU ---
+  useEffect(() => {
+    const initAI = async () => {
+      try {
+        if (!window.tf) {
+          const scripts = [
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core",
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter",
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl",
+            "https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"
+          ];
+          for (const src of scripts) {
+            const script = document.createElement('script');
+            script.src = src;
+            script.async = false;
+            document.head.appendChild(script);
+            await new Promise(r => script.onload = r);
+          }
+        }
+        
+        await window.tf.setBackend('webgl');
+        const detectorConfig = {
+          modelType: window.poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+          enableSmoothing: true,
+          multiPoseMaxDetections: 8 
+        };
+        detectorRef.current = await window.poseDetection.createDetector(
+          window.poseDetection.SupportedModels.MoveNet, 
+          detectorConfig
+        );
+        
+        // Calentamiento del modelo
+        const dummy = document.createElement('canvas');
+        dummy.width = 256; dummy.height = 144;
+        await detectorRef.current.estimatePoses(dummy);
+        
+        setUiState(prev => ({ ...prev, isAiLoading: false }));
+      } catch (e) {
+        setUiState(prev => ({ ...prev, error: "AI_CORE_ERROR: Error inicializando GPU." }));
+      }
+    };
+    initAI();
+  }, []);
+
+  // --- CONTROL DE CÁMARA 4K (CORREGIDO) ---
+  const startCamera = useCallback(async () => {
+    try {
+      const constraints = {
+        video: { 
+          facingMode: "environment", 
+          width: { ideal: 3840 }, 
+          height: { ideal: 2160 }, 
+          frameRate: { ideal: 60 } 
+        },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        audioStreamRef.current = stream;
+        
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().then(() => {
+            isCameraReadyRef.current = true;
+            if (!aiBufferCanvasRef.current) {
+              aiBufferCanvasRef.current = document.createElement('canvas');
+              aiBufferCanvasRef.current.width = 256;
+              aiBufferCanvasRef.current.height = 144;
+            }
+          });
+        };
+      }
+    } catch (err) {
+      setUiState(prev => ({ ...prev, error: "SENSOR_FAIL: Acceso denegado o hardware 4K no listo." }));
+    }
+  }, []);
+
+  useEffect(() => { startCamera(); }, [startCamera]);
+
+  // --- ALGORITMO DE SEGUIMIENTO PERSISTENTE ---
+  const processSkeletons = (poses) => {
+    const now = performance.now();
+    const MAX_LIFE = 8000;
+    const MISSED_FRAME_LIMIT = 45;
+    const SMOOTHING = 0.2;
+
+    skeletonsRef.current.forEach(s => {
+      s.life -= Math.min(30, now - s.lastUpdate);
+      s.missedFrames++;
+      s.lastUpdate = now;
+    });
+
+    poses.forEach(pose => {
+      const kp = pose.keypoints;
+      const torsoPts = [5, 6, 11, 12].filter(i => kp[i].score > 0.15).length;
+      const headFound = kp[0].score > 0.15 && (kp[5].score > 0.1 || kp[6].score > 0.1);
+      
+      if (pose.score < 0.04 && torsoPts < 3 && !headFound) return;
+
+      let match = skeletonsRef.current.find(s => {
+        const d = Math.sqrt(Math.pow(s.keypoints[0].x - kp[0].x, 2) + Math.pow(s.keypoints[0].y - kp[0].y, 2));
+        return d < 180;
+      });
+
+      if (match) {
+        match.life = MAX_LIFE;
+        match.missedFrames = 0;
+        kp.forEach((p, i) => {
+          match.keypoints[i].x += (p.x - match.keypoints[i].x) * SMOOTHING;
+          match.keypoints[i].y += (p.y - match.keypoints[i].y) * SMOOTHING;
+          match.keypoints[i].score = p.score;
+        });
+      } else {
+        skeletonsRef.current.push({
+          id: Math.random(),
+          keypoints: JSON.parse(JSON.stringify(kp)),
+          life: MAX_LIFE,
+          missedFrames: 0,
+          score: pose.score,
+          lastUpdate: now
+        });
+      }
+    });
+
+    skeletonsRef.current = skeletonsRef.current.filter(s => s.life > 0 && s.missedFrames < MISSED_FRAME_LIMIT);
+  };
+
+  const drawHUD = (ctx, w, h) => {
+    const bW = 280; const bH = 160;
+    const m = w - bW - 40; const HUD_TOP = 80;
+
+    ctx.fillStyle = 'rgba(10, 15, 10, 0.95)';
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(m, HUD_TOP, bW, bH, 2); ctx.fill(); ctx.stroke();
+    
+    ctx.fillStyle = '#22c55e'; ctx.font = 'bold 12px monospace';
+    ctx.fillText(`TELEMETRÍA_FIELD_OBR`, m + 15, HUD_TOP + 22);
+    ctx.fillRect(m + 15, HUD_TOP + 28, bW - 30, 1);
+    
+    const emf = telemetryRef.current.emf + (skeletonsRef.current.length * (Math.random() * 2.5));
+    const temp = telemetryRef.current.temp - (skeletonsRef.current.length * 0.8);
+
+    ctx.font = '10px monospace';
+    ctx.fillText(`EMF_FIELD:  ${emf.toFixed(2)} mG`, m + 15, HUD_TOP + 50);
+    ctx.fillText(`COLD_SPOT:  ${temp.toFixed(1)}°C`, m + 15, HUD_TOP + 72);
+    ctx.fillText(`SIGNAL_KV:  ${telemetryRef.current.signal}%`, m + 15, HUD_TOP + 94);
+    ctx.fillText(`NEURAL_ISO: ${Math.round(isoRef.current)}`, m + 15, HUD_TOP + 116);
+    ctx.fillStyle = skeletonsRef.current.length > 0 ? '#ff00ff' : '#22c55e';
+    ctx.fillText(`SLS_DATA:   ${skeletonsRef.current.length} DETECTADAS`, m + 15, HUD_TOP + 138);
+  };
+
+  const drawSkeleton = (ctx, s, w, h) => {
+    const color = uiState.mode === 'GHOST' ? '#00ffff' : '#d946ef';
+    const kp = s.keypoints;
+    const sX = w / 256; const sY = h / 144;
+    
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, s.life / 2000);
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(4, w / 400);
+    ctx.lineCap = 'round'; ctx.shadowBlur = 15; ctx.shadowColor = color;
+
+    const bones = [[5,7],[7,9],[6,8],[8,10],[11,13],[13,15],[12,14],[14,16]];
+    bones.forEach(([i, j]) => {
+      if (kp[i].score > 0.05 && kp[j].score > 0.05) {
+        ctx.beginPath(); ctx.moveTo(kp[i].x*sX, kp[i].y*sY); ctx.lineTo(kp[j].x*sX, kp[j].y*sY); ctx.stroke();
+      }
+    });
+
+    const n=kp[0], sL=kp[5], sR=kp[6], hL=kp[11], hR=kp[12];
+    const nX = (sL.x + sR.x)/2; const nY = (sL.y + sR.y)/2;
+    ctx.beginPath(); ctx.moveTo(n.x*sX, n.y*sY); ctx.lineTo(nX*sX, nY*sY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sL.x*sX, sL.y*sY); ctx.lineTo(nX*sX, nY*sY); ctx.lineTo(sR.x*sX, sR.y*sY); ctx.stroke();
+
+    const hpX = (hL.x + hR.x)/2; const hpY = (hL.y + hR.y)/2;
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath(); ctx.moveTo(nX*sX, nY*sY); ctx.lineTo(hpX*sX, hpY*sY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(hL.x*sX, hL.y*sY); ctx.lineTo(hpX*sX, hpY*sY); ctx.lineTo(hR.x*sX, hR.y*sY); ctx.stroke();
+
+    ctx.restore();
+  };
+
+  // --- BUCLE DE RENDERIZADO PRINCIPAL (OPTIMIZADO PARA SEÑAL) ---
+  const renderLoop = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    // Si la cámara no está lista, seguimos loopeando pero no dibujamos
+    if (!video || !canvas || !isCameraReadyRef.current || video.videoWidth === 0) {
+      requestRef.current = requestAnimationFrame(renderLoop);
+      return;
+    }
+
+    // Ajuste de canvas forzado al tamaño del video
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const now = performance.now();
+
+    // 1. DIBUJAR VIDEO (PRIORIDAD 1)
+    const bright = (isoRef.current / 2500) + 0.1;
+    ctx.save();
+    let filterStr = "none";
+    switch(uiState.mode) {
+      case 'NVG': filterStr = `brightness(${bright}) contrast(1.8) grayscale(1) sepia(1) hue-rotate(85deg)`; break;
+      case 'THERMAL': filterStr = `brightness(${bright}) contrast(2.2) saturate(2.5) hue-rotate(-110deg)`; break;
+      case 'GHOST': filterStr = `brightness(${bright}) contrast(1.6) invert(1) hue-rotate(180deg)`; break;
+      case 'DAYLIGHT': filterStr = `brightness(${bright * 1.8}) contrast(1.2) saturate(1.6)`; break;
+      default: filterStr = `brightness(${bright}) contrast(1.5)`;
+    }
+    ctx.filter = filterStr;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // 2. IA ASINCRONA (PRIORIDAD 2 - 30 FPS)
+    if (detectorRef.current && (now - lastAiTime.current > 33)) {
+      lastAiTime.current = now;
+      const aiCtx = aiBufferCanvasRef.current.getContext('2d', { alpha: false });
+      aiCtx.drawImage(video, 0, 0, 256, 144);
+      
+      const d = aiCtx.getImageData(0,0,256,144).data;
+      let total = 0; for(let i=0; i<d.length; i+=400) total += (d[i]*0.3+d[i+1]*0.6+d[i+2]*0.1);
+      const avg = total / (d.length/400);
+      isoRef.current += (Math.max(800, Math.min(12800, 3200 * (128/(avg+1)))) - isoRef.current) * 0.05;
+
+      detectorRef.current.estimatePoses(aiBufferCanvasRef.current).then(processSkeletons).catch(()=>{});
+    }
+
+    // 3. DIBUJAR CAPAS SLS Y HUD (PRIORIDAD 3)
+    skeletonsRef.current.forEach(s => drawSkeleton(ctx, s, canvas.width, canvas.height));
+    drawHUD(ctx, canvas.width, canvas.height);
+
+    requestRef.current = requestAnimationFrame(renderLoop);
+  }, [uiState.mode]);
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(renderLoop);
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [renderLoop]);
+
+  // --- UTILIDADES ---
+  const toggleRecording = () => {
+    if (uiState.isRecording) {
+      mediaRecorderRef.current.stop();
+      setUiState(p => ({ ...p, isRecording: false }));
+    } else {
+      chunksRef.current = [];
+      const stream = canvasRef.current.captureStream(60);
+      const combined = new MediaStream([...stream.getTracks(), ...audioStreamRef.current.getAudioTracks()]);
+      mediaRecorderRef.current = new MediaRecorder(combined, { 
+        mimeType: 'video/webm;codecs=vp8,opus', 
+        videoBitsPerSecond: 20000000 
+      });
+      mediaRecorderRef.current.ondataavailable = e => chunksRef.current.push(e.data);
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `OBR_4K_MASTER_${Date.now()}.webm`; a.click();
+      };
+      mediaRecorderRef.current.start();
+      setUiState(p => ({ ...p, isRecording: true, recTime: 0 }));
+    }
+  };
+
+  useEffect(() => {
+    let int;
+    if(uiState.isRecording) int = setInterval(() => setUiState(p => ({ ...p, recTime: p.recTime + 1 })), 1000);
+    return () => clearInterval(int);
+  }, [uiState.isRecording]);
+
+  const takePhoto = () => {
+    const link = document.createElement('a');
+    link.download = `OBR_SLS_CAP_${Date.now()}.png`;
+    link.href = canvasRef.current.toDataURL('image/png', 1.0);
+    link.click();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black overflow-hidden font-mono text-green-500 cursor-none select-none">
+      <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+      <canvas ref={canvasRef} className="w-full h-full object-contain" />
+      
+      {/* UI OVERLAY */}
+      <div className="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between">
+        <div className="flex justify-between items-start">
+          <div className="bg-black/80 px-4 py-2 border border-green-500/30 rounded flex items-center gap-3 backdrop-blur-md">
+            <Focus className={`w-4 h-4 ${!uiState.isAiLoading ? 'animate-pulse' : ''}`} />
+            <span className="text-[11px] font-black uppercase tracking-widest text-white">
+              {uiState.isAiLoading ? 'SYNCING CORE...' : 'OBR SLS 4K MASTER ACTIVE'}
+            </span>
+          </div>
+          <div className="bg-black/80 px-4 py-2 border border-white/10 rounded flex items-center gap-3">
+             <Mic className={`w-3 h-3 ${uiState.isRecording ? 'text-green-500' : 'text-white/20'}`} />
+             <span className="text-[9px] font-bold text-white/40 tracking-tighter">AUDIO_STREAM_4K</span>
+          </div>
+        </div>
+
+        {uiState.isRecording && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-3 bg-red-600/30 px-6 py-2 border border-red-500 rounded-full backdrop-blur-xl">
+              <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
+              <span className="text-[14px] font-black text-white tracking-[0.4em]">REC {Math.floor(uiState.recTime/60).toString().padStart(2,'0')}:{(uiState.recTime%60).toString().padStart(2,'0')}</span>
+            </div>
+            <div className="text-[8px] text-red-500 font-bold uppercase tracking-widest bg-black/40 px-3 py-0.5 rounded italic">4K UHD Master Evidence Data</div>
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row justify-between items-end gap-4 pointer-events-auto w-full">
+          <div className="w-full md:w-[420px] bg-zinc-950/98 p-4 rounded-t-3xl border border-white/10 backdrop-blur-3xl space-y-4">
+            <div className="flex justify-between items-center px-2">
+               <div className="flex items-center gap-2 text-[10px] font-black text-green-400 uppercase tracking-tighter">
+                 <Zap className="w-3 h-3" /> NEURAL_ISO: {Math.round(isoRef.current)}
+               </div>
+               <div className="text-[8px] text-white/30 font-bold uppercase tracking-widest">KINECT_EMULATION_ACTIVE</div>
+            </div>
+            <div className="flex gap-1.5">
+              {['NVG', 'THERMAL', 'GHOST', 'DAYLIGHT'].map(mode => (
+                <button key={mode} onClick={() => setUiState(p => ({ ...p, mode }))} className={`flex-1 py-2 text-[8px] border ${uiState.mode === mode ? 'bg-white/10 border-white text-white' : 'border-white/5 text-white/20'} rounded uppercase font-black`}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-row md:flex-col items-center gap-5 w-full md:w-auto justify-center mb-2">
+            <button onClick={takePhoto} className="w-14 h-14 rounded-full border border-white/20 flex items-center justify-center bg-zinc-900/60 text-white active:scale-75 shadow-2xl">
+              <CameraIcon className="w-6 h-6" />
+            </button>
+            <button onClick={toggleRecording} className={`w-20 h-20 rounded-full border-4 flex flex-col items-center justify-center transition-all ${uiState.isRecording ? 'border-red-600 bg-red-600' : 'border-zinc-800 bg-zinc-900/80 text-red-600 shadow-xl'}`}>
+              {uiState.isRecording ? <StopCircle className="w-8 h-8" /> : <Video className="w-8 h-8" />}
+              <span className="text-[8px] mt-1 font-black tracking-widest uppercase">{uiState.isRecording ? 'STOP' : 'REC'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {uiState.error && (
+        <div className="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-12 text-center backdrop-blur-md">
+          <ShieldAlert className="w-16 h-16 text-red-600 mb-6 animate-bounce" />
+          <h2 className="text-2xl font-black uppercase text-red-600 italic tracking-tighter">HARDWARE_FAILURE</h2>
+          <p className="text-[10px] text-zinc-500 mb-8 font-bold uppercase tracking-[0.3em] leading-relaxed">{uiState.error}</p>
+          <button onClick={() => window.location.reload()} className="bg-red-700 text-white px-12 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.4em] shadow-2xl">RESTART_CORE</button>
+        </div>
+      )}
+      
+      <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px]"></div>
+    </div>
+  );
+};
+
+export default App;
