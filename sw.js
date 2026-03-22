@@ -13,6 +13,11 @@ const PRECACHE = [
   `${BASE}/manifest.json`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
+  // ← AGREGAR ESTOS
+  `${BASE}/INTRO_1.mp4`,
+  `${BASE}/FIN_DIRECTO.mp4`,
+  `${BASE}/BANNER_1.mp4`,
+  `${BASE}/obr-logo.png`, 
   // JS locales (si existen en el repo)
   `${BASE}/js/tf.min.js`,
   `${BASE}/js/pose-detection.min.js`,
