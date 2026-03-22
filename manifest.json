@@ -2,14 +2,17 @@
   "name": "OBR Cámara Pro - Exploraciones Paranormales",
   "short_name": "OBR CAM",
   "description": "Sistema de exploración paranormal con visión SLS, IA y audio scan",
-  "start_url": "/OBR-EQUIPO-ESPECIAL/camara.html?utm_source=pwa",
+  "start_url": "/OBR-EQUIPO-ESPECIAL/",
   "scope": "/OBR-EQUIPO-ESPECIAL/",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#000000",
   "theme_color": "#ff3333",
   "lang": "es",
-  "categories": ["entertainment", "utilities"],
+  "categories": [
+    "entertainment",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/OBR-EQUIPO-ESPECIAL/icons/icon-72.png",
@@ -66,18 +69,21 @@
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "OBR CAM en modo SLS"
+      "label": "OBR CAM PRO"
     }
   ],
   "shortcuts": [
     {
       "name": "Abrir Cámara",
       "short_name": "Cámara",
-      "description": "Acceso directo a la cámara paranormal",
-      "url": "/OBR-EQUIPO-ESPECIAL/camara.html",
-      "icons": [{ "src": "/OBR-EQUIPO-ESPECIAL/icons/icon-96.png", "sizes": "96x96" }]
+      "url": "/OBR-EQUIPO-ESPECIAL/",
+      "icons": [
+        {
+          "src": "/OBR-EQUIPO-ESPECIAL/icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ],
-  "prefer_related_applications": false,
-  "related_applications": []
+  "prefer_related_applications": false
 }
