@@ -1514,7 +1514,7 @@ const paranormalQuestions = [
         if (audioStream) {
             micSource   = audioCtx.createMediaStreamSource(audioStream);
             micGainNode = audioCtx.createGain();
-            micGainNode.gain.value = 1.8;
+            micGainNode.gain.value = 2.5;
 
             audioAnalyser         = audioCtx.createAnalyser();
             audioAnalyser.fftSize = 1024;
@@ -1534,7 +1534,7 @@ const paranormalQuestions = [
                 try {
                     ttsSource = audioCtx.createMediaElementSource(cloudTTSPlayer);
                     ttsGainNode = audioCtx.createGain();
-                    ttsGainNode.gain.value = 1.0; // el volumen lo maneja cloudTTSPlayer.volume
+                    ttsGainNode.gain.value = 1.5; // el volumen lo maneja cloudTTSPlayer.volume
                     ttsSource.connect(ttsGainNode);
                     // TTS → altavoz (destination)
                     ttsGainNode.connect(audioCtx.destination);
