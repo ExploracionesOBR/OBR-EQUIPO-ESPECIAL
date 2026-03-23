@@ -68,8 +68,6 @@
         
         body.filter-thermal #shared-video-element { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
         body.filter-urbex #shared-video-element { filter: invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%); }
-        /* EFECTO EDGE X-RAY: Fondo invertido oscuro y tintado azul/cyan para alto contraste */
-        body.filter-edge #shared-video-element { filter: grayscale(100%) invert(100%) sepia(100%) hue-rotate(180deg) saturate(3.0) contrast(1.5) brightness(0.4); }
 
         .hud-burn-hidden { display: none; }
 
@@ -150,11 +148,10 @@
         <div id="zoom-container">
             <video id="shared-video-element" autoplay playsinline muted></video>
             <canvas id="sls-canvas"></canvas>
+            <canvas id="audio-canvas"></canvas>
         </div>
         <div id="ai-scan-overlay"></div>
     </div>
-    
-    <canvas id="audio-canvas"></canvas>
     
     <canvas id="heatmap-buffer"></canvas>
     <canvas id="lidar-buffer"></canvas>
@@ -198,24 +195,25 @@
         </div>
         
         <div id="telemetry-container">
-            <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()">
+            <!-- mic-btn oculto: el control está en el menú lateral derecho (btn-audio-menu) -->
+            <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()" style="display:none;">
                 <span>AUDIO SCAN</span><i class="fas fa-microphone text-[10px]"></i>
             </div>
             <div class="stat-row"><span id="meta-res">INIT...</span><i class="fas fa-expand text-[8px]"></i></div>
             <div class="stat-row"><span id="meta-fps">-- FPS</span><div class="signal-bars signal-level-0" id="signal-ui"><div class="bar"></div><div class="bar"></div><div class="bar"></div></div></div>
         </div>
 
-        <!-- FIX 3: IZQUIERDA = filtros de imagen | DERECHA = detección + control -->
+        <!-- MENÚ IZQUIERDA: filtros imagen | MENÚ DERECHA: detección + control -->
         <div id="menu-left" class="menu-container left-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('lidar', this)" id="btn-heatmap"><i class="fas fa-fingerprint"></i></div><div class="menu-label">LIDAR</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
         </div>
         <div id="menu-right" class="menu-container right-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('edge', this)" id="btn-edge"><i class="fas fa-wave-square"></i></div><div class="menu-label">X-RAY</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="toggleAudioScanner()" id="btn-audio-menu"><i class="fas fa-microphone"></i></div><div class="menu-label">AUDIO</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
     </div>
@@ -228,7 +226,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.51 (Spirit vox)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.83 (anuncio Juana + EVP tras interacción + pitch -530)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -253,93 +251,219 @@
     </div>
 
     <div id="settings-modal" class="modal-bg">
-        <div class="relative bg-neutral-900 border border-red-900 p-6 rounded w-[480px] max-w-[95%] shadow-[0_0_30px_rgba(255,0,0,0.1)]">
+        <div class="relative bg-neutral-900 border border-red-900 p-4 rounded w-[680px] max-w-[98%] shadow-[0_0_30px_rgba(255,0,0,0.1)] overflow-y-auto" style="max-height:95vh;">
             <button onclick="document.getElementById('settings-modal').classList.remove('active')" class="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
-            <h2 class="text-red-500 font-orbitron mb-4 font-bold text-center uppercase tracking-widest text-lg">CONFIGURACIÓN SISTEMA</h2>
-            
-            <div class="bg-black/50 p-3 rounded border border-gray-800 mb-4 flex justify-between items-center">
+            <h2 class="text-red-500 font-orbitron mb-3 font-bold text-center uppercase tracking-widest text-base">CONFIGURACIÓN SISTEMA</h2>
+
+            <!-- ① OCULTAR BOTONES LATERALES — arriba, ancho completo -->
+            <div class="bg-black/50 p-3 rounded border border-gray-800 mb-3 flex justify-between items-center">
                 <div>
-                    <h3 class="text-xs font-bold text-gray-400">OCULTAR MENÚS LATERALES</h3>
-                    <p class="text-[8px] text-gray-500 font-mono mt-1">NO APARECERÁN AL TOCAR LA PANTALLA</p>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">OCULTAR BOTONES LATERALES</h3>
+                    <p class="text-[8px] text-gray-500 font-mono mt-0.5">NO APARECERÁN AL TOCAR LA PANTALLA</p>
                 </div>
-                <button id="btn-toggle-ui" onclick="toggleCleanUI()" class="w-10 h-10 rounded-full border border-gray-600 flex items-center justify-center text-gray-400 hover:text-white hover:border-white transition-all">
+                <button id="btn-toggle-ui" onclick="toggleCleanUI()" class="w-10 h-10 rounded-full border border-gray-600 flex items-center justify-center text-gray-400 hover:text-white hover:border-white transition-all flex-shrink-0 ml-3">
                     <i class="fas fa-eye"></i>
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div class="bg-black/50 p-3 rounded border border-gray-800">
-                    <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">RED ESTUDIO</h3>
-                    <label class="text-[9px] text-gray-500 font-mono mb-1 block uppercase">DOCK ID / IP</label>
-                    <input type="text" id="mtx-host" placeholder="EJ: 192.168.1.50" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded font-mono outline-none focus:border-red-500 text-center mb-2">
-                    <p class="text-[8px] text-gray-600 font-mono uppercase text-center leading-tight">IP SE CONVIERTE A ID AUTO</p>
+            <!-- ②③ FILA MEDIA: ESTUDIO + IA (izquierda) | PREVIEW TTS (derecha) -->
+            <div class="flex gap-3 mb-3">
+
+                <!-- Columna izquierda: ESTUDIO + IA apilados -->
+                <div class="flex flex-col gap-3 flex-1 min-w-0">
+
+                    <!-- ② RED ESTUDIO — DOCK -->
+                    <div class="bg-black/50 p-3 rounded border border-cyan-900">
+                        <h3 class="text-[10px] font-bold text-cyan-400 mb-2 border-b border-cyan-900/60 pb-1 uppercase tracking-wider">RED ESTUDIO — DOCK</h3>
+                        <div class="flex gap-2 items-center mb-1.5">
+                            <input type="text" id="mtx-host" placeholder="IP ó ID del dock" class="flex-1 min-w-0 bg-black border border-gray-700 p-2 text-white text-[11px] rounded font-mono outline-none focus:border-cyan-500 text-center">
+                            <button onclick="document.getElementById('settings-modal').classList.remove('active'); openConnect();" class="flex-shrink-0 flex items-center gap-1 bg-cyan-900/30 border border-cyan-600 text-cyan-400 hover:bg-cyan-700 hover:text-white text-[10px] font-bold px-2.5 py-2 rounded transition-all font-orbitron whitespace-nowrap">
+                                <i class="fas fa-link"></i><span class="ml-1">ENLAZAR</span>
+                            </button>
+                        </div>
+                        <p class="text-[7px] text-gray-600 font-mono uppercase leading-tight">IP SE CONVIERTE A ID AUTO</p>
+                    </div>
+
+                    <!-- ③ IA ANALYZER -->
+                    <div class="bg-black/50 p-3 rounded border border-gray-800">
+                        <div class="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                            <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">IA ANALYZER</h3>
+                            <div class="flex gap-1">
+                                <button onclick="window.open('https://aistudio.google.com/api-keys','_blank')" class="bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-800 text-[8px] px-2 py-0.5 rounded transition-colors font-bold" title="Google AI Studio">GEM</button>
+                                <button onclick="window.open('https://console.groq.com/keys','_blank')" class="bg-orange-900/40 text-orange-400 hover:bg-orange-600 hover:text-white border border-orange-800 text-[8px] px-2 py-0.5 rounded transition-colors font-bold" title="Groq Console">GRQ</button>
+                            </div>
+                        </div>
+                        <input type="password" id="api-key-internal" placeholder="GEMINI, GROQ O ELEVENLABS KEY" class="w-full bg-black border border-gray-700 p-2 text-white text-[11px] rounded outline-none focus:border-red-500 mb-2">
+                        <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-800 text-green-500 hover:bg-green-900/30 py-1 rounded text-[10px] font-bold">VALIDAR KEY</button>
+                        <div id="api-status-msg" class="text-[9px] font-mono mt-1 text-center text-yellow-500 h-3"></div>
+                    </div>
                 </div>
-                <div class="bg-black/50 p-3 rounded border border-gray-800">
-                    <h3 className="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">IA ANALYZER</h3>
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="text-[9px] text-gray-500 font-mono block uppercase">API KEY</label>
-                        <div class="flex gap-1">
-                            <button onclick="window.open('https://aistudio.google.com/api-keys', '_blank')" class="bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-800 text-[8px] px-2 py-0.5 rounded transition-colors font-bold tracking-widest" title="Obtener Llave Gemini">GEM</button>
-                            <button onclick="window.open('https://console.groq.com/keys', '_blank')" class="bg-orange-900/40 text-orange-400 hover:bg-orange-600 hover:text-white border border-orange-800 text-[8px] px-2 py-0.5 rounded transition-colors font-bold tracking-widest" title="Obtener Llave Groq">GRQ</button>
+
+                <!-- Columna derecha: ESTADO TTS ENGINE compacto -->
+                <div class="bg-black/50 p-3 rounded border border-gray-800 flex flex-col" style="min-width:160px;max-width:210px;">
+                    <h3 class="text-[10px] font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1 uppercase tracking-wider">TTS ENGINE</h3>
+                    <div class="flex flex-col gap-1 mb-3 flex-1">
+                        <div class="text-[9px] font-mono text-gray-400">Motor: <span id="tts-engine-status" class="text-green-400">ELEVENLABS</span></div>
+                        <div class="text-[9px] font-mono text-gray-400">Créditos: <span id="tts-credits-status" class="text-green-500">9908/10000</span></div>
+                        <div class="text-[9px] font-mono text-gray-400">Usados: <span id="tts-used-status" class="text-yellow-500">92</span></div>
+                        <div class="text-[9px] font-mono text-gray-400">Fallback: <span id="tts-fallback-status" class="text-green-500">NO</span></div>
+                    <div class="text-[9px] font-mono text-gray-400">VoiceRSS: <span id="tts-vrss-status" class="text-blue-400">350/350</span></div>
+                    </div>
+                    <div class="border-t border-gray-700 pt-2">
+                        <label class="text-[8px] text-gray-500 font-mono uppercase block mb-1.5">MODO DE VOZ</label>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="setTTSMode('auto')" id="tts-btn-auto" class="w-full py-1.5 rounded text-[9px] font-bold font-mono border transition-all border-green-700 text-green-400 bg-green-900/20">AUTO</button>
+                            <button onclick="setTTSMode('elevenlabs')" id="tts-btn-el" class="w-full py-1.5 rounded text-[9px] font-bold font-mono border transition-all border-gray-700 text-gray-400">ELEVENLABS</button>
+                            <button onclick="setTTSMode('voicerss')" id="tts-btn-vrss" class="w-full py-1.5 rounded text-[9px] font-bold font-mono border transition-all border-gray-700 text-gray-400">VOICE RSS</button>
                         </div>
                     </div>
-                    <div class="relative w-full mb-2">
-                        <input type="password" id="api-key-internal" placeholder="GEMINI O GROQ KEY" class="w-full bg-black border border-gray-700 p-2 text-white text-xs rounded outline-none focus:border-red-500">
+                </div>
+            </div>
+
+            <!-- ⑤ TTS FILTROS — ancho completo, desplegable con inputs numéricos -->
+            <details id="tts-filtros-details" class="bg-black/50 rounded border border-purple-900/60 mb-3 group">
+                <summary class="flex justify-between items-center p-3 cursor-pointer select-none list-none" onclick="loadTTSFilterPanel()">
+                    <div class="flex items-center gap-2">
+                        <span class="text-purple-400 text-[9px] font-mono group-open:rotate-90 transition-transform inline-block">▶</span>
+                        <h3 class="text-[10px] font-bold text-purple-400 uppercase tracking-wider">TTS FILTROS — GOOGLE TRANSLATE</h3>
                     </div>
-                    <button id="btn-validate-api" onclick="validateAndSaveKey()" class="w-full border border-green-800 text-green-500 hover:bg-green-900/30 py-1 rounded text-[10px] font-bold">VALIDAR KEY</button>
-                    <div id="api-status-msg" class="text-[9px] font-mono mt-1 text-center text-yellow-500 h-3"></div>
-                </div>
-            </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] text-gray-600 font-mono">código base + ajuste panel</span>
+                        <button onclick="event.stopPropagation(); resetTTSFilters()" class="text-[8px] text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-700 px-2 py-0.5 rounded transition-colors font-mono">RESET</button>
+                    </div>
+                </summary>
 
-            <!-- BLOQUE DE ESTADO TTS ENGINE -->
-            <div class="bg-black/50 p-3 rounded border border-gray-800 mb-4">
-                <h3 class="text-xs font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">ESTADO TTS ENGINE</h3>
-                <div class="text-[9px] font-mono text-gray-400 leading-tight grid grid-cols-2 gap-2">
-                    <div>TTS Engine: <span id="tts-engine-status" class="text-white">ELEVENLABS</span></div>
-                    <div>ElevenLabs Créditos restantes: <span id="tts-credits-status" class="text-green-500">9908 / 10000</span></div>
-                    <div>Créditos usados: <span id="tts-used-status" class="text-yellow-500">92</span></div>
-                    <div>Modo fallback: <span id="tts-fallback-status" class="text-green-500">NO</span></div>
-                </div>
-            </div>
+                <div class="px-3 pb-3 border-t border-purple-900/30">
+                    <div class="grid grid-cols-2 gap-3 mt-3">
 
-            <!-- FIX 4: LINK / DOCK movido desde menú principal a configuración -->
-            <div class="bg-black/50 p-3 rounded border border-cyan-900 mb-4 flex justify-between items-center">
-                <div>
-                    <h3 class="text-xs font-bold text-cyan-400">ENLACE A ESTUDIO</h3>
-                    <p class="text-[8px] text-gray-500 font-mono mt-1">CONECTAR / DESCONECTAR DEL DOCK</p>
-                </div>
-                <button onclick="document.getElementById('settings-modal').classList.remove('active'); openConnect();" class="w-10 h-10 rounded-full border border-cyan-600 flex items-center justify-center text-cyan-400 hover:text-white hover:border-white hover:bg-cyan-900/40 transition-all">
-                    <i class="fas fa-link"></i>
-                </button>
-            </div>
+                        <div class="bg-black/40 rounded border border-gray-800 p-2">
+                            <label class="text-[8px] text-gray-500 font-mono uppercase block mb-1">Rate pre-proceso ×</label>
+                            <input type="number" id="tts-f-rate" min="-0.5" max="1.5" step="0.01" value="0"
+                                class="w-full bg-black border border-gray-700 text-purple-300 text-[11px] font-mono text-center p-1.5 rounded outline-none focus:border-purple-500">
+                            <div class="text-[7px] text-gray-600 font-mono mt-1">código: ×0.88 · panel ajusta encima</div>
+                            <div class="text-[7px] text-gray-700 font-mono">1.5 + panel = velocidad base del proceso</div>
+                        </div>
 
-            <div class="h-px bg-gray-800 w-full mb-4"></div>
+                        <div class="bg-black/40 rounded border border-purple-800/60 p-2">
+                            <label class="text-[8px] text-purple-400 font-mono uppercase block mb-1">🎵 Tono (cents)</label>
+                            <input type="number" id="tts-f-pitch" min="-1200" max="1200" step="50" value="-530"
+                                class="w-full bg-black border border-purple-800/60 text-purple-300 text-[11px] font-mono text-center p-1.5 rounded outline-none focus:border-purple-400">
+                            <div class="text-[7px] text-gray-600 font-mono mt-1">código: -200c · panel se suma</div>
+                            <div class="text-[7px] text-gray-700 font-mono">100=+1 semitono · -200=-2 semitonos</div>
+                        </div>
+                    </div>
+
+                    <!-- Prueba TTS -->
+                    <div class="flex gap-2 items-center border-t border-purple-900/30 pt-2 mt-3">
+                        <input type="text" id="tts-preview-text" placeholder="texto de prueba..." value="siento tu presencia aquí"
+                            class="flex-1 bg-black border border-gray-700 p-1.5 text-white text-[10px] rounded font-mono outline-none focus:border-purple-500">
+                        <button id="btn-tts-preview" onclick="previewGoogleTTS()"
+                            class="flex-shrink-0 flex items-center gap-1.5 bg-purple-900/30 border border-purple-600 text-purple-300 hover:bg-purple-700 hover:text-white text-sm px-3 py-1.5 rounded transition-all font-mono"
+                            title="Escuchar con filtros actuales">🔊</button>
+                    </div>
+                    <p class="text-[7px] text-gray-700 font-mono mt-1.5">Pitch: tono base. Rate: velocidad normal (preview). AUDIO SCAN aplica 1.75-2.0x encima. Subir velocidad también sube tono — compensar bajando Pitch.</p>
+                </div>
+            </details>
+
+            <div class="h-px bg-gray-800 w-full mb-3"></div>
             <button onclick="saveSettings()" class="w-full bg-red-900/20 border border-red-600 text-red-500 hover:bg-red-900/50 hover:text-white py-3 rounded text-sm font-bold uppercase tracking-widest transition-colors font-orbitron">GUARDAR Y CERRAR</button>
         </div>
     </div>
 
 <script>
+    // ── OFFLINE CACHE: Service Worker para modelos SLS + LIDAR ──────────────
+    if ('serviceWorker' in navigator) {
+        const swCode = `
+const CACHE = 'obr-models-v1';
+const URLS = [
+  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh_solution_simd_wasm_bin.wasm',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.binarypb',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.binarypb',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.wasm',
+  'https://tfhub.dev/google/tfjs-model/movenet/multipose/lightning/1/model.json'
+];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(URLS).catch(()=>{})));
+  self.skipWaiting();
+});
+self.addEventListener('fetch', e => {
+  if (URLS.some(u => e.request.url.includes(u.split('/').pop()))) {
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+      const clone = res.clone();
+      caches.open(CACHE).then(cache => cache.put(e.request, clone));
+      return res;
+    })));
+  }
+});`;
+        try {
+            const blob = new Blob([swCode], {type:'application/javascript'});
+            const url  = URL.createObjectURL(blob);
+            navigator.serviceWorker.register(url, {scope:'/'}).catch(()=>{});
+        } catch(e) {}
+    }
+
     let sharedMicMode = true; // BANDERA GLOBAL MIC COMPARTIDO
 
-    // --- VARIABLES GLOBALES DE ESTADO TTS Y CRÉDITOS ---
-    let elevenlabsCreditsTotal = 10000;
-    let elevenlabsCreditsUsed = parseInt(localStorage.getItem('obr_tts_used') || '92');
-    let elevenlabsCreditsRemaining = elevenlabsCreditsTotal - elevenlabsCreditsUsed;
-    if (elevenlabsCreditsRemaining < 0) elevenlabsCreditsRemaining = 0;
+    // ──────────────────────────────────────────────────────────────
+    // CRÉDITOS TTS
+    // ElevenLabs: 10000 chars/mes, reset día 15
+    // VoiceRSS:   350 requests/día, reset medianoche
+    // ──────────────────────────────────────────────────────────────
+
+    // ElevenLabs
+    let elevenlabsCreditsTotal     = 10000;
+    let elevenlabsCreditsUsed      = parseInt(localStorage.getItem('obr_tts_used') || '92');
+    let elevenlabsCreditsRemaining = Math.max(0, elevenlabsCreditsTotal - elevenlabsCreditsUsed);
+
+    // VoiceRSS (350 solicitudes diarias)
+    const VOICERSS_API_KEY    = '776fa230d3574c4097aa44e4e3c3949c';
+    const VOICERSS_DAILY_MAX  = 350;
+    let voicerssUsedToday     = 0;
+    let voicerssRemaining     = VOICERSS_DAILY_MAX;
+
+    function _initVoiceRSSCounter() {
+        const today = new Date().toDateString();
+        const saved = localStorage.getItem('obr_vrss_date');
+        if (saved === today) {
+            voicerssUsedToday = parseInt(localStorage.getItem('obr_vrss_used') || '0');
+        } else {
+            voicerssUsedToday = 0;
+            localStorage.setItem('obr_vrss_used',  '0');
+            localStorage.setItem('obr_vrss_date',  today);
+        }
+        voicerssRemaining = Math.max(0, VOICERSS_DAILY_MAX - voicerssUsedToday);
+    }
+    _initVoiceRSSCounter();
+
+    // Sincronizar defaults de filtros TTS con localStorage al iniciar
+    // Evita discrepancia entre getTTSFilters() y readFiltersFromDOM()
+    (function _syncTTSFilterDefaults() {
+        if (localStorage.getItem('obr_tts_f_rate')  === null) localStorage.setItem('obr_tts_f_rate',  '0');
+        if (localStorage.getItem('obr_tts_f_pitch') === null) localStorage.setItem('obr_tts_f_pitch', '-530');
+    })();
+
+    function _incrementVoiceRSS() {
+        voicerssUsedToday++;
+        voicerssRemaining = Math.max(0, VOICERSS_DAILY_MAX - voicerssUsedToday);
+        localStorage.setItem('obr_vrss_used', voicerssUsedToday);
+        updateTTSStatusUI();
+    }
+
     let usingFallbackTTS = false;
 
-    // --- SELECCIÓN DE VOZ SEGURA Y AUTORIZADA (PROBABILIDAD) ---
+    // --- SELECCIÓN DE VOCES (PROBABILIDAD) ---
+    // ElevenLabs: 60% Callum (N2lVS1w4EtoT3dr4eOWO) · 40% Eric (cjVigY5qzO86Huf0OWal)
     function getRandomVoice() {
-        const r = Math.random();
-        if (r < 0.7) {
-            return "N2lVS1w4EtoT3dr4eOWO"; // callum 70% Principal
-        } else if (r < 0.9) {
-            return "cjVigY5qzO86Huf0OWal"; // eric 20% Secundaria
-        } else {
-            return ""; // 10% Terciaria
-        }
+        return Math.random() < 0.6
+            ? 'N2lVS1w4EtoT3dr4eOWO'  // Callum 60%
+            : 'cjVigY5qzO86Huf0OWal'; // Eric   40%
+    }
+
+    // VoiceRSS: 60% Jose (masc) · 40% Juana (fem)  — es-mx
+    function getRandomVoiceRSSVoice() {
+        return Math.random() < 0.6 ? 'Jose' : 'Juana';
     }
 
     // --- FUNCIONES EVP FRAGMENTER (MANTENIDAS PERO DESACTIVADAS INTERNAMENTE) ---
@@ -376,19 +500,62 @@
 
     // --- FUNCIÓN PARA ACTUALIZAR UI DE ESTADO TTS ---
     function updateTTSStatusUI() {
-        const engineEl = document.getElementById('tts-engine-status');
-        const creditsEl = document.getElementById('tts-credits-status');
-        const usedEl = document.getElementById('tts-used-status');
+        const engineEl   = document.getElementById('tts-engine-status');
+        const creditsEl  = document.getElementById('tts-credits-status');
+        const usedEl     = document.getElementById('tts-used-status');
         const fallbackEl = document.getElementById('tts-fallback-status');
+        const vrssEl     = document.getElementById('tts-vrss-status');
 
-        if (engineEl) engineEl.innerText = usingFallbackTTS ? "GOOGLE TRANSLATE TTS" : "ELEVENLABS";
-        if (creditsEl) creditsEl.innerText = elevenlabsCreditsRemaining + " / " + elevenlabsCreditsTotal;
-        if (usedEl) usedEl.innerText = elevenlabsCreditsUsed;
+        let motorLabel, motorClass;
+        if (ttsMode === 'voicerss') {
+            motorLabel = 'VOICE RSS'; motorClass = 'text-blue-400';
+        } else if (ttsMode === 'elevenlabs') {
+            motorLabel = 'ELEVENLABS'; motorClass = 'text-white';
+        } else {
+            motorLabel = usingFallbackTTS ? 'VOICE RSS (fallback)' : 'ELEVENLABS (prioritario)';
+            motorClass = usingFallbackTTS ? 'text-yellow-400' : 'text-green-400';
+        }
+        if (engineEl)  { engineEl.innerText = motorLabel; engineEl.className = motorClass; }
+        if (creditsEl) creditsEl.innerText = elevenlabsCreditsRemaining + ' / ' + elevenlabsCreditsTotal;
+        if (usedEl)    usedEl.innerText = elevenlabsCreditsUsed;
+        if (vrssEl)    vrssEl.innerText = voicerssRemaining + ' / ' + VOICERSS_DAILY_MAX;
         if (fallbackEl) {
-            fallbackEl.innerText = usingFallbackTTS ? "SI" : "NO";
-            fallbackEl.className = usingFallbackTTS ? "text-red-500" : "text-green-500";
+            const isFallback = ttsMode === 'voicerss' || (ttsMode === 'auto' && usingFallbackTTS);
+            fallbackEl.innerText = isFallback ? 'SI' : 'NO';
+            fallbackEl.className = isFallback ? 'text-red-500' : 'text-green-500';
         }
     }
+
+    // --- SELECTOR MANUAL DE MODO TTS ---
+    let ttsMode = localStorage.getItem('obr_tts_mode') || 'auto'; // 'auto' | 'elevenlabs' | 'voicerss'
+    function setTTSMode(mode) {
+        ttsMode = mode;
+        localStorage.setItem('obr_tts_mode', mode);
+        if (mode === 'voicerss')        { usingFallbackTTS = true;  }
+        else if (mode === 'elevenlabs') { usingFallbackTTS = false; }
+        else if (mode === 'auto')       { usingFallbackTTS = false; }
+
+        const btns = { auto: 'tts-btn-auto', elevenlabs: 'tts-btn-el', voicerss: 'tts-btn-vrss' };
+        Object.entries(btns).forEach(([k, id]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (k === mode) {
+                el.className = el.className
+                    .replace(/border-gray-700/g, '').replace(/text-gray-400/g, '').trim()
+                    + ' border-green-700 text-green-400 bg-green-900/20';
+            } else {
+                el.className = el.className
+                    .replace(/border-green-700/g, '').replace(/text-green-400/g, '')
+                    .replace(/bg-green-900\/20/g, '').trim()
+                    + ' border-gray-700 text-gray-400';
+            }
+        });
+        const labels = { auto: 'MODO AUTO', elevenlabs: 'ELEVENLABS', voicerss: 'VOICE RSS' };
+        showToast('VOZ: ' + (labels[mode] || mode.toUpperCase()));
+        updateTTSStatusUI();
+    }
+    // Inicializar estado de botones TTS al abrir settings
+    function initTTSModeUI() { setTTSMode(ttsMode); }
 
     // --- SANITIZADOR UNIVERSAL DE TEXTO ---
     function normalizarTexto(texto) {
@@ -401,12 +568,12 @@
     }
 
     // SENSIBILIDAD ÓPTIMA PARA ESTABILIDAD DE PUNTOS
-    const AI_SENSITIVITY = 0.3; 
+    const AI_SENSITIVITY = 0.2; // sensibilidad general 
     const state = { 
         apiKey: localStorage.getItem("obr_ai_key") || localStorage.getItem("obr_gemini_key") || "", 
         aiProvider: localStorage.getItem("obr_ai_provider") || "gemini",
         aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash", 
-        studioId: localStorage.getItem("obr_studio_id") || "", filter: 'normal', isSLS: false, isLidar: false, isEdge: false, isPareidolia: false, isAudioScan: false, zoom: 1 
+        studioId: localStorage.getItem("obr_studio_id") || "", filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 
     };
     
     const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] } };
@@ -422,7 +589,8 @@
     
     // VARIABLES VISUALIZACIÓN IA/AUDIO
     let currentAiText = "";
-    let currentAiImage = null; 
+    let currentAiImage = null;   // blob URL string
+    let currentAiImgEl = null;   // HTMLImageElement decoded from blob URL
     let aiTextTimer = null;
     let radarAngle = 0; 
     let canvasScanBoxes = []; 
@@ -460,8 +628,8 @@ respuestas: ["frío","dolor","oscuro","triste","cansado","perdido","solo","atrap
 },
 
 {
-triggers: ["que paso aqui","que ocurrio aqui","que paso"],
-respuestas: ["fuego","caída","grito","sangre","oscuridad","silencio","dolor","accidente"]
+triggers: ["que paso aqui","que paso aca","que ocurrio aqui","que ocurrio aca","que paso","que fue lo que paso","cuanto paso","que sucedio aqui"],
+respuestas: ["fuego","caída","grito","sangre","oscuridad","silencio","dolor","accidente","no preguntes","ya sabes"]
 },
 
 {
@@ -695,9 +863,22 @@ const paranormalQuestions = [
         return seleccion;
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // FILTROS TTS — parámetros de procesamiento offline para AUDIO SCAN
+    // Calibrados para VoiceRSS (Jose/Juana es-mx) + playbackRate 1.75-2.0
+    // Panel de Settings suma/multiplica encima de estos valores base.
+    // ═══════════════════════════════════════════════════════════════════
+    // FILTROS TTS: Rate base × 1.5 compensa velocidad natural de VoiceRSS
+    const TTS_FILTER_RATE_CODE  = 1.5;
+    // FILTROS TTS: Pitch -1050 cents (~10 semitonos grave) para voz paranormal
+    const TTS_FILTER_PITCH_CODE = -1050;
+    // ═══════════════════════════════════════════════════════════════════
+
     // AUDIO SCANNER VARS
     let audioStream = null;
+    // audioCtx = alias de evpAudioCtx (se asigna en initAudioEngine)
     let audioCtx = null;
+    let micSource  = null;   // FIX C1: declaración explícita — evita global implícita en Safari
     let micGainNode = null; 
     let audioAnalyser = null;
     let audioDataArray = null;
@@ -709,50 +890,184 @@ const paranormalQuestions = [
     let isTtsPlaying = false; 
     let lastQuestionTime = 0; 
     let lastEvpTime = 0; 
-    
+    let evpSilenceCount = 0;    // contador de frases en silencio
+    const EVP_GOOGLE_LIMIT = 10; // primeras 10 frases con Google
+    const EVP_EL_LIMIT     = 5;  // siguientes 5 con ElevenLabs
+    let evpSilenceCycleStart = 0; // timestamp inicio de ciclo
+
     let simulatedPikes = new Array(128).fill(0); 
     let ambientNoiseLevel = 0.01; 
     let cumulativeEVPEnergy = 0; 
 
     // --- REPRODUCTOR CLOUD TTS & PIPELINE EVP (GRAVE Y OSCURO) ---
+    // crossOrigin NO se pone aquí: se activa solo cuando se conecta a WebAudio.
+    // Para Google TTS como src de <audio> NO debe estar presente (bloquea CORS).
     const cloudTTSPlayer = new Audio();
-    cloudTTSPlayer.crossOrigin = "anonymous";
-    cloudTTSPlayer.playsInline = true; 
+    cloudTTSPlayer.playsInline = true;
     cloudTTSPlayer.preload = "auto";
     cloudTTSPlayer.muted = false;
-    cloudTTSPlayer.volume = 1.0; // FIX 8: Volumen al máximo
-    // Forzar salida de audio SIEMPRE al altavoz
+    cloudTTSPlayer.volume = 1.0;
     if (typeof cloudTTSPlayer.setSinkId === 'function') {
-        cloudTTSPlayer.setSinkId("communications").catch(() => {
-            cloudTTSPlayer.setSinkId("default").catch(err => console.log("Sink ID no soportado en este navegador", err));
-        });
+        cloudTTSPlayer.setSinkId("default").catch(() => {});
     }
 
-    let ttsSource = null, ttsGainNode = null;
-    let mixDestination = null;
+    // ── UN SOLO AudioContext para todo el sistema de audio ─────────────────
+    // evpAudioCtx = contexto maestro único (TTS pipeline + mic + sweep)
+    // audioCtx    = alias del mismo objeto (usado por el visualizador y mic)
+    let evpAudioCtx    = null;
+    // audioCtx = alias de evpAudioCtx (declarado arriba, línea ~786)
+    let ttsSource      = null; // MediaElementSource de cloudTTSPlayer (solo uno)
+    let ttsMainGain    = null; // ganancia final TTS
+    let bassBoost      = null; // filtro graves
+    let darkFilter     = null; // filtro oscuro
+    let ttsGainNode    = null; // ganancia para mixDestination (FIX C4: alias de ttsMainGain)
+    let mixDestination = null; // stream WebRTC
 
     function makeDistortionCurve(amount) {
-        // Función mantenida por reglas de "NO eliminar funciones", pero inactiva en el pipeline.
+        if (!makeDistortionCurve._cache) makeDistortionCurve._cache = {};
+        const key = Math.round(amount);
+        if (makeDistortionCurve._cache[key]) return makeDistortionCurve._cache[key];
         let k = typeof amount === 'number' ? amount : 5,
-            n_samples = 44100,
-            curve = new Float32Array(n_samples),
+            n_samples = 44100, curve = new Float32Array(n_samples),
             deg = Math.PI / 180, x;
-        for (let i = 0; i < n_samples; ++i ) {
+        for (let i = 0; i < n_samples; ++i) {
             x = i * 2 / n_samples - 1;
-            curve[i] = ( 3 + k ) * x * 5 * deg / ( Math.PI + k * Math.abs(x) );
+            curve[i] = (3 + k) * x * 5 * deg / (Math.PI + k * Math.abs(x));
         }
+        makeDistortionCurve._cache[key] = curve;
         return curve;
     }
 
-    // SOLO en interacción usuario para FIX MODO LLAMADA
-    document.addEventListener('click', async () => {
-        if (audioCtx && audioCtx.state === 'suspended') {
-            await audioCtx.resume();
+    // initEVPWebAudio: ya no crea su propio contexto.
+    // Solo reanuda el contexto único si existe.
+    function initEVPWebAudio() {
+        if (evpAudioCtx && evpAudioCtx.state === 'suspended') {
+            evpAudioCtx.resume().catch(() => {});
         }
-    }, { once: true });
+    }
+
+    // ── Leer filtros TTS combinados: código base + ajuste de settings ──────────
+    function getTTSFilters() {
+        const ls  = (k, def) => { const v = parseFloat(localStorage.getItem(k)); return isNaN(v) ? def : v; };
+        const hasPitch = localStorage.getItem('obr_tts_f_pitch') !== null;
+        const hasRate  = localStorage.getItem('obr_tts_f_rate')  !== null;
+        return {
+            // Rate: código base + ajuste panel (panel en 0 = sin cambio, +0.5 = más rápido)
+            rate:  TTS_FILTER_RATE_CODE  + (hasRate  ? ls('obr_tts_f_rate',  0.0) : 0.0),
+            // Pitch: código base + ajuste panel en cents (panel en 0 = sin cambio extra)
+            pitch: TTS_FILTER_PITCH_CODE + (hasPitch ? ls('obr_tts_f_pitch', -530) : 0),
+        };
+    }
+
+    // ── ARCHIVOS DE AUDIO: barrido.mp3 y respuesta.mp3 ─────────────────────
+    const sweepAudio    = new Audio('./barrido.mp3');
+    sweepAudio.loop     = true;
+    sweepAudio.volume   = 0.22;
+    sweepAudio.preload  = 'auto';
+
+    const responseAudio = new Audio('./respuesta.mp3');
+    responseAudio.loop  = true;   // loop = true: correr durante toda la respuesta
+    responseAudio.volume = 0.5;
+    responseAudio.preload = 'auto';
+
+    let sweepFileAvailable    = false;
+    let responseFileAvailable = false;
+
+    fetch('./barrido.mp3',   { method: 'HEAD' }).then(r => { sweepFileAvailable    = r.ok; }).catch(() => {});
+    fetch('./respuesta.mp3', { method: 'HEAD' }).then(r => { responseFileAvailable = r.ok; }).catch(() => {});
+
+    // ── FIX C3: WeakMap independiente por elemento <audio> ─────────────────
+    // Elimina la cancelación cruzada entre sweepAudio y responseAudio
+    // cuando playResponseStart los fades simultáneamente.
+    const _xfadeTimers = new WeakMap();
+    function _fadeVolume(audio, targetVol, durationMs) {
+        if (_xfadeTimers.has(audio)) clearInterval(_xfadeTimers.get(audio));
+        const steps    = 20;
+        const stepMs   = durationMs / steps;
+        const startVol = audio.volume;
+        const delta    = (targetVol - startVol) / steps;
+        let   step     = 0;
+        const timer = setInterval(() => {
+            step++;
+            audio.volume = Math.max(0, Math.min(1, startVol + delta * step));
+            if (step >= steps) {
+                clearInterval(timer);
+                _xfadeTimers.delete(audio);
+            }
+        }, stepMs);
+        _xfadeTimers.set(audio, timer);
+    }
+
+    // Llamar ANTES de la voz TTS: inicia respuesta.mp3 y baja barrido.mp3
+    function playResponseStart() {
+        return new Promise(resolve => {
+            if (responseFileAvailable) {
+                // Bajar barrido suavemente (400ms) — timer independiente (FIX C3)
+                _fadeVolume(sweepAudio, 0.04, 400);
+                // Subir respuesta.mp3 y dejarlo corriendo — timer independiente (FIX C3)
+                responseAudio.currentTime = 0;
+                responseAudio.play().catch(() => {});
+                _fadeVolume(responseAudio, 0.55, 300);
+                // Intro de ~700ms antes de la voz
+                setTimeout(resolve, 700);
+            } else {
+                // Sin respuesta.mp3: silencio (sin ruido sintético de "puss")
+                resolve();
+            }
+        });
+    }
+
+    // Llamar DESPUÉS de la voz TTS: mantiene respuesta.mp3 ~600ms más y vuelve a barrido
+    function playResponseEnd() {
+        if (!responseFileAvailable) return;
+        setTimeout(() => {
+            // Bajar respuesta suavemente (500ms)
+            _fadeVolume(responseAudio, 0, 500);
+            // Subir barrido de vuelta (600ms, con pequeño delay)
+            setTimeout(() => {
+                _fadeVolume(sweepAudio, 0.22, 600);
+                // Parar respuesta cuando ya no se oiga
+                setTimeout(() => {
+                    responseAudio.pause();
+                    responseAudio.currentTime = 0;
+                }, 600);
+            }, 200);
+        }, 600); // 600ms de "cola" tras la voz
+    }
+
+    // Compatibilidad con código que llama playResponseIntro
+    function playResponseIntro() { return playResponseStart(); }
+
+    // ── Manejo del sweep ──────────────────────────────────────────────────
+    let _webAudioSweepRunning = false; // guard para no lanzar múltiples sweeps
+
+    function startSweepAudio() {
+        // Solo barrido.mp3 — sin generación de ruido Web Audio (interfiere con mic)
+        if (sweepFileAvailable) {
+            sweepAudio.volume = 0.22;
+            sweepAudio.currentTime = 0;
+            sweepAudio.play().catch(() => {});
+        }
+        // Sin .mp3: silencio limpio (no generamos ruido sintético)
+    }
+    function stopSweepAudio() {
+        _fadeVolume(sweepAudio, 0, 400);
+        setTimeout(() => { sweepAudio.pause(); sweepAudio.currentTime = 0; }, 450);
+        responseAudio.pause(); responseAudio.currentTime = 0;
+    }
+
+    // Desbloqueo de AudioContext al primer gesto (INICIAR CÁMARA cuenta como gesto)
+    function unlockAudioContext() {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        else if (evpAudioCtx && evpAudioCtx.state === 'suspended') evpAudioCtx.resume().catch(() => {});
+    }
+    document.addEventListener('click', unlockAudioContext, { once: true });
+    document.addEventListener('touchend', unlockAudioContext, { once: true });
 
     // --- NUEVO SISTEMA TTS ELEVENLABS ---
-    const ELEVENLABS_API_KEY = "sk_e4c25b079bd92a788a81593d86ceadb63add38a5afdb04e0";
+    // N-A1: clave leída de localStorage — nunca hardcodeada en texto plano
+    // Configurable desde Settings panel junto a Gemini/Groq
+    const ELEVENLABS_API_KEY = localStorage.getItem('obr_el_key') || '';
 
     async function getElevenLabsAudio(text, voiceId) {
         console.log("ElevenLabs request enviada");
@@ -801,6 +1116,8 @@ const paranormalQuestions = [
         }
     }
 
+    // safeStartSpeechRec: EXACTAMENTE igual a la referencia v6.1.50
+    // Clave: isRecognizing = true ANTES de start() → sin ventana de race condition
     function safeStartSpeechRec() {
         if (speechRec && state.isAudioScan && !isTtsPlaying && !isSpookySpeaking && !isRecognizing) {
             try { 
@@ -836,131 +1153,407 @@ const paranormalQuestions = [
         }
     }
 
-    // --- SPEAK TEXT (SISTEMA ELEVENLABS NORMAL) ---
-    async function speakText(text) {
-        if (!text) return;
-        
-        isTtsPlaying = true;
-        isSpookySpeaking = false;
-        
-        safeStopSpeechRec(); 
-        
-        await initAudioEngine(); 
-        if (audioCtx && audioCtx.state === "suspended") {
-            await audioCtx.resume();
+    // ── Sin TTS disponible: deshabilitar IA VISION y AUDIO SCAN ────────────────
+    function ttsNoDisponible(origen) {
+        const msg = `TTS NO DISPONIBLE — ${origen || 'SIN CRÉDITOS'}`;
+        showToast(msg, true);
+
+        // Apagar AUDIO SCAN si está activo
+        if (state.isAudioScan) {
+            state.isAudioScan = false;
+            const btn     = document.getElementById('mic-btn');
+            const btnMenu = document.getElementById('btn-audio-menu');
+            if (btn)     btn.classList.remove('active');
+            if (btnMenu) btnMenu.classList.remove('active-state');
+            try { stopSweepAudio(); }    catch(e) {}
+            try { safeStopSpeechRec(); } catch(e) {}
+            simulatedPikes.fill(0);
+            cumulativeEVPEnergy = 0;
+            ambientNoiseLevel   = 0.01;
+            isTtsPlaying = false; isSpookySpeaking = false;
+            clearTimeout(_ttsWatchdog);
+            if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+            if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
         }
 
-        const safeText = text.substring(0, 120);
-        const voiceId = getRandomVoice(); 
-        
-        let audioUrl = await getElevenLabsAudio(safeText, voiceId);
-        
-        if (!audioUrl) {
-            usingFallbackTTS = true;
-            console.warn("Fallback Google TTS activado");
-            audioUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=es&client=gtx&q=${encodeURIComponent(safeText)}`;
-        } else {
-            usingFallbackTTS = false;
+        // Apagar IA VISION si está activa
+        if (isPareidoliaActive) {
+            isPareidoliaActive = false;
+            state.isPareidolia = false;
+            const btn = document.getElementById('btn-ia');
+            if (btn) btn.classList.remove('active-state');
+            clearTimeout(pareidoliaInterval);
+            isAIProcessing = false;
+            stopScanningEffect();
         }
+
         updateTTSStatusUI();
-        
+    }
+
+    // --- FALLBACK TTS: Web Speech API nativa (sin internet, sin CORS, sin API key) ---
+    function speakWithWebSpeech(text, onEnd) {
+        if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
+        window.speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.lang  = 'es-MX';
+        utt.rate  = 0.88;
+        utt.pitch = 0.7;
+        utt.volume = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const esVoice = voices.find(v => v.lang && v.lang.startsWith('es'));
+        if (esVoice) utt.voice = esVoice;
+        utt.onend   = () => { if (onEnd) onEnd(); };
+        utt.onerror = () => { if (onEnd) onEnd(); };
+        window.speechSynthesis.speak(utt);
+    }
+
+    function dividirTextoTTS(text, max = 180) {
+        const parts = [];
+        let t = (text || '').trim();
+        while (t.length > max) {
+            let cut = t.lastIndexOf(' ', max);
+            if (cut < 10) cut = max;
+            parts.push(t.slice(0, cut));
+            t = t.slice(cut).trim();
+        }
+        if (t.length) parts.push(t);
+        return parts.length ? parts : [text.substring(0, max)];
+    }
+
+    // Proxies en cascada — si uno falla se intenta el siguiente
+    // ──────────────────────────────────────────────────────────────
+    // VOICE RSS TTS — reemplaza Google Translate
+    // API: https://api.voicerss.org/
+    // Voces es-mx: Jose (60%) · Juana (40%)
+    // Límite: 350 solicitudes/día (reset a medianoche)
+    // ──────────────────────────────────────────────────────────────
+    async function getVoiceRSSAudio(text) {
+        if (voicerssRemaining <= 0) {
+            console.warn('VoiceRSS: límite diario alcanzado');
+            return null;
+        }
+        const voice   = getRandomVoiceRSSVoice();
+        const encoded = encodeURIComponent((text || '').substring(0, 300));
+        const url     = `https://api.voicerss.org/?key=${VOICERSS_API_KEY}&hl=es-mx&v=${voice}&src=${encoded}&f=48khz_16bit_stereo&c=MP3`;
+        try {
+            const ac  = new AbortController();
+            const t   = setTimeout(() => ac.abort(), 8000);
+            const res = await fetch(url, { signal: ac.signal });
+            clearTimeout(t);
+            if (!res.ok) { console.warn('VoiceRSS HTTP', res.status); return null; }
+            const ct = res.headers.get('content-type') || '';
+            // VoiceRSS retorna error como JSON o text cuando falla
+            if (ct.includes('application/json') || ct.includes('text/plain')) {
+                const txt = await res.text();
+                console.warn('VoiceRSS error:', txt);
+                return null;
+            }
+            const blob = await res.blob();
+            if (blob.size < 500) return null;
+            _incrementVoiceRSS();
+            return URL.createObjectURL(blob);
+        } catch(e) {
+            console.warn('VoiceRSS exception:', e.message);
+            return null;
+        }
+    }
+
+    // --- SPEAK ANNOUNCEMENT — Juana (VoiceRSS), sin filtros, para indicaciones ---
+    // Usa siempre Juana, sin pitch/rate, sin afectar lastSpokenText ni EVP
+    // Marca _isAnnouncement=true en el período de reproducción para que onresult lo ignore
+    async function speakAnnouncement(text) {
+        if (!text || !state.isAudioScan && !isPareidoliaActive) return;
+        await initAudioEngine();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume().catch(()=>{});
+        if (!ttsSource) initTTSPipeline();
+
+        // Juana siempre, sin rotación
+        const encoded = encodeURIComponent(text.substring(0, 200));
+        const url = `https://api.voicerss.org/?key=${VOICERSS_API_KEY}&hl=es-mx&v=Juana&src=${encoded}&f=48khz_16bit_stereo&c=MP3`;
+        let blobUrl = null;
+        try {
+            const ac = new AbortController();
+            const t  = setTimeout(() => ac.abort(), 8000);
+            const res = await fetch(url, { signal: ac.signal });
+            clearTimeout(t);
+            if (res.ok) {
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('text/') && !ct.includes('application/json')) {
+                    const blob = await res.blob();
+                    if (blob.size > 500) { _incrementVoiceRSS(); blobUrl = URL.createObjectURL(blob); }
+                }
+            }
+        } catch(e) {}
+
+        if (!blobUrl) return; // si falla, no bloquear
+
+        return new Promise(resolve => {
+            window._isAnnouncement = true; // flag para ignorar en onresult
+            isTtsPlaying = true;
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+            if (!ttsSource) initTTSPipeline();
+
+            cloudTTSPlayer.src = blobUrl;
+            cloudTTSPlayer.playbackRate = 1.0; // natural, sin rate filter
+            cloudTTSPlayer.volume = 1.0;
+            cloudTTSPlayer.load();
+            cloudTTSPlayer.play().catch(() => {});
+            cloudTTSPlayer.addEventListener('ended', () => {
+                isTtsPlaying = false;
+                window._isAnnouncement = false;
+                try { URL.revokeObjectURL(blobUrl); } catch(e) {}
+                resolve();
+            }, { once: true });
+            setTimeout(() => {
+                isTtsPlaying = false; window._isAnnouncement = false;
+                try { URL.revokeObjectURL(blobUrl); } catch(e) {}
+                resolve();
+            }, 10000);
+        });
+    }
+
+    // --- SPEAK TEXT (IA VISION — VoiceRSS primario, ElevenLabs como fallback) ---
+    async function speakText(text) {
+        if (!text) return;
+        isTtsPlaying = true;
+        isSpookySpeaking = false;
+        // NO parar speechRec — mic sigue escuchando, solo se pausa el procesamiento de EVP
+        // El guard isTtsPlaying en onresult evita triggers mientras reproduce
+        clearTimeout(_ttsWatchdog);
+        _ttsWatchdog = setTimeout(() => { _resetTtsFlags(); }, 22000);
+
+        await initAudioEngine();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+
+        // Sin límite de caracteres — IA VISION reproduce la oración completa
+        const safeText = text.replace(/[*_#]/g, '').trim();
+        if (!safeText) { isTtsPlaying = false; return; }
+
+        // IA VISION usa VoiceRSS (Jose/Juana) — voz natural sin procesar EVP
+        // ElevenLabs como fallback si VoiceRSS falla o límite diario alcanzado
+        let audioUrl = null;
+        if (ttsMode !== 'elevenlabs' && voicerssRemaining > 0) {
+            usingFallbackTTS = true;
+            audioUrl = await getVoiceRSSAudio(safeText);
+        }
+        if (!audioUrl) {
+            // Fallback a ElevenLabs si VoiceRSS falla
+            const voiceId = 'N2lVS1w4EtoT3dr4eOWO';
+            const canUseEL = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
+            if (canUseEL) {
+                audioUrl = await getElevenLabsAudio(safeText, voiceId);
+                if (audioUrl) usingFallbackTTS = false;
+            }
+        }
+        if (!audioUrl) {
+            isTtsPlaying = false;
+            ttsNoDisponible('VoiceRSS + EL agotados');
+            return;
+        }
+        if (!audioUrl) { isTtsPlaying = false; ttsNoDisponible('sin audio'); return; }
+        updateTTSStatusUI();
+
+        await playResponseIntro();
+
+        const _isBlobIA = audioUrl && audioUrl.startsWith('blob:');
+
+        if (_isBlobIA) {
+            // IA VISION blob → [OFFLINE: pitch+EQ a 1x] → [PLAYBACK: 0.94 natural]
+            try {
+                const ctx3 = audioCtx;
+                if (ctx3.state === 'suspended') await ctx3.resume().catch(()=>{});
+                const resp3 = await fetch(audioUrl);
+                const arrBuf3 = await resp3.arrayBuffer();
+                const rawBuf3 = await ctx3.decodeAudioData(arrBuf3);
+
+                // PASO 1: pitch + EQ offline a velocidad normal
+                const _rateIA = 0.94 + Math.random() * 0.03; // IA VISION natural
+                await _ensureContextRunning();
+                // IA VISION: sin filtros de pitch agresivos — VoiceRSS ya es voz natural
+                const src3 = await playBlobWithFilters(rawBuf3, _rateIA, 'iavision');
+                src3.start(0);
+                src3.onended = () => {
+                    clearTimeout(_ttsWatchdog); _activeBufSrc = null;
+                    isTtsPlaying = false; playResponseEnd();
+                    if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
+                    try { URL.revokeObjectURL(audioUrl); } catch(e){}
+                };
+                return;
+            } catch(e) { console.warn('speakText offline error:', e); }
+        }
+
+        // URL directa (Google TTS sin proxy) → cloudTTSPlayer via WebAudio graph (sin pitch)
         cloudTTSPlayer.src = audioUrl;
-        
-        // Ligeramente bajada para tono oscuro/grave (0.94 a 0.97)
-        cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03; 
-        cloudTTSPlayer.load(); 
-        
+        cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03;
+        cloudTTSPlayer.volume = 1.0;
+        cloudTTSPlayer.load();
         try {
             await cloudTTSPlayer.play();
         } catch(err) {
-            console.warn("Error reproduciendo audio:", err);
-            // DIFERENCIAR: Error real de red vs Bloqueo de Safari
-            if (err.name === 'NotAllowedError') {
-                console.log("Safari bloqueó el autoplay. Esperando interacción del usuario.");
-            } else {
-                showTtsWarning(); // Solo muestra warning si es fallo de motor/red
-            }
+            if (err.name !== 'NotAllowedError') showTtsWarning();
             isTtsPlaying = false;
-            setTimeout(() => { safeStartSpeechRec(); }, 500);
+            if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
+            return;
         }
-
-        cloudTTSPlayer.onended = () => {
-            isTtsPlaying = false;
-            setTimeout(() => { safeStartSpeechRec(); }, 500);
-        };
+        cloudTTSPlayer.addEventListener('ended', () => {
+            clearTimeout(_ttsWatchdog); isTtsPlaying = false; playResponseEnd();
+            if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
+        }, { once: true });
     }
 
     // --- SPEAK SPOOKY (FANTASMA ELEVENLABS GRAVE Y CLARO) ---
+    let _activeBufSrc = null; // AudioBufferSourceNode activo (para stop)
+
+    let _ttsWatchdog = null; // timeout de seguridad
+    function _resetTtsFlags() {
+        isTtsPlaying = false;
+        isSpookySpeaking = false;
+        lastSpokenText = "";
+        clearTimeout(speechTimer);
+        clearTimeout(_ttsWatchdog);
+        _ttsWatchdog = null;
+        lastEvpTime = Date.now() - 5000;
+        if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+        // Mic ya debería estar corriendo — safeStartSpeechRec solo lo inicia si no está activo
+        if (!isRecognizing) setTimeout(() => safeStartSpeechRec(), 200);
+    }
+
     async function speakSpooky(text) {
         if (!text) return;
-        
         isTtsPlaying = true;
         isSpookySpeaking = true;
-        
-        safeStopSpeechRec();
-        
-        await initAudioEngine(); 
-        if (audioCtx && audioCtx.state === "suspended") {
-            await audioCtx.resume();
-        }
-        
-        const safeText = text.substring(0, 120);
-        const finalSpookyText = fragmentEVPText(safeText); // Retorna texto sin cortes para legibilidad
-        
-        const randomVoice = getRandomVoice(); // Usa únicamente la cuenta permitida
-        
-        let audioUrl = await getElevenLabsAudio(finalSpookyText, randomVoice);
-        
-        if (!audioUrl) {
+        // NO parar speechRec — mic sigue escuchando en paralelo al altavoz
+        // Watchdog: si en 22s no termina, forzar reset
+        clearTimeout(_ttsWatchdog);
+        _ttsWatchdog = setTimeout(() => {
+            console.warn("TTS watchdog: forzando reset de flags");
+            _resetTtsFlags();
+        }, 22000);
+
+        const safeText      = text.substring(0, 120);
+        const spookyText    = fragmentEVPText(safeText);
+        const randomVoice   = getRandomVoice();
+
+        // ── Obtener blob URL ──────────────────────────────────────────────
+        // FIX A6: máximo 2 llamadas fetch a getGoogleTTSAudio (modo auto + ElevenLabs fallando).
+        // Fallback: VoiceRSS → Web Speech API nativa
+        let blobUrl = null;
+        if (ttsMode === 'voicerss') {
             usingFallbackTTS = true;
-            console.warn("Fallback Google TTS activado");
-            audioUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=es&client=gtx&q=${encodeURIComponent(finalSpookyText)}`;
+            blobUrl = await getVoiceRSSAudio(spookyText);
         } else {
-            usingFallbackTTS = false;
+            // N-M3: pre-check créditos — evita llamada HTTP que fallará con 429
+            const canUseEL = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
+            if (canUseEL) blobUrl = await getElevenLabsAudio(spookyText, randomVoice);
+            if (!blobUrl) {
+                usingFallbackTTS = true;
+                if (ttsMode !== 'elevenlabs') blobUrl = await getVoiceRSSAudio(spookyText);
+            } else { usingFallbackTTS = false; }
         }
-        updateTTSStatusUI(); 
-        
-        cloudTTSPlayer.src = audioUrl;
+        // ElevenLabs + VoiceRSS sin disponibilidad → desactivar funciones
+        if (!blobUrl) {
+            isTtsPlaying = false; isSpookySpeaking = false;
+            clearTimeout(_ttsWatchdog);
+            ttsNoDisponible('EL + VoiceRSS agotados');
+            return;
+        }
+        updateTTSStatusUI();
+        await playResponseIntro();
 
-        // Velocidad ajustada para voz más natural, grave y pesada sin sonar rota.
-        cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03;
-        cloudTTSPlayer.load(); 
-        
-        try {
-            await cloudTTSPlayer.play();
-            startEVPFragmenter(); // Llamada mantenida, pero función desactivada internamente.
-        } catch(err) {
-            console.warn("Error reproduciendo audio:", err);
-            // DIFERENCIAR: Error real de red vs Bloqueo de Safari
-            if (err.name === 'NotAllowedError') {
-                console.log("Safari bloqueó el autoplay. Esperando interacción del usuario.");
-            } else {
+        // Asegurar contexto activo
+        await initAudioEngine();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+
+        const isBlob = blobUrl && blobUrl.startsWith('blob:');
+
+        if (isBlob) {
+            // ── CAMINO A: blob → decode → [OFFLINE: pitch+EQ a 1x] → [PLAYBACK: 1.75-2.0] ──
+            try {
+                const ctx1   = audioCtx;
+                const resp   = await fetch(blobUrl);
+                const arrBuf = await resp.arrayBuffer();
+                const rawBuf = await ctx1.decodeAudioData(arrBuf);
+
+                // PASO 1: procesar pitch + EQ offline a velocidad normal
+                const _dado = 1.75 + Math.random() * 0.25; // dado 1.75-2.0 AUDIO SCAN
+                await _ensureContextRunning();
+                const src = await playBlobWithFilters(rawBuf, _dado, false);
+                src.start(0);
+
+                lastSpokenText = text;
+                clearTimeout(speechTimer);
+                speechTimer = setTimeout(() => { lastSpokenText = ""; }, 3500);
+
+                src.onended = () => {
+                    clearTimeout(_ttsWatchdog);
+                    _activeBufSrc = null;
+                    lastSpokenText = "";
+                    clearTimeout(speechTimer);
+                    isTtsPlaying = false; isSpookySpeaking = false;
+                    playResponseEnd();
+                    if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
+                    try { URL.revokeObjectURL(blobUrl); } catch(e){}
+                };
+
+            } catch(err) {
+                console.warn('speakSpooky camino A error:', err);
                 showTtsWarning();
+                lastSpokenText = ""; isTtsPlaying = false; isSpookySpeaking = false;
+                if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
             }
-            isTtsPlaying = false;
-            isSpookySpeaking = false;
-            setTimeout(() => { safeStartSpeechRec(); }, 500);
-        }
 
-        cloudTTSPlayer.onended = () => {
-            stopEVPFragmenter();
-            isTtsPlaying = false;
-            isSpookySpeaking = false;
-            setTimeout(() => { safeStartSpeechRec(); }, 500);
-        };
+        } else {
+            // ── CAMINO B: URL directa → intentar obtener blob via proxy primero ──
+            // Sin blob no podemos aplicar pitch+rate offline → reintento con proxy
+            let blobFromProxy = null;
+            try {
+                blobFromProxy = await getVoiceRSSAudio(spookyText);
+            } catch(e) {}
+
+            if (blobFromProxy) {
+                // Tenemos blob → procesar offline + BufferSource
+                try {
+                    const ctx2 = audioCtx;
+                    if (ctx2.state === 'suspended') await ctx2.resume().catch(()=>{});
+                    const resp2 = await fetch(blobFromProxy);
+                    const arr2  = await resp2.arrayBuffer();
+                    const raw2  = await ctx2.decodeAudioData(arr2);
+                    const _dado2 = 1.75 + Math.random() * 0.25;
+                    await _ensureContextRunning();
+                    const src2 = await playBlobWithFilters(raw2, _dado2, false);
+                    src2.start(0);
+                    lastSpokenText = text;
+                    clearTimeout(speechTimer);
+                    speechTimer = setTimeout(() => { lastSpokenText = ''; }, 3500);
+                    src2.onended = () => {
+                        clearTimeout(_ttsWatchdog); _activeBufSrc = null;
+                        lastSpokenText = ''; clearTimeout(speechTimer);
+                        isTtsPlaying = false; isSpookySpeaking = false; playResponseEnd();
+                        if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
+                        try { URL.revokeObjectURL(blobFromProxy); } catch(e){}
+                    };
+                    return;
+                } catch(e) { console.warn('camino B offline err:', e); }
+            }
+
+            // Sin blob y VoiceRSS también falló → sin TTS disponible
+            isTtsPlaying = false; isSpookySpeaking = false;
+            clearTimeout(_ttsWatchdog);
+            ttsNoDisponible('VoiceRSS agotado');
+        }
     }
 
     // --- OPTIMIZATION GLOBAL VARS ---
     let lastFrameTime = performance.now();
     const targetRenderFPS = 60;
     const fpsInterval = 1000 / targetRenderFPS; 
-    let performanceLagging = false; // Flag to reduce detection frequency during stream
+    let performanceLagging = false;
     
     // --- SPECIALIZED CANVASES (OPTIMIZED RESOLUTION) ---
     const analysisCanvas = document.createElement('canvas');
     const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
     analysisCanvas.width = 256;
-    analysisCanvas.height = 192; // OPTIMIZED 4:3
+    analysisCanvas.height = 192;
     
     const aiSnapCanvas = document.createElement('canvas'); aiSnapCanvas.width = 320; aiSnapCanvas.height = 240;
     const aiSnapCtx = aiSnapCanvas.getContext('2d', { alpha: false });
@@ -979,7 +1572,7 @@ const paranormalQuestions = [
     let predictedPose = null;
     let lastPoseTimestamp = 0;
     let lastMotionTime = performance.now();
-    window.motionLevel = 0; // GLOBAL FLAG FOR HYBRID RENDER
+    window.motionLevel = 0;
 
     function detectMotionSimple(pose) {
         if (!prevPose || !pose || !pose[0] || !prevPose[0]) {
@@ -1005,7 +1598,7 @@ const paranormalQuestions = [
     function predictPose() {
         if (!prevPose || !currentPose) return currentPose;
         const now = performance.now();
-        const dt = Math.min((now - lastPoseTimestamp) / 1000, 0.1); // Previene estelas gigantes
+        const dt = Math.min((now - lastPoseTimestamp) / 1000, 0.1);
 
         return currentPose.map((pt, i) => {
             const prev = prevPose[i];
@@ -1051,7 +1644,6 @@ const paranormalQuestions = [
         statusDot: document.getElementById('status-dot') 
     };
 
-    // Optimizacion contexto canvas (Hardware acceleration + memory stability)
     const ctx = el.canvas.getContext('2d', { alpha: true, desynchronized: false, willReadFrequently: true });
     const audioLayerCtx = el.audioCanvas.getContext('2d', { alpha: true, desynchronized: false, willReadFrequently: true });
     const lidarCtx = el.lidarCanvas.getContext('2d', { alpha: true, desynchronized: false, willReadFrequently: true });
@@ -1075,7 +1667,10 @@ const paranormalQuestions = [
         if(ctx && ctx.beginPath) ctx.beginPath(); 
         if(audioLayerCtx && audioLayerCtx.beginPath) audioLayerCtx.beginPath();
         if (!state.isPareidolia && !state.isSLS) {
-            currentAiImage = null; 
+            // N-M1: revocar blob URL antes de soltar la referencia (evita memory leak acumulativo)
+            if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} }
+            currentAiImage = null;
+            currentAiImgEl = null;
         }
         
         if (peerCommand && (peerCommand.disconnected || peerCommand.destroyed)) {
@@ -1149,7 +1744,6 @@ const paranormalQuestions = [
         }
     }
 
-    // --- DETENER FLUXOS AL SALIR PREVIENE AUDIO BLOQUEADO ---
     window.addEventListener('beforeunload', () => {
         if (videoStream) videoStream.getTracks().forEach(track => track.stop());
         if (audioStream) audioStream.getTracks().forEach(track => track.stop());
@@ -1177,7 +1771,7 @@ const paranormalQuestions = [
         try {
             if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); }
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }, // SAFE FOR TIKTOK
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
                 video: { 
                     facingMode: 'environment', 
                     width: { ideal: 3840 }, 
@@ -1190,6 +1784,17 @@ const paranormalQuestions = [
             audioStream = stream; 
             el.video.srcObject = stream; 
             await el.video.play();
+
+            // N-C1: reconectar micSource al nuevo stream — initAudioEngine no lo hace
+            // porque tiene early-return cuando audioCtx ya existe
+            if (audioCtx && micGainNode && stream.getAudioTracks().length > 0) {
+                try {
+                    if (micSource) { try { micSource.disconnect(); } catch(e){} }
+                    // Usar stream directo (no wrapper) — igual que versión estable
+                    micSource = audioCtx.createMediaStreamSource(stream);
+                    micSource.connect(micGainNode);
+                } catch(e) { console.warn("N-C1 mic reconnect:", e); }
+            }
             
             if (state.zoom > 1) {
                  const track = stream.getVideoTracks()[0];
@@ -1219,17 +1824,16 @@ const paranormalQuestions = [
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; 
         document.getElementById('mtx-host').value = state.studioId; 
-        // FIX 9: Si ya hay permiso guardado, transformar botón en inicio rápido
-        // NO se llama initApp() aquí: getUserMedia necesita gesto del usuario en iOS/móvil
         const btn = document.querySelector('.load-btn');
-        if (btn && localStorage.getItem("camPermission") === "granted") {
+        const hasPerm = localStorage.getItem("camPermission") === "granted"
+                      || sessionStorage.getItem("camPermission") === "granted";
+        if (btn && hasPerm) {
             btn.innerText = "▶ REANUDAR CÁMARA";
             btn.style.borderColor = "#00ff41";
             btn.style.color = "#00ff41";
         }
     };
 
-    // ─── HELPER: Mostrar panel de error de cámara ───────────────────────
     function showCamError(title, msg, steps) {
         const panel = document.getElementById('cam-error-panel');
         const btn   = document.querySelector('.load-btn');
@@ -1248,7 +1852,6 @@ const paranormalQuestions = [
         updateProgress(0, '');
     }
 
-    // ─── HELPER: Reintentar desde el panel de error ───────────────────
     function retryCam() {
         document.getElementById('cam-error-panel').style.display = 'none';
         const btn = document.querySelector('.load-btn');
@@ -1257,6 +1860,7 @@ const paranormalQuestions = [
     }
 
     async function initApp() {
+        unlockAudioContext();
         const btn = document.querySelector('.load-btn');
         if (btn) btn.style.display = 'none';
         document.getElementById('cam-error-panel').style.display = 'none';
@@ -1264,17 +1868,16 @@ const paranormalQuestions = [
 
         updateProgress(10, "SOLICITANDO PERMISO DE CÁMARA...");
 
-        // ── Constraints en cascada: 4K → HD → mínimo ──────────────────
         const constraintSets = [
-            {   // Intento 1: máxima calidad
+            {
                 audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
                 video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] }
             },
-            {   // Intento 2: HD estándar
+            {
                 audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
             },
-            {   // Intento 3: mínimo — cualquier cámara disponible
+            {
                 audio: true,
                 video: { facingMode: { ideal: 'environment' } }
             }
@@ -1287,11 +1890,10 @@ const paranormalQuestions = [
             try {
                 updateProgress(10 + i * 5, i === 0 ? "INICIANDO SENSOR 4K..." : i === 1 ? "INTENTANDO HD..." : "MODO BÁSICO...");
                 stream = await navigator.mediaDevices.getUserMedia(constraintSets[i]);
-                break; // éxito
+                break;
             } catch(e) {
                 lastError = e;
                 console.warn(`Constraints intento ${i+1} fallido:`, e.name, e.message);
-                // NotAllowedError = permiso bloqueado, no tiene caso seguir intentando
                 if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') break;
             }
         }
@@ -1300,12 +1902,10 @@ const paranormalQuestions = [
             const e = lastError;
             localStorage.removeItem("camPermission");
 
-            // Restaurar botón base por si el usuario limpia permisos manualmente
             const btn = document.querySelector('.load-btn');
             if (btn) { btn.innerText = "INICIAR CÁMARA"; btn.style.borderColor = ""; btn.style.color = ""; }
 
             if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-                // Detectar si es Android o iOS para dar instrucciones correctas
                 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
                 const isAndroid = /android/i.test(navigator.userAgent);
                 let steps = '';
@@ -1316,11 +1916,7 @@ const paranormalQuestions = [
                 } else {
                     steps = '1. Haz clic en el ícono 🔒 o 📷 en la barra de tu navegador.<br>2. Permite acceso a Cámara y Micrófono.<br>3. Recarga la página y toca Reintentar.';
                 }
-                showCamError(
-                    'PERMISO DENEGADO',
-                    'El navegador bloqueó el acceso a la cámara. Sigue estos pasos para desbloquearlo:',
-                    steps
-                );
+                showCamError('PERMISO DENEGADO', 'El navegador bloqueó el acceso a la cámara. Sigue estos pasos para desbloquearlo:', steps);
             } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
                 showCamError('SIN CÁMARA', 'No se detectó ninguna cámara en este dispositivo.', null);
             } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
@@ -1332,8 +1928,8 @@ const paranormalQuestions = [
             return;
         }
 
-        // ── Éxito ────────────────────────────────────────────────────────
         localStorage.setItem("camPermission", "granted");
+        try { sessionStorage.setItem("camPermission", "granted"); } catch(e){}
         videoStream = stream;
         audioStream = stream;
         el.video.srcObject = stream;
@@ -1358,20 +1954,18 @@ const paranormalQuestions = [
                 if(window.FaceMesh) { 
                     faceMesh = new FaceMesh({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`}); 
                     faceMesh.setOptions({
-                        maxNumFaces: 1,
-                        refineLandmarks: true,
-                        minDetectionConfidence: 0.5,
-                        minTrackingConfidence: 0.5
+                        maxNumFaces: 5,
+                        refineLandmarks: false,
+                        minDetectionConfidence: 0.3,
+                        minTrackingConfidence: 0.2
                     });
                     await faceMesh.initialize(); 
-                    // EVITA DUPLICADOS - SOLO UNA VEZ
                     faceMesh.onResults(res => { faces = res.multiFaceLandmarks || []; });
                 }
                 if(window.SelfieSegmentation) { segmenter = new SelfieSegmentation({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`}); segmenter.setOptions({ modelSelection: 1 }); segmenter.onResults(res => { lidarMask = res.segmentationMask; lidarBusy = false; }); }
 
-                // Warmup con el canvas dedicado
                 const vRatio = el.video.videoHeight / el.video.videoWidth;
-                analysisCanvas.height = analysisCanvas.width * (vRatio || 0.75); // CORRECT ASPECT RATIO
+                analysisCanvas.height = analysisCanvas.width * (vRatio || 0.75);
                 analysisCtx.drawImage(el.video, 0, 0, analysisCanvas.width, analysisCanvas.height);
                 if(segmenter) await segmenter.send({image: analysisCanvas}); 
                 if(aiDetector) await aiDetector.estimatePoses(analysisCanvas);
@@ -1390,18 +1984,43 @@ const paranormalQuestions = [
             
             setInterval(telemetryLoop, 1000);
             
-            // Loop Separado para procesamiento en lugar de setInterval
             requestAnimationFrame(detectionLoop);
+
+            // Inicializar AudioContext y speechRec al arrancar — mic siempre listo.
+            if (!audioCtx && videoStream) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AC({ latencyHint: 'interactive' });
+                evpAudioCtx = audioCtx;
+                try {
+                    // Ganancia 8.7: máxima sensibilidad — capta cualquier ruido/voz del entorno
+                    // videoStream captura audio de otras apps de forma silenciosa (no interfiere)
+                    const micSrc = audioCtx.createMediaStreamSource(videoStream);
+                    micGainNode  = audioCtx.createGain(); micGainNode.gain.value = 8.7;
+                    const warmComp = audioCtx.createDynamicsCompressor();
+                    warmComp.threshold.value = -18; warmComp.knee.value = 20;
+                    warmComp.ratio.value = 8; warmComp.attack.value = 0.002; warmComp.release.value = 0.15;
+                    audioAnalyser = audioCtx.createAnalyser(); audioAnalyser.fftSize = 2048;
+                    audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+                    micSrc.connect(micGainNode);
+                    micGainNode.connect(audioAnalyser);
+                    micGainNode.connect(warmComp);
+                    // "Silent speaker" trick: conectar a destination con gain=0
+                    // activa el contexto de audio para captura silenciosa sin feedback audible
+                    const silentGain = audioCtx.createGain(); silentGain.gain.value = 0;
+                    micGainNode.connect(silentGain); silentGain.connect(audioCtx.destination);
+                    micSource = micSrc;
+                } catch(e) { console.warn("initAudioEngine warm:", e); }
+                _initSpeechRecOnly();
+            }
             
         }, 800);
     }
 
     // --- SEPARACIÓN DE CICLO DE DETECCIÓN ---
-    let faceFrameSkip = 0; // Throttle para FaceMesh
+    let faceFrameSkip = 0;
 
     async function detectionLoop() {
-        // FIX 3: Si SLS no está activo, limpiar poses Y usar setTimeout largo para no quemar CPU
-        if (!state.isSLS && !state.isLidar && !state.isPareidolia && !state.isEdge) {
+        if (!state.isSLS && !state.isLidar && !state.isPareidolia) {
             if (targetPoses.length || faces.length) {
                 targetPoses = []; faces = []; lidarMask = null;
                 currentPose = null; prevPose = null; smoothedPoses = []; smoothedFaces = [];
@@ -1430,24 +2049,16 @@ const paranormalQuestions = [
                     try { await segmenter.send({image: analysisCanvas}); } catch(e){ lidarBusy = false; }
                 }
             } else {
-                // FIX 3: SLS throttle agresivo — 500ms entre detecciones, maxPoses=2 (no 6)
-                // maxPoses=6 causaba 3-4 FPS y sobrecalentamiento
-                if (aiDetector && state.isSLS && now - lastPoseTime > 500) {
+                if (aiDetector && state.isSLS && now - lastPoseTime > 80) {
                     lastPoseTime = now;
                     ensureImageDrawn();
                     try {
                         let newPoses = await aiDetector.estimatePoses(analysisCanvas, {
-                            maxPoses: 2,           // FIX 3: máx 2 personas, no 6
+                            maxPoses: 5,
                             flipHorizontal: false,
-                            scoreThreshold: 0.3    // umbral más alto = menos detecciones falsas
+                            scoreThreshold: AI_SENSITIVITY
                         });
-                        if (newPoses && newPoses.length > 0 && newPoses[0].keypoints) {
-                            let normalized = newPoses[0].keypoints.map(kp => ({
-                                ...kp,
-                                x: kp.x / analysisCanvas.width,
-                                y: kp.y / analysisCanvas.height
-                            }));
-                            updatePose(normalized);
+                        if (newPoses && newPoses.length > 0) {
                             targetPoses = newPoses.map(p => ({
                                 keypoints: p.keypoints.map(kp => ({
                                     ...kp,
@@ -1455,8 +2066,10 @@ const paranormalQuestions = [
                                     y: kp.y / analysisCanvas.height
                                 }))
                             }));
+                            if (newPoses[0].keypoints) {
+                                updatePose(targetPoses[0].keypoints);
+                            }
                         } else {
-                            // FIX 3: sin pose detectada → limpiar para no dejar líneas colgadas
                             targetPoses = [];
                             currentPose = null;
                             smoothedPoses = [];
@@ -1464,9 +2077,8 @@ const paranormalQuestions = [
                     } catch(e){}
                 }
 
-                // FaceMesh: cada 4 frames (era 2), solo si SLS activo
                 if (faceMesh && state.isSLS) {
-                    if (faceFrameSkip++ % 4 === 0) {
+                    if (faceFrameSkip++ % 2 === 0) {
                         ensureImageDrawn();
                         try { await faceMesh.send({image: analysisCanvas}); } catch(e){}
                     }
@@ -1474,140 +2086,342 @@ const paranormalQuestions = [
             }
         } catch(e) {}
 
-        // FIX 3: usar setTimeout en lugar de rAF para no saturar el hilo principal
-        setTimeout(detectionLoop, state.isSLS ? 50 : 16);
+        setTimeout(detectionLoop, state.isSLS ? 16 : 200);
     }
 
+    // Variables del compresor
+    let audioCompressor = null;
+    let audioMasterGain = null;
+
+    function _ensureAudioContext() {
+        if (audioCtx) { evpAudioCtx = audioCtx; return audioCtx; }
+        if (!evpAudioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            evpAudioCtx = new AC({ latencyHint: 'interactive' });
+            audioCtx    = evpAudioCtx;
+        }
+        if (evpAudioCtx.state === 'suspended') evpAudioCtx.resume().catch(() => {});
+        return evpAudioCtx;
+    }
+
+    async function _ensureContextRunning() {
+        const ctx = audioCtx || evpAudioCtx;
+        if (!ctx) return;
+        let tries = 0;
+        while (ctx.state !== 'running' && tries < 10) {
+            await ctx.resume().catch(() => {});
+            await new Promise(r => setTimeout(r, 30));
+            tries++;
+        }
+    }
+
+    // ── Procesamiento offline: pitch + EQ a velocidad normal ───────────────────
+    // Paso 1 (offline): audio → detune (pitch) + EQ → buffer procesado
+    // playBlobWithFilters — procesa offline (pitch fijo) y reproduce al finalRate
+    // 1. OfflineAudioContext renderiza el audio CON pitch compensado a velocidad normal
+    // 2. El buffer resultante se reproduce a finalRate — velocidad cambia, pitch NO
+    // useDom: true = lee filtros del panel (preview en tiempo real)
+    async function playBlobWithFilters(srcBuffer, finalRate, useDom) {
+        // useDom='iavision': IA VISION — sin filtros (voz natural VoiceRSS)
+        const pf = (useDom === 'iavision')
+            ? { rate: 1.0, pitch: 0 }
+            : (useDom ? readFiltersFromDOM() : getTTSFilters());
+
+        const fRate      = Math.max(0.5, Math.min(4.0, isFinite(finalRate) ? finalRate : 1.0));
+        const preRate    = Math.max(0.5, Math.min(4.0, isFinite(pf.rate)   ? pf.rate   : 1.0));
+        const pitchCents = isFinite(pf.pitch) ? pf.pitch : 0;
+        const sr         = srcBuffer.sampleRate;
+        const ch         = srcBuffer.numberOfChannels;
+
+        // ── PASO 1: Offline — SOLO pitch shift, a playbackRate=1.0 ─────────
+        // Separar pitch de velocidad: el offline graba el pitch en el buffer
+        // sin cambiar la velocidad. El buffer resultante tiene distinta duración
+        // pero la misma velocidad percibida que el original.
+        //
+        // Con detune=pitchCents y playbackRate=1.0:
+        //   velocidad efectiva = 2^(pitchCents/1200)
+        //   outLen = srcDuration * sr / 2^(pitchCents/1200)
+        //   (pitch negativo → ratio < 1 → buffer más largo → audio más grave y largo)
+        const pitchRatio = Math.pow(2, pitchCents / 1200);
+        const outLen     = Math.max(1, Math.ceil(srcBuffer.duration * sr / pitchRatio));
+        const offCtx     = new OfflineAudioContext(ch, outLen, sr);
+        const offSrc     = offCtx.createBufferSource();
+        offSrc.buffer    = srcBuffer;
+        offSrc.playbackRate.value = 1.0;        // sin cambio de velocidad en el offline
+        offSrc.detune.value       = pitchCents; // solo el pitch deseado
+        offSrc.connect(offCtx.destination);
+        offSrc.start(0);
+
+        let processed;
+        try { processed = await offCtx.startRendering(); }
+        catch(e) { processed = srcBuffer; }
+
+        // ── PASO 2: Reproducir con la velocidad deseada (pitch NO cambia) ──
+        // El pitch ya está "grabado" en el buffer del paso 1.
+        // Al cambiar playbackRate aquí, solo cambia la velocidad — el pitch
+        // permanece igual porque el desplazamiento de frecuencia ya fue aplicado.
+        const speedRate = preRate * fRate; // velocidad total de reproducción
+        if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+        const src = audioCtx.createBufferSource();
+        src.buffer = processed;
+        src.playbackRate.value = speedRate; // velocidad final (no afecta pitch)
+        src.detune.value = 0;              // pitch ya está en el buffer
+
+        if (ttsMainGain) { src.connect(ttsMainGain); }
+        else             { src.connect(audioCtx.destination); }
+        if (mixDestination) src.connect(mixDestination);
+
+        _activeBufSrc = src;
+        return src;
+    }
+
+    // ── Pipeline TTS con filtros suaves para Google TTS ────────────────────────
+    // ElevenLabs: ttsSource → ttsMainGain → destination (sin filtros)
+    // Google TTS: ttsSource → bassFilter → highFilter → ttsMainGain → destination
+    // Los nodos de filtro se crean aquí; sus valores se actualizan en applyGoogleTTSFilters()
+    let _ttsBassFilter = null, _ttsHighFilter = null;
+
+    function initTTSPipeline() {
+        const ctx1 = _ensureAudioContext();
+        if (ttsSource) return; // ya construido
+        // Asegurar contexto activo antes de conectar nodos
+        if (ctx1.state === 'suspended') ctx1.resume().catch(() => {});
+
+        if (!ttsSource) {
+            try { ttsSource = ctx1.createMediaElementSource(cloudTTSPlayer); }
+            catch(e) { console.warn("MediaElementSource:", e); return; }
+        }
+
+        // Filtro de graves (bajo)
+        _ttsBassFilter = ctx1.createBiquadFilter();
+        _ttsBassFilter.type = 'lowshelf';
+
+        // Filtro de agudos (alto)
+        _ttsHighFilter = ctx1.createBiquadFilter();
+        _ttsHighFilter.type = 'highshelf';
+
+        // Ganancia master
+        ttsMainGain = ctx1.createGain();
+        ttsMainGain.gain.value = 1.5;
+        ttsGainNode = ttsMainGain;
+
+        // Cadena: ttsSource → bass → high → ttsMainGain → destination
+        ttsSource.connect(_ttsBassFilter);
+        _ttsBassFilter.connect(_ttsHighFilter);
+        _ttsHighFilter.connect(ttsMainGain);
+        ttsMainGain.connect(ctx1.destination);
+        if (mixDestination) ttsMainGain.connect(mixDestination);
+
+        bassBoost = null; // guards legacy siguen funcionando
+        applyGoogleTTSFilters(false); // inicio con filtros bypass (ElevenLabs por defecto)
+    }
+
+    // Leer filtros directamente del DOM (para preview en tiempo real)
+    function readFiltersFromDOM() {
+        const n = (id, def) => { const el = document.getElementById(id); if (!el) return def; const v = parseFloat(el.value); return (isNaN(v) ? def : v); };
+        const hasDOM = !!document.getElementById('tts-f-pitch');
+        if (hasDOM) {
+            return {
+                rate:  TTS_FILTER_RATE_CODE  + n('tts-f-rate',  0.0),
+                pitch: TTS_FILTER_PITCH_CODE + n('tts-f-pitch', -530),
+            };
+        }
+        return getTTSFilters();
+    }
+
+    // Activar/desactivar y calibrar filtros según motor
+    // useDom=true → lee del panel abierto en tiempo real (preview); false → lee de localStorage
+    function applyGoogleTTSFilters(isGoogle, useDom) {
+        // EQ removido — ganancia fija bypass
+        // Esta función solo normaliza la ganancia del nodo de salida
+        if (!ttsMainGain) return;
+        ttsMainGain.gain.value = 1.5;
+        if (_ttsBassFilter) { _ttsBassFilter.gain.value = 0; }
+        if (_ttsHighFilter) { _ttsHighFilter.gain.value = 0; }
+    }
+
+    // ── Watchdog periódico del mic ─────────────────────────────────────────
+    setInterval(() => {
+        if (!state.isAudioScan) return;
+        if (!speechRec) return;
+        // Mic corre SIEMPRE que AUDIO SCAN esté activo — incluso durante TTS
+        // El guard isTtsPlaying en onresult evita disparar respuestas
+        if (!isRecognizing) {
+            try {
+                isRecognizing = true;
+                speechRec.start();
+            } catch(e) {
+                isRecognizing = false;
+            }
+        }
+        const ctx = audioCtx || evpAudioCtx;
+        if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    }, 3000);
+
+    // ── initAudioEngine: una sola instancia, mic + speechRec ───────────────
     async function initAudioEngine() {
-        if (audioCtx) return;
+        if (evpAudioCtx && !audioCtx) { audioCtx = evpAudioCtx; }
+        if (audioCtx) {
+            if (!speechRec) _initSpeechRecOnly();
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            if (!mixDestination && micGainNode) {
+                mixDestination = audioCtx.createMediaStreamDestination();
+                micGainNode.connect(mixDestination);
+            }
+            if (!ttsSource) initTTSPipeline();
+            if (ttsMainGain && mixDestination) { try { ttsMainGain.connect(mixDestination); } catch(e){} }
+            return;
+        }
         if (!state.isAudioScan && !conn) return;
 
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext({ latencyHint: 'interactive' });
+        evpAudioCtx = audioCtx;
 
-        // FIX 2: TTS NO pasa por WebAudio — el elemento <audio> reproduce directo al altavoz.
-        // createMediaElementSource() hijackea el elemento y lo silencia en iOS/Android si
-        // el WebAudio destination no está correctamente en modo speaker. Lo eliminamos.
-        // cloudTTSPlayer.volume = 1.0 ya está en la declaración del objeto.
-        // setSinkId se mantuvo en la declaración para intentar priorizar altavoz.
-
-        // ── COMPRESOR + GANANCIA para el MIC (análisis + stream WebRTC) ──────────
-        const compressor = audioCtx.createDynamicsCompressor();
-        compressor.threshold.value = -24;
-        compressor.knee.value      = 30;
-        compressor.ratio.value     = 12;
-        compressor.attack.value    = 0.003;
-        compressor.release.value   = 0.25;
-
-        // Mic → análisis visual SOLAMENTE, no sale por altavoz (evita feedback)
-        // FIX 2: MIC Source & Routing
         if (videoStream && videoStream.getAudioTracks().length > 0) {
             audioStream = videoStream;
         } else {
             try {
                 audioStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }
                 });
-            } catch(e) { console.warn("Mic access denied or unavailable", e); return; }
+            } catch(e) { console.warn("Mic access denied:", e); }
         }
 
         if (audioStream) {
+            // Ganancia 8.7: máxima sensibilidad para captar cualquier ruido/voz
+            // audioStream captura silenciosamente streams de otras apps sin interferirlas
             micSource   = audioCtx.createMediaStreamSource(audioStream);
             micGainNode = audioCtx.createGain();
-            micGainNode.gain.value = 2.5;
+            micGainNode.gain.value = 8.7;
+
+            // Compresor ajustado para alta ganancia: evita saturación manteniendo sensibilidad
+            const compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.value = -18; compressor.knee.value = 20;
+            compressor.ratio.value = 8; compressor.attack.value = 0.002; compressor.release.value = 0.15;
 
             audioAnalyser         = audioCtx.createAnalyser();
-            audioAnalyser.fftSize = 1024;
+            audioAnalyser.fftSize = 2048;
             audioDataArray        = new Uint8Array(audioAnalyser.frequencyBinCount);
 
-            // MIC → analyser (visualizador) → NO conectar a destination (sin feedback)
             micSource.connect(micGainNode);
             micGainNode.connect(audioAnalyser);
             micGainNode.connect(compressor);
-            // compressor NO conecta a destination: mic no sale por altavoz
 
-            // Stream WebRTC: mezcla micrófono real
+            // "Silent speaker" trick: mic → silentGain(0) → destination
+            // Activa el contexto de audio para captura continua sin feedback audible
+            const silentGain = audioCtx.createGain(); silentGain.gain.value = 0;
+            micGainNode.connect(silentGain); silentGain.connect(audioCtx.destination);
+
             mixDestination = audioCtx.createMediaStreamDestination();
             micGainNode.connect(mixDestination);
-            // TTS se agrega al stream capturando el elemento audio directamente
-            if (!ttsSource) {
-                try {
-                    ttsSource = audioCtx.createMediaElementSource(cloudTTSPlayer);
-                    ttsGainNode = audioCtx.createGain();
-                    ttsGainNode.gain.value = 1.5; // el volumen lo maneja cloudTTSPlayer.volume
-                    ttsSource.connect(ttsGainNode);
-                    // TTS → altavoz (destination)
-                    ttsGainNode.connect(audioCtx.destination);
-                    // TTS → stream WebRTC
-                    ttsGainNode.connect(mixDestination);
-                } catch(e) { console.warn("TTS WebAudio source error:", e); }
+
+            if (ttsSource && mixDestination) {
+                try { ttsSource.connect(mixDestination); } catch(e){}
             }
         }
-            
+
+        _initSpeechRecOnly();
+    }
+
+    function _initSpeechRecOnly() {
+        if (speechRec) return;
+        if (!('webkitSpeechRecognition' in window)) return;
         if ('webkitSpeechRecognition' in window) {
             speechRec = new webkitSpeechRecognition();
-            speechRec.continuous = true; 
-            speechRec.interimResults = true; 
-            speechRec.lang = 'es-MX';
-            
+            speechRec.continuous     = true;
+            speechRec.interimResults = true;
+            speechRec.lang           = 'es-MX';
+
             speechRec.onstart = () => { isRecognizing = true; };
-            speechRec.onerror = (e) => { isRecognizing = false; };
-            
-            speechRec.onresult = (event) => {
-                const lastIndex = event.results.length - 1;
-                const latestText = event.results[lastIndex][0].transcript;
-                
-                if (latestText.trim().length > 0) {
-                    
-                    const txtNormalizado = normalizarTexto(latestText);
-                    lastSpokenText = txtNormalizado; 
-                    
-                    clearTimeout(speechTimer);
-                    speechTimer = setTimeout(() => { lastSpokenText = ""; }, 4000); 
-                    
-                    if(event.results[lastIndex].isFinal && conn && conn.open) {
-                         conn.send({type: 'ai-speech', text: `[VOZ]: ${txtNormalizado}`});
-                    }
-
-                    let isQuestion = paranormalQuestions.some(q => txtNormalizado.includes(q));
-                    
-                    if (!isQuestion) {
-                        for(let cat of DIRECTORIO_EVP) {
-                            if (cat.triggers.some(t => txtNormalizado.includes(t))) {
-                                isQuestion = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (isQuestion) {
-                        lastQuestionTime = Date.now(); 
-                    }
-
-                    if (isQuestion && state.isAudioScan && !isSpookySpeaking && !isTtsPlaying && (Date.now() - lastEvpTime > 6000)) {
-                        lastEvpTime = Date.now() + 99999; 
-                        setTimeout(() => {
-                            lastEvpTime = Date.now();
-                            
-                            lastSpokenText = obtenerRespuestaContextual(txtNormalizado);
-                            
-                            clearTimeout(speechTimer);
-                            speechTimer = setTimeout(() => { lastSpokenText = ""; }, 3000);
-                            if (conn && conn.open) conn.send({type: 'ai-speech', text: `${lastSpokenText}`});
-                            speakSpooky(lastSpokenText);
-                        }, 2500 + Math.random() * 2000); 
+            speechRec.onerror = (e) => {
+                isRecognizing = false;
+                if (e.error !== 'not-allowed' && e.error !== 'service-not-allowed') {
+                    if (state.isAudioScan && !isTtsPlaying && !isSpookySpeaking) {
+                        setTimeout(() => safeStartSpeechRec(), 300);
                     }
                 }
             };
-            
+
+            speechRec.onresult = (event) => {
+                if (!state.isAudioScan) return;
+                // Ignorar durante anuncios del sistema (ESPIRIT BOX ACTIVADO etc.)
+                if (window._isAnnouncement) return;
+                // Transcripción siempre visible, EVP pausado durante reproducción
+                const lastIndex  = event.results.length - 1;
+                const latestText = event.results[lastIndex][0].transcript;
+                if (!latestText.trim()) return;
+
+                const txt = normalizarTexto(latestText);
+                if (!txt) return;
+
+                // Primera interacción: desbloquear EVP automático
+                if (window._waitingFirstInteraction) {
+                    window._waitingFirstInteraction = false;
+                    window._audioScanStartTime = Date.now(); // reiniciar timer de sesión
+                    window._evpNextGap = 15000 + Math.random() * 10000; // primer gap tras interacción
+                }
+                // Transcripción en vivo del USUARIO — solo para display cyan
+                window._liveUserText = normalizarTexto(latestText);
+                window._liveUserLastUpdate = Date.now();
+                // NO asignar lastSpokenText aquí — evita que texto del usuario
+                // aparezca en la línea roja del EVP
+
+                if (event.results[lastIndex].isFinal && conn && conn.open) {
+                    conn.send({type: 'ai-speech', text: `[VOZ]: ${txt}`});
+                }
+
+                let matchedCat = null;
+                for (const cat of DIRECTORIO_EVP) {
+                    if (cat.triggers.some(trigger => txt.includes(trigger))) {
+                        matchedCat = cat; break;
+                    }
+                }
+                let isQuestion = matchedCat !== null
+                    || paranormalQuestions.some(q => txt.includes(q));
+
+                if (isQuestion) lastQuestionTime = Date.now();
+
+                // Solo responder a triggers cuando el reconocedor confirma la oración (isFinal)
+                // Evita disparar mientras el usuario sigue hablando (resultados intermedios)
+                const isFinalResult = event.results[lastIndex].isFinal;
+                if (isQuestion && isFinalResult && state.isAudioScan
+                    && !isSpookySpeaking && !isTtsPlaying
+                    && (Date.now() - lastEvpTime > 3000)) {
+
+                    // Feedback visual: iniciar fade-out del texto del usuario
+                    // El usuario ve cómo el sistema "toma" su pregunta
+                    window._liveUserFadeStart = performance.now();
+                    window._liveUserFadeDuration = 400; // ms de fade rápido al capturar
+
+                    lastEvpTime = Date.now() + 99999;
+                    window._liveUserText = '';     // limpiar inmediatamente al capturar
+                    window._liveUserLastUpdate = 0;
+                    setTimeout(() => {
+                        if (isRecognizing && !isTtsPlaying) { /* continuar */ }
+                        lastEvpTime = Date.now();
+                        window._evpNextGap = 3000 + Math.random() * 3000;
+                        const respText = matchedCat
+                            ? matchedCat.respuestas[Math.floor(Math.random() * matchedCat.respuestas.length)]
+                            : obtenerRespuestaContextual(txt);
+                        if (conn && conn.open) conn.send({type: 'ai-speech', text: respText});
+                        speakSpooky(respText);
+                    }, 1800 + Math.random() * 1000);
+                }
+            };
+
+            // FIX M11: delay adaptativo — si TTS activo al disparar onend,
+            // esperar 2s en lugar de no reiniciar. Sin fix: onend con
+            // isTtsPlaying=true → no reinicia → silencio hasta watchdog de 3s.
             speechRec.onend = () => {
                 isRecognizing = false;
-                if(state.isAudioScan && !isTtsPlaying && !isSpookySpeaking) {
-                     setTimeout(() => { safeStartSpeechRec(); }, 1000);
+                window._liveUserText = ''; // limpiar transcripción en vivo
+                if (state.isAudioScan) {
+                    setTimeout(() => safeStartSpeechRec(), 500);
                 }
             };
         }
-        
+
         if (audioCtx && audioCtx.state !== 'running') {
             audioCtx.resume().catch(() => {});
         }
@@ -1615,240 +2429,406 @@ const paranormalQuestions = [
 
     async function toggleAudioScanner() {
         state.isAudioScan = !state.isAudioScan;
-        const btn = document.getElementById('mic-btn');
+        const btn    = document.getElementById('mic-btn');
+        const btnMenu = document.getElementById('btn-audio-menu');
         if (state.isAudioScan) {
-            btn.classList.add('active');
-            await initAudioEngine(); 
-            safeStartSpeechRec();
+            // Verificar disponibilidad de TTS antes de activar
+            const elOk  = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
+            const vrOk  = voicerssRemaining > 0;
+            if (!elOk && !vrOk) {
+                state.isAudioScan = false;
+                ttsNoDisponible('sin créditos para activar AUDIO SCAN');
+                return;
+            }
+            if (btn)    btn.classList.add('active');
+            if (btnMenu) btnMenu.classList.add('active-state');
+            await initAudioEngine();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            if (speechRec) {
+                try { speechRec.abort(); } catch(e) {}
+                speechRec = null; isRecognizing = false;
+            }
+            _initSpeechRecOnly();
+            startSweepAudio();
+            window._audioScanStartTime = Date.now();
+            window._evpNextGap = 999999; // bloquear EVP hasta primera interacción del usuario
+            window._waitingFirstInteraction = true; // flag para esperar primer habla
+            // Anuncio Juana natural — EVP NO se activa hasta que el usuario hable primero
+            speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
+                setTimeout(() => safeStartSpeechRec(), 300);
+            }).catch(() => {
+                setTimeout(() => safeStartSpeechRec(), 300);
+            });
         } else {
-            btn.classList.remove('active');
+            if (btn)    btn.classList.remove('active');
+            if (btnMenu) btnMenu.classList.remove('active-state');
+            stopSweepAudio();
             safeStopSpeechRec();
+            // Kill todo TTS en curso
+            clearTimeout(_ttsWatchdog);
+            if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
+            if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            isTtsPlaying = false; isSpookySpeaking = false;
+            lastSpokenText = ''; clearTimeout(speechTimer);
+            lastEvpTime = 0; window._evpNextGap = 8000;
+            simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01;
+            // Anuncio de desactivación
+            speakAnnouncement('ESPIRIT BOX DESACTIVADO').catch(() => {});
         }
-        sendScanDataToStudio(); // FIX 5: reportar estado audio al estudio
+        sendScanDataToStudio();
     }
 
     // --- VISUALIZADOR DE AUDIO ---
     function drawAudioVisualizer(c, w, h) {
-        if (!state.isAudioScan || !audioAnalyser) return;
+        if (!state.isAudioScan || !audioAnalyser || !audioDataArray) return;
         
         audioAnalyser.getByteTimeDomainData(audioDataArray);
         
         const bufferLength = audioAnalyser.frequencyBinCount;
-        // FIX 5: escalar tamaños según resolución del canvas vs pantalla real
-        // El canvas es 1920x1080 pero en móvil se muestra en 360-420px → todo se ve muy pequeño
-        const screenScale = Math.max(1, Math.min(3, (1920 / (window.innerWidth || 1920))));
-        const bottomY    = h * 0.85;
-        const waveHeight = 71  * screenScale;
-        const sensitivity = 8.8 * screenScale; 
+        const screenScale  = Math.max(1.2, Math.min(4, 1920 / (window.innerWidth || 1920)));
+        const bottomY      = h * 0.84;
+        const waveHeight   = 71 * screenScale;
+        const sensitivity  = Math.min(9, 9 / screenScale * 1.5);
+        const clampH       = waveHeight * 0.95;
+        const clampY       = (val) => Math.max(-clampH, Math.min(clampH, val));
 
-        let frameSum = 0;
-        let currentMaxVolume = 0;
-
+        let frameSum = 0, currentMaxVolume = 0, rmsSum = 0;
         for (let i = 0; i < bufferLength; i++) {
-            let v = Math.abs((audioDataArray[i] / 128.0) - 1);
+            const v = Math.abs((audioDataArray[i] / 128.0) - 1);
             frameSum += v;
+            rmsSum   += v * v;
             if (v > currentMaxVolume) currentMaxVolume = v;
         }
+        const frameAvg = frameSum / bufferLength;
+        const rmsLevel = Math.sqrt(rmsSum / bufferLength);
 
-        let frameAvg = frameSum / bufferLength;
-        ambientNoiseLevel = (ambientNoiseLevel * 0.98) + (frameAvg * 0.02);
-        let dynamicThreshold = ambientNoiseLevel * 2.5 + 0.02;
+        ambientNoiseLevel = ambientNoiseLevel * 0.985 + rmsLevel * 0.015;
+        const dynamicThreshold = ambientNoiseLevel * 2.2 + 0.015;
 
-        if (!isSpookySpeaking && !isTtsPlaying && currentMaxVolume > dynamicThreshold) {
-            cumulativeEVPEnergy += (currentMaxVolume - dynamicThreshold) * 5.0;
+        if (!isSpookySpeaking && !isTtsPlaying && rmsLevel > dynamicThreshold) {
+            cumulativeEVPEnergy += (rmsLevel - dynamicThreshold) * 8.0;
         }
-        cumulativeEVPEnergy *= 0.95;
-        if (cumulativeEVPEnergy < 0) cumulativeEVPEnergy = 0;
-        if (cumulativeEVPEnergy > 100) cumulativeEVPEnergy = 100;
+        cumulativeEVPEnergy *= 0.93;
+        cumulativeEVPEnergy  = Math.max(0, Math.min(100, cumulativeEVPEnergy));
+
+        const rmsNorm    = Math.min(1, rmsLevel * 8);
+        const visualBins = 128;
+        const step       = Math.floor(bufferLength / visualBins);
+        const displayWidth = Math.min(w * 0.92, 1400);
+        const startX     = (w - displayWidth) / 2;
+        const sliceW     = displayWidth / visualBins;
+        const now        = performance.now();
+
+        // Picos simulados durante TTS
+        if (isSpookySpeaking || isTtsPlaying) {
+            const env  = (Math.sin(now * 0.005) + 1) * 0.5;
+            const env2 = (Math.sin(now * 0.0031) + 1) * 0.5;
+            const combined = env * 0.6 + env2 * 0.4;
+            for (let i = 0; i < visualBins; i++) {
+                simulatedPikes[i] *= 0.80;
+                const specShape = Math.sin((i / visualBins) * Math.PI);
+                // Mayor probabilidad y amplitud → gráfico más vivo durante TTS
+                if (Math.random() < 0.03) {
+                    simulatedPikes[i] = (combined * 0.18 + 0.06) * specShape * (0.7 + Math.random() * 0.6);
+                }
+            }
+        } else {
+            for (let i = 0; i < visualBins; i++) simulatedPikes[i] *= 0.9;
+        }
+        const sp2 = new Array(visualBins).fill(0);
+        for (let i = 0; i < visualBins; i++) {
+            const l2 = i > 1  ? simulatedPikes[i-2] : 0;
+            const l1 = i > 0  ? simulatedPikes[i-1] : 0;
+            const r1 = i < visualBins-1 ? simulatedPikes[i+1] : 0;
+            const r2 = i < visualBins-2 ? simulatedPikes[i+2] : 0;
+            sp2[i] = l2*0.1 + l1*0.25 + simulatedPikes[i]*0.3 + r1*0.25 + r2*0.1;
+        }
+        simulatedPikes = sp2;
 
         c.save();
-        
-        if (lastSpokenText) {
-            const evpFontSize = Math.round(23 * screenScale); // FIX 5: texto EVP escala con pantalla
-            c.font = `bold ${evpFontSize}px 'Share Tech Mono'`;
-            c.fillStyle = "rgba(255, 0, 0, 0.7)"; 
-            c.textAlign = "center";
-            c.shadowColor = "rgba(255, 0, 0, 0.5)"; c.shadowBlur = 10 * screenScale; 
-            c.fillText(`"${lastSpokenText.toUpperCase()}"`, w/2, bottomY - 86 * screenScale); 
-        }
 
-        c.lineWidth = screenScale * (window.innerWidth < 600 ? 3.5 : 1.5); // FIX 5
-        c.lineJoin = 'round';
-
-        const displayWidth = Math.min(700, w * 0.9);
-        const startX = (w - displayWidth) / 2;
-
-        const visualBins = 128;
-        const step = Math.floor(bufferLength / visualBins);
-        const displaySliceWidth = displayWidth / visualBins;
-
-        const clampY = (val) => Math.max(-71, Math.min(71, val));
-
-        for (let i = 0; i < visualBins; i++) {
-            simulatedPikes[i] *= 0.60; 
-
-            if ((isSpookySpeaking || isTtsPlaying) && Math.random() < 0.015) {
-                simulatedPikes[i] = (Math.random() * 0.5) + 0.2; 
-            }
-        }
-
-        let smoothedPikes = new Array(visualBins).fill(0);
-        for (let i = 0; i < visualBins; i++) {
-            let prev = i > 0 ? simulatedPikes[i-1] : 0;
-            let next = i < visualBins - 1 ? simulatedPikes[i+1] : 0;
-            smoothedPikes[i] = (prev * 0.1) + simulatedPikes[i] + (next * 0.1); 
-        }
-        simulatedPikes = smoothedPikes;
-
+        // ── ONDA PRINCIPAL cyan ─────────────────────────────────────────
         c.beginPath();
-        c.strokeStyle = 'rgba(0, 255, 255, 0.8)'; 
+        c.strokeStyle = 'rgba(0, 255, 255, 0.8)';
         c.shadowColor = 'rgba(0, 255, 255, 0.8)';
-        c.shadowBlur = 15;
-        
+        c.shadowBlur  = 15;
+        c.lineWidth   = screenScale * (window.innerWidth < 600 ? 3.5 : 1.5);
+        c.lineJoin    = 'round';
         let x = startX;
         for (let i = 0; i < visualBins; i++) {
-            let dataIndex = i * step; 
-            let v = (audioDataArray[dataIndex] / 128.0) - 1; 
-            
+            let v = (audioDataArray[i * step] / 128.0) - 1;
             if (isSpookySpeaking || isTtsPlaying) {
-                v *= 0.05; 
-                let simPeak = simulatedPikes[i];
-                v += (Math.random() > 0.5 ? simPeak : -simPeak); 
+                // Usar datos reales del mic + picos simulados para actividad durante TTS
+                // NO atenuar a 0.05 — el gráfico sigue grande mientras habla el espíritu
+                v = v * 0.7 + (Math.random() > 0.5 ? simulatedPikes[i] : -simulatedPikes[i]) * 0.5;
             }
-
-            const rawH = v * waveHeight * sensitivity;
-            const y = bottomY + clampY(rawH); 
-            
-            const offset = Math.sin(i * 0.2 + performance.now() * 0.01) * 2; 
-
-            if (i === 0) c.moveTo(x, y + offset);
-            else c.lineTo(x, y + offset);
-            x += displaySliceWidth;
+            // Sin offset sinusoidal — evita el efecto de ola de agua
+            const y = bottomY + clampY(v * waveHeight * sensitivity);
+            if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+            x += sliceW;
         }
         c.stroke();
-        
-        x = startX; 
-        for (let i = 0; i < visualBins; i++) {
-            let dataIndex = i * step;
-            let v = (audioDataArray[dataIndex] / 128.0) - 1; 
 
-            if (isSpookySpeaking || isTtsPlaying) {
-                v *= 0.05;
-                let simPeak = simulatedPikes[i];
-                v += (Math.random() > 0.5 ? simPeak : -simPeak); 
-            }
-
-            if (Math.abs(v) > 0.15 && i % 2 === 0) { 
-                const rawH = v * waveHeight * sensitivity;
-                const y = bottomY + clampY(rawH);
-                const offset = Math.sin(i * 0.2 + performance.now() * 0.01) * 2;
-                
-                c.save();
-                c.fillStyle = "rgba(255, 255, 255, 0.95)";
-                c.shadowColor = "white";
-                c.shadowBlur = 15;
-                c.beginPath();
-                c.arc(x, y + offset, 2.5, 0, Math.PI * 2);
-                c.fill();
-                c.restore();
-            }
-            x += displaySliceWidth;
-        }
-
-        c.beginPath();
-        c.strokeStyle = 'rgba(255, 0, 255, 0.8)'; 
-        c.shadowColor = 'rgba(255, 0, 255, 0.8)';
-        c.shadowBlur = 15;
-        
+        // ── PUNTOS blancos en picos ─────────────────────────────────────
         x = startX;
         for (let i = 0; i < visualBins; i++) {
-            let dataIndex = i * step;
-            let v = (audioDataArray[dataIndex] / 128.0) - 1;
-            
+            let v = (audioDataArray[i * step] / 128.0) - 1;
             if (isSpookySpeaking || isTtsPlaying) {
-                v *= 0.05;
-                let simPeak = simulatedPikes[i];
-                v += (Math.random() > 0.5 ? simPeak : -simPeak); 
+                v = v * 0.7 + (Math.random() > 0.5 ? simulatedPikes[i] : -simulatedPikes[i]) * 0.5;
             }
+            if (Math.abs(v) > 0.15 && i % 2 === 0) {
+                const y = bottomY + clampY(v * waveHeight * sensitivity);
+                c.save();
+                c.fillStyle   = 'rgba(255,255,255,0.95)';
+                c.shadowColor = 'white'; c.shadowBlur = 15;
+                c.beginPath(); c.arc(x, y, 2.5, 0, Math.PI * 2); c.fill();
+                c.restore();
+            }
+            x += sliceW;
+        }
 
-            const rawH = v * waveHeight * sensitivity * 0.8;
-            const y = bottomY - clampY(rawH); 
-             
-            if (i === 0) c.moveTo(x, y);
-            else c.lineTo(x, y);
-            
-            if (Math.abs(v) > 0.05 && i % 8 === 0) {
-                 const pSize = Math.random() * 2 + 1;
-                 c.fillStyle = Math.random() > 0.5 ? '#00ffff' : '#ff00ff';
-                 c.fillRect(x, y + (Math.random() * 30 - 15), pSize, pSize);
+        // ── ONDA SECUNDARIA magenta (reflejo) ──────────────────────────
+        c.beginPath();
+        c.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+        c.shadowColor = 'rgba(255, 0, 255, 0.8)';
+        c.shadowBlur  = 15;
+        c.lineWidth   = screenScale * (window.innerWidth < 600 ? 3.0 : 1.2);
+        x = startX;
+        for (let i = 0; i < visualBins; i++) {
+            let v = (audioDataArray[i * step] / 128.0) - 1;
+            if (isSpookySpeaking || isTtsPlaying) {
+                v = v * 0.7 + (Math.random() > 0.5 ? simulatedPikes[i] : -simulatedPikes[i]) * 0.5;
             }
-            x += displaySliceWidth;
+            const y = bottomY - clampY(v * waveHeight * sensitivity * 0.8);
+            if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+            if (Math.abs(v) > 0.05 && i % 8 === 0) {
+                const pSize = Math.random() * 2 + 1;
+                c.fillStyle = Math.random() > 0.5 ? '#00ffff' : '#ff00ff';
+                c.fillRect(x, y + (Math.random() * 30 - 15), pSize, pSize);
+            }
+            x += sliceW;
         }
         c.stroke();
-        
-        c.restore();
 
-        let evpProbability = 0.90; 
-        
-        if (Date.now() - lastQuestionTime < 5000) {
-            evpProbability = 0.50; 
+        // ── TEXTOS ─────────────────────────────────────────────────────────
+        const _userTalking = isRecognizing && !isTtsPlaying && !isSpookySpeaking;
+        const textFS = Math.round(23 * screenScale);
+
+        // Auto-clear: si el texto del usuario lleva >2.5s sin actualizarse y no está hablando, limpiar
+        if (window._liveUserText && window._liveUserLastUpdate
+            && !_userTalking && (Date.now() - window._liveUserLastUpdate > 2500)) {
+            window._liveUserText = '';
         }
 
-        let shouldTriggerEVP = false;
-        if (currentMaxVolume > 0.10 && currentMaxVolume > dynamicThreshold) shouldTriggerEVP = true;
-        if (cumulativeEVPEnergy > 75) shouldTriggerEVP = true;
+        // Texto USUARIO — arriba de la onda, cyan, sin fondo, con fade-out al capturar
+        let _userAlpha = 1.0;
+        if (window._liveUserFadeStart) {
+            const elapsed = performance.now() - window._liveUserFadeStart;
+            const fadeDur = window._liveUserFadeDuration || 800;
+            _userAlpha = Math.max(0, 1 - elapsed / fadeDur);
+            if (_userAlpha <= 0) { window._liveUserFadeStart = null; window._liveUserText = ''; }
+        }
+        if ((_userTalking || _userAlpha < 1) && window._liveUserText && _userAlpha > 0) {
+            c.globalAlpha = _userAlpha;
+            const userLabel = window._liveUserText.toUpperCase();
+            c.font      = `bold ${textFS}px 'Share Tech Mono'`;
+            c.textAlign = "center";
+            const uY    = bottomY - 55 * screenScale;
+            // Neon cyan — 3 capas: halo difuso + cuerpo + core blanco
+            c.shadowColor = "rgba(0, 200, 255, 0.3)"; c.shadowBlur = 28 * screenScale;
+            c.fillStyle   = "rgba(0, 220, 255, 0.15)";
+            c.fillText(userLabel, w / 2, uY);
+            c.shadowColor = "rgba(0, 220, 255, 0.9)"; c.shadowBlur = 10 * screenScale;
+            c.fillStyle   = "rgba(0, 220, 255, 0.9)";
+            c.fillText(userLabel, w / 2, uY);
+            c.shadowColor = "rgba(120, 240, 255, 1)"; c.shadowBlur = 3 * screenScale;
+            c.fillStyle   = "rgba(210, 250, 255, 1)";
+            c.fillText(userLabel, w / 2, uY);
+            c.globalAlpha = 1.0;
+        }
 
-        let timeSinceLastEvp = Date.now() - lastEvpTime;
+        // Texto EVP — sin fondo, al centro, rojo neon con destellos
+        if (lastSpokenText) {
+            const label  = lastSpokenText.toUpperCase();
+            const evpY   = bottomY - 28 * screenScale; // centrado sobre la onda
+            const flash  = (Math.sin(now * 0.018) + 1) * 0.5; // destello pulsante
+            c.font      = `bold ${textFS}px 'Share Tech Mono'`;
+            c.textAlign = "center";
+            // Halo exterior pulsante
+            c.shadowColor = `rgba(255, 0, 0, ${0.2 + flash * 0.2})`; c.shadowBlur = 32 * screenScale;
+            c.fillStyle   = `rgba(255, 20, 0, ${0.1 + flash * 0.15})`;
+            c.fillText(label, w / 2, evpY);
+            // Cuerpo principal rojo
+            c.shadowColor = "rgba(255, 0, 0, 0.9)"; c.shadowBlur = 14 * screenScale;
+            c.fillStyle   = "rgba(255, 30, 10, 0.95)";
+            c.fillText(label, w / 2, evpY);
+            // Core blanco-naranja (centro luminoso)
+            c.shadowColor = "rgba(255, 180, 100, 1)"; c.shadowBlur = 4 * screenScale;
+            c.fillStyle   = "rgba(255, 230, 200, 1)";
+            c.fillText(label, w / 2, evpY);
+        }
 
-        if (shouldTriggerEVP && !lastSpokenText && !isSpookySpeaking && !isTtsPlaying && timeSinceLastEvp > (6000 + Math.random() * 4000) && Math.random() > evpProbability) {
-            lastEvpTime = Date.now();
-            lastSpokenText = obtenerEVP();
-            clearTimeout(speechTimer);
-            speechTimer = setTimeout(() => { lastSpokenText = ""; }, 2500);
-            
-            if (conn && conn.open) {
-                conn.send({type: 'ai-speech', text: `${lastSpokenText}`});
+        c.restore();
+
+        // ── EVP TRIGGER: spirit box inteligente ─────────────────────────────
+        const now_evp       = Date.now();
+        const micActive     = audioAnalyser && audioDataArray && currentMaxVolume > 0.001;
+        // Silencio: volumen bajo sostenido
+        const isSilent      = micActive && currentMaxVolume < dynamicThreshold * 1.2;
+        // Energía acumulada: ruido ambiente (ventilador, pasos, aire)
+        const hasEnergy     = cumulativeEVPEnergy > 18;
+        // Pico súbito: spike de energía sin voz reconocida (golpe, susurro, crujido)
+        const hasSpike      = micActive && rmsLevel > dynamicThreshold * 3.5 && !isRecognizing;
+        const afterQuestion = (now_evp - lastQuestionTime) < 5000;
+
+        const timeSinceLastEvp = now_evp - lastEvpTime;
+        // El EVP sigue disparando aunque el usuario hable — spirit box siempre activo
+        // Solo se oculta en pantalla mientras habla (ver drawAudioVisualizer)
+        const userIsSpeaking = isRecognizing && lastSpokenText.length > 0;
+        const shouldTrigger = micActive && (isSilent || hasEnergy || hasSpike)
+            && !isSpookySpeaking && !isTtsPlaying
+            && timeSinceLastEvp > (window._evpNextGap || 8000)
+            && Math.random() > (afterQuestion ? 0.25 : 0.55);
+
+        if (shouldTrigger) {
+            lastEvpTime = now_evp;
+
+            // ── DADO DE TIMING con ramp-up de actividad ──────────────────
+            // Primeros 2 minutos: EVP muy silencioso (parece inactivo al inicio)
+            // Después de 2 min: actividad normal con sus probabilidades
+            const sessionMs  = window._audioScanStartTime ? (now_evp - window._audioScanStartTime) : 0;
+            const sessionMin = sessionMs / 60000;
+            const warmFactor = Math.min(1, sessionMin / 2); // 0→1 en 2 minutos
+
+            if (afterQuestion) {
+                // Pregunta siempre responde rápido independientemente del tiempo
+                window._evpNextGap = 2000 + Math.random() * 2000;
+            } else if (warmFactor < 0.5) {
+                // Primero minuto: muy espaciado (30-60s), da credibilidad al inicio
+                window._evpNextGap = 30000 + Math.random() * 30000;
+            } else {
+                // Después de 1-2 min: dados normales con mezcla gradual
+                const dado = Math.random();
+                if (dado < 0.25 * warmFactor) {
+                    // Ráfaga rápida: solo disponible cerca del minuto 2
+                    window._evpNextGap = 3000 + Math.random() * 500;
+                } else if (dado < 0.55) {
+                    // 30% — ritmo normal
+                    window._evpNextGap = 4000 + Math.random() * 4000;
+                } else if (dado < 0.80) {
+                    // 25% — pausa dramática
+                    window._evpNextGap = 10000 + Math.random() * 8000;
+                } else {
+                    // 20% — presencia distante
+                    window._evpNextGap = 20000 + Math.random() * 15000;
+                }
             }
-            
-            speakSpooky(lastSpokenText);
-            cumulativeEVPEnergy = -50; 
+
+            if (ttsMainGain) {
+                const volVar = 0.75 + Math.random() * 0.5;
+                ttsMainGain.gain.setTargetAtTime(volVar * 1.8, evpAudioCtx?.currentTime || 0, 0.05);
+            }
+
+            // ── SELECCIÓN DE RESPUESTA spirit box ────────────────────────
+            let evpText;
+            const textRoll = Math.random();
+            if (afterQuestion) {
+                // Post-pregunta: 60% contextual + 40% palabra directa
+                evpText = textRoll < 0.60
+                    ? obtenerRespuestaContextual(lastSpokenText || '')
+                    : evpPalabrasSueltas[Math.floor(Math.random() * evpPalabrasSueltas.length)];
+            } else {
+                // Sin pregunta: dado de tipo de respuesta
+                if (textRoll < 0.50) {
+                    // 50% — una sola palabra suelta
+                    evpText = evpPalabrasSueltas[Math.floor(Math.random() * evpPalabrasSueltas.length)];
+                } else if (textRoll < 0.75) {
+                    // 25% — advertencia
+                    evpText = evpAdvertencias[Math.floor(Math.random() * evpAdvertencias.length)];
+                } else {
+                    // 25% — frase corta del sistema EVP
+                    evpText = evpFrasesCortas[Math.floor(Math.random() * evpFrasesCortas.length)];
+                }
+            }
+
+            if (conn && conn.open) conn.send({type:'ai-speech', text: evpText});
+            speakSpooky(evpText);
+            cumulativeEVPEnergy = -30;
         }
     }
 
     function onLidarResults(results) { if(results && results.segmentationMask) lidarMask = results.segmentationMask; }
     
+    const lidarAnalysisCanvas = document.createElement('canvas');
+    lidarAnalysisCanvas.width  = 64;
+    lidarAnalysisCanvas.height = 48;
+    const lidarACtx = lidarAnalysisCanvas.getContext('2d', { willReadFrequently: true });
+
     function drawLidarEffect(c, width, height, currentFrame) {
-        const maskToUse = lidarMask || lastLidarMask; 
-        if (!maskToUse) return; 
-        
+        const maskToUse = lidarMask || lastLidarMask;
+        if (!maskToUse) return;
+
         if (lidarGeneratedFrame !== currentFrame) {
             lidarCtx.clearRect(0, 0, width, height);
             lidarCtx.save();
+
             lidarCtx.drawImage(maskToUse, 0, 0, width, height);
             lidarCtx.globalCompositeOperation = 'source-in';
-            const grad = lidarCtx.createLinearGradient(0, 0, 0, height);
-            grad.addColorStop(0, 'rgba(255, 0, 0, 0.9)'); grad.addColorStop(0.5, 'rgba(255, 255, 0, 0.8)'); grad.addColorStop(1, 'rgba(0, 0, 255, 0.8)');
-            lidarCtx.fillStyle = grad; lidarCtx.fillRect(0, 0, width, height);
 
-            // OPTIMIZACION LIDAR: 25 Rayos Simulados sobre la mascara
-            lidarCtx.globalCompositeOperation = 'source-atop'; 
-            lidarCtx.strokeStyle = 'rgba(0, 255, 100, 0.4)';
-            lidarCtx.lineWidth = 2;
+            lidarACtx.drawImage(maskToUse, 0, 0, 64, 48);
+            const px = lidarACtx.getImageData(0, 0, 64, 48).data;
+            let sumX = 0, sumY = 0, count = 0;
+            for (let y = 0; y < 48; y++) {
+                for (let x = 0; x < 64; x++) {
+                    const a = px[(y * 64 + x) * 4 + 3];
+                    if (a > 100) { sumX += x; sumY += y; count++; }
+                }
+            }
+            const cx = count > 0 ? (sumX / count) / 64 * width  : width  * 0.5;
+            const cy = count > 0 ? (sumY / count) / 48 * height : height * 0.5;
+            const radius = Math.max(width, height) * 0.65;
+
+            const grad = lidarCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            grad.addColorStop(0.00, 'rgba(255, 255, 220, 0.95)');
+            grad.addColorStop(0.15, 'rgba(255, 240,  50, 0.92)');
+            grad.addColorStop(0.35, 'rgba(255, 140,   0, 0.90)');
+            grad.addColorStop(0.55, 'rgba(255,  30,   0, 0.88)');
+            grad.addColorStop(0.72, 'rgba(180,   0, 120, 0.82)');
+            grad.addColorStop(0.88, 'rgba( 20,  80, 255, 0.75)');
+            grad.addColorStop(1.00, 'rgba(  0,   0, 140, 0.40)');
+            lidarCtx.fillStyle = grad;
+            lidarCtx.fillRect(0, 0, width, height);
+
+            lidarCtx.globalCompositeOperation = 'source-atop';
+            lidarCtx.strokeStyle = 'rgba(255, 255, 180, 0.55)';
+            lidarCtx.lineWidth   = 1.5;
+
+            const rayCount = 5;
+            const t = frameCount * 0.04;
             lidarCtx.beginPath();
-            const rayCount = 3;
             for (let i = 0; i < rayCount; i++) {
-                let rx = (width / rayCount) * i;
-                let offset = Math.sin((frameCount * 0.05) + i) * 100;
+                const rx     = (width / rayCount) * i + Math.sin(t + i * 1.2) * (width * 0.06);
+                const offset = Math.sin(t * 0.7 + i * 0.9) * (height * 0.12);
                 lidarCtx.moveTo(rx, 0);
                 lidarCtx.lineTo(rx + offset, height);
             }
             lidarCtx.stroke();
 
+            const pulseR = (Math.sin(t * 1.5) + 1) * 0.5;
+            lidarCtx.beginPath();
+            lidarCtx.arc(cx, cy, 6 + pulseR * 8, 0, Math.PI * 2);
+            lidarCtx.strokeStyle = `rgba(255,255,200,${0.4 + pulseR * 0.5})`;
+            lidarCtx.lineWidth   = 1;
+            lidarCtx.stroke();
+
             lidarCtx.restore();
             lidarGeneratedFrame = currentFrame;
         }
-        
-        c.globalCompositeOperation = 'screen'; c.drawImage(el.lidarCanvas, 0, 0, width, height); c.globalCompositeOperation = 'source-over';
+
+        c.globalCompositeOperation = 'screen';
+        c.drawImage(el.lidarCanvas, 0, 0, width, height);
+        c.globalCompositeOperation = 'source-over';
     }
 
     function initScanlines(w, h) {
@@ -1871,7 +2851,6 @@ const paranormalQuestions = [
         el.audioCanvas.width = w; el.audioCanvas.height = h;
     }
 
-    // FIX 3: Sincronización canvas con video real (evita mover la UI)
     function fixCanvasSize() {
         const w = el.video.videoWidth || 1920;
         const h = el.video.videoHeight || 1080;
@@ -1882,7 +2861,6 @@ const paranormalQuestions = [
     }
     window.addEventListener("resize", fixCanvasSize);
 
-    // FIX 2+6: Fallback visual solo en canvas LOCAL (audioLayerCtx), no contamina canvas de estudio (ctx)
     function drawFallbackSilhouette() {
         audioLayerCtx.globalAlpha = 0.12;
         audioLayerCtx.fillStyle = "#00ffff";
@@ -1923,16 +2901,12 @@ const paranormalQuestions = [
             ctx.save();
             ctx.translate(SLS_IZQUIERDA, SLS_ARRIBA);
             ctx.scale(scale * SLS_TAMANO, scale * SLS_TAMANO);
-
-            const bx = -40; 
-            const by = 0;
-            
+            const bx = -40, by = 0;
             ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, by, 80, 20);
             ctx.strokeStyle = "#d946ef"; ctx.lineWidth = 1; ctx.strokeRect(bx, by, 80, 20);
-            ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace"; 
-            ctx.textAlign = "center"; 
+            ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace";
+            ctx.textAlign = "center";
             ctx.fillText("● SLS ACTIVO", 0, by + 13);
-            
             ctx.restore();
         }
     }
@@ -1961,8 +2935,8 @@ const paranormalQuestions = [
     function drawAIBurnIn(c, w, h, scale) {
         if(scale <= 0.01) return;
         c.save();
-        const bx = 20, by = 20; const panelW = 220; 
-        let displayTxt = currentAiText; let isScanning = !currentAiImage; 
+        const bx = 14, by = 14; const panelW = 320;
+        let displayTxt = currentAiText; let isScanning = !(currentAiImgEl && currentAiImgEl.complete && currentAiImgEl.naturalWidth > 0); 
         if (isScanning && !displayTxt) {
              aiScannerTimer++;
              if(aiScannerTimer > 150) { aiScannerState = (aiScannerState + 1) % 3; aiScannerTimer = 0; }
@@ -1971,7 +2945,7 @@ const paranormalQuestions = [
              else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%";
         }
         let borderColor = isScanning ? "#ff0000" : "#ff3333"; let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)"; 
-        let imgH = 0; if (isScanning) imgH = 150; else if(currentAiImage && currentAiImage.complete && currentAiImage.naturalWidth > 0) imgH = panelW * (currentAiImage.naturalHeight / currentAiImage.naturalWidth);
+        let imgH = 0; if (isScanning) imgH = 150; else if(currentAiImgEl && currentAiImgEl.naturalWidth > 0) imgH = panelW * (currentAiImgEl.naturalHeight / currentAiImgEl.naturalWidth);
         const centerX = bx + panelW/2; const centerY = by + imgH/2 + 20; 
         c.translate(centerX, centerY); c.scale(scale, scale); c.translate(-centerX, -centerY);
 
@@ -1995,9 +2969,28 @@ const paranormalQuestions = [
                 const txtX = radarCx + radarRadiusBase + 15; const txtY = radarCy; 
                 if (displayTxt.includes('\n')) { const lines = displayTxt.split('\n'); let lineY = txtY - 15; lines.forEach((l, idx) => { drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11); }); } else { drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12); }
             } else {
-                c.save(); c.filter = "invert(100%) grayscale(100%) contrast(1.5)"; c.drawImage(currentAiImage, bx, by, panelW, imgH); c.restore(); 
+                c.save();
+                try {
+                    const tmpC = document.createElement('canvas');
+                    tmpC.width = panelW; tmpC.height = imgH;
+                    const tmpCtx = tmpC.getContext('2d');
+                    tmpCtx.drawImage(currentAiImgEl, 0, 0, panelW, imgH);
+                    const iData = tmpCtx.getImageData(0, 0, panelW, imgH);
+                    const d = iData.data;
+                    for (let pi = 0; pi < d.length; pi += 4) {
+                        const gray = d[pi]*0.299 + d[pi+1]*0.587 + d[pi+2]*0.114;
+                        const inv  = 255 - gray;
+                        const con  = Math.min(255, Math.max(0, (inv - 128) * 1.5 + 128));
+                        d[pi] = d[pi+1] = d[pi+2] = con;
+                    }
+                    tmpCtx.putImageData(iData, 0, 0);
+                    c.drawImage(tmpC, bx, by, panelW, imgH);
+                } catch(e) {
+                    c.drawImage(currentAiImgEl, bx, by, panelW, imgH);
+                }
+                c.restore(); 
                 c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH);
-                c.fillStyle = "#ffcccc"; c.font = "10px 'Share Tech Mono'"; let line = ''; let ly = by + imgH + 20;
+                c.fillStyle = "#ffcccc"; c.font = "15px 'Share Tech Mono'"; let line = ''; let ly = by + imgH + 24;
                 const resWords = currentAiText ? currentAiText.split(' ') : [];
                  for(let n = 0; n < resWords.length; n++) { let testLine = line + resWords[n] + ' '; if (c.measureText(testLine).width > (panelW - 20) && n > 0) { c.fillText(line.toLowerCase(), bx + 10, ly); line = resWords[n] + ' '; ly += 14; } else { line = testLine; } }
                 c.fillText(line.toLowerCase(), bx + 10, ly);
@@ -2007,305 +3000,237 @@ const paranormalQuestions = [
     }
 
     function updateSmoothing() {
-        // Interpola mallas faciales
-        const faceFactor = 0.5;
+        const FF = 0.45;
         if (smoothedFaces.length !== faces.length) {
-            smoothedFaces = JSON.parse(JSON.stringify(faces));
+            smoothedFaces = faces.map(f => f.map(p => ({...p})));
         } else {
-            for(let i=0; i<faces.length; i++) {
-                for(let j=0; j<faces[i].length; j++) {
-                     let tF = faces[i][j];
-                     let sF = smoothedFaces[i][j];
-                     if(tF && sF) {
-                         sF.x = lerp(sF.x, tF.x, faceFactor);
-                         sF.y = lerp(sF.y, tF.y, faceFactor);
-                     }
+            for (let i = 0; i < faces.length; i++) {
+                if (!smoothedFaces[i]) { smoothedFaces[i] = faces[i].map(p => ({...p})); continue; }
+                for (let j = 0; j < faces[i].length; j++) {
+                    const tF = faces[i][j], sF = smoothedFaces[i][j];
+                    if (tF && sF) { sF.x = lerp(sF.x, tF.x, FF); sF.y = lerp(sF.y, tF.y, FF); }
                 }
             }
         }
 
-        // SISTEMA GAMING: INTERPOLACIÓN + PREDICCIÓN PARA SLS
-        if (currentPose) {
-            let basePose = predictPose();
-            if (!smoothedPoses || smoothedPoses.length === 0 || !smoothedPoses[0] || !smoothedPoses[0].keypoints) {
-                smoothedPoses = [{ keypoints: basePose }];
-            } else {
-                smoothedPoses[0].keypoints = smoothPoseObj(smoothedPoses[0].keypoints, basePose, 0.65);
-            }
-        } else {
+        const PF = 0.50;
+        if (!targetPoses || targetPoses.length === 0) {
             smoothedPoses = [];
-        }
-    }
-
-    // ==========================================
-    // ⚡ EDGE DETECTOR X-RAY — FIX 1+2+7: alineación real + contorno + anti-temblor
-    // ==========================================
-
-    let lastEdgeProcess = 0;
-    const EDGE_INTERVAL = 80; // ms (~12 FPS, más fluido)
-
-    const edgeCanvas = document.createElement("canvas");
-    const edgeCtx = edgeCanvas.getContext("2d", { willReadFrequently: true });
-    // FIX 1: resolución dinámica ligada al aspect ratio real del video
-    edgeCanvas.width  = 320;
-    edgeCanvas.height = 240;
-
-    let edgeFrame     = null;
-    let lastEdgeData  = null; // FIX 7: buffer para suavizado temporal
-
-    function processEdgeFrame() {
-        const now = performance.now();
-        if (now - lastEdgeProcess < EDGE_INTERVAL) return;
-        lastEdgeProcess = now;
-
-        const vW = el.video.videoWidth  || 320;
-        const vH = el.video.videoHeight || 240;
-
-        // FIX 1: mantener aspect ratio real del video en el edgeCanvas
-        const targetW = 320;
-        const targetH = Math.round(targetW * (vH / vW));
-        if (edgeCanvas.width !== targetW || edgeCanvas.height !== targetH) {
-            edgeCanvas.width  = targetW;
-            edgeCanvas.height = targetH;
-            lastEdgeData = null; // reset suavizado al cambiar tamaño
-        }
-
-        try {
-            // FIX 1: capturar video escalado al aspect ratio correcto
-            edgeCtx.drawImage(el.video, 0, 0, targetW, targetH);
-
-            const frame = edgeCtx.getImageData(0, 0, targetW, targetH);
-            const data  = frame.data;
-            const W = targetW, H = targetH;
-
-            // FIX 2: detección de bordes por gradiente de luminancia
-            for (let y = 0; y < H - 1; y++) {
-                for (let x = 0; x < W - 1; x++) {
-                    const i      = (y * W + x) * 4;
-                    const right  = i + 4;
-                    const bottom = i + W * 4;
-
-                    const g1 = data[i]   * 0.299 + data[i+1]      * 0.587 + data[i+2]      * 0.114;
-                    const g2 = data[right]  * 0.299 + data[right+1]  * 0.587 + data[right+2]  * 0.114;
-                    const g3 = data[bottom] * 0.299 + data[bottom+1] * 0.587 + data[bottom+2] * 0.114;
-
-                    const diff = Math.abs(g1 - g2) + Math.abs(g1 - g3);
-
-                    if (diff > 10) {
-                        const intensity = Math.min(255, diff * 2.5);
-                        data[i]   = 0;
-                        data[i+1] = Math.round(intensity * 0.78); // verde-cyan
-                        data[i+2] = intensity;                     // azul fuerte
-                        data[i+3] = Math.min(220, intensity);
-                    } else {
-                        data[i+3] = 0; // transparente
+        } else {
+            if (smoothedPoses.length !== targetPoses.length) {
+                smoothedPoses = targetPoses.map(p => ({ keypoints: p.keypoints.map(kp => ({...kp})) }));
+            } else {
+                for (let i = 0; i < targetPoses.length; i++) {
+                    const target = targetPoses[i].keypoints;
+                    const smooth = smoothedPoses[i].keypoints;
+                    for (let j = 0; j < target.length; j++) {
+                        if (!smooth[j]) { smooth[j] = {...target[j]}; continue; }
+                        smooth[j].x = lerp(smooth[j].x, target[j].x, PF);
+                        smooth[j].y = lerp(smooth[j].y, target[j].y, PF);
+                        smooth[j].score = target[j].score;
                     }
                 }
             }
-
-            // FIX 7: suavizado temporal (mezcla 60% frame actual + 40% frame anterior)
-            if (lastEdgeData && lastEdgeData.length === data.length) {
-                for (let i = 0; i < data.length; i++) {
-                    data[i] = Math.round(data[i] * 0.6 + lastEdgeData[i] * 0.4);
-                }
-            }
-            lastEdgeData = new Uint8ClampedArray(data); // guardar copia para siguiente frame
-
-            edgeCtx.putImageData(frame, 0, 0);
-            edgeFrame = edgeCanvas;
-        } catch(e) {
-            console.warn("EDGE ERROR:", e);
         }
+        if (smoothedPoses.length > 0) currentPose = smoothedPoses[0].keypoints;
     }
 
-    function drawEDGE(targetCtx, w, h, dX, dY, dW, dH) {
-        processEdgeFrame();
-        if (!edgeFrame) return;
-
-        targetCtx.save();
-        // FIX 1+2: dibujar sobre las coordenadas exactas del video (sin distorsión)
-        targetCtx.globalAlpha = 0.85;
-        targetCtx.globalCompositeOperation = "lighter";
-        targetCtx.imageSmoothingEnabled    = true;
-        targetCtx.imageSmoothingQuality    = "low";
-        // Proyectar el edgeCanvas exactamente sobre el área del video → alineación perfecta
-        targetCtx.drawImage(edgeFrame, dX, dY, dW, dH);
-        targetCtx.restore();
-
-        // HUD EDGE
-        targetCtx.save();
-        targetCtx.fillStyle  = "#00ccff";
-        targetCtx.font       = "bold 16px 'Share Tech Mono', monospace";
-        targetCtx.textAlign  = "center";
-        targetCtx.shadowBlur = 5;
-        targetCtx.shadowColor = "#00ccff";
-        targetCtx.fillText("ESCANEANDO X-RAY", w / 2, 80);
-        targetCtx.restore();
-    }
+    // ── Estado de bbox suavizado por objetivo ──
+    const _smoothBBox = {};
 
     // --- RENDER HÍBRIDO ÚNICO (FUSION SLS + FACEMESH) ---
-    function drawHybrid(targetCtx, face, pose) {
+    function drawHybrid(targetCtx, face, pose, targetIdx) {
         if (!window.drawCoords) return;
         const { dW, dH, dX, dY } = window.drawCoords;
         const mapX = (x) => (x * dW) + dX;
         const mapY = (y) => (y * dH) + dY;
+        const now  = performance.now();
+        const pulse = (Math.sin(now * 0.008) + 1) / 2;
 
-        let drewSomething = false;
+        let drewFace = false, drewPose = false;
+        let bboxMinX = Infinity, bboxMinY = Infinity, bboxMaxX = -Infinity, bboxMaxY = -Infinity;
 
-        // =====================
-        // 🎯 FACE (MALLA FACEMESH ORIGINAL ULTRA-OPTIMIZADA)
-        // =====================
         if (face && face.length > 0) {
-            drewSomething = true;
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            
             face.forEach(pt => {
-                if(!pt) return;
-                const absX = mapX(pt.x); const absY = mapY(pt.y);
-                if (absX < minX) minX = absX; if (absY < minY) minY = absY;
-                if (absX > maxX) maxX = absX; if (absY > maxY) maxY = absY;
+                if (!pt) return;
+                const ax = mapX(pt.x), ay = mapY(pt.y);
+                if (ax < bboxMinX) bboxMinX = ax; if (ay < bboxMinY) bboxMinY = ay;
+                if (ax > bboxMaxX) bboxMaxX = ax; if (ay > bboxMaxY) bboxMaxY = ay;
             });
-            
-            // 🔴 RECUADRO MÁS GRUESO Y ROJO
-            if (minX !== Infinity) {
-                targetCtx.strokeStyle = "rgba(255, 0, 0, 0.85)";
-                targetCtx.lineWidth = 2.5;
-                targetCtx.shadowBlur = 8;
-                targetCtx.shadowColor = "#ff0000";
-                const pad = 10;
-                targetCtx.strokeRect(minX - pad, minY - pad, (maxX - minX) + pad * 2, (maxY - minY) + pad * 2);
-                targetCtx.shadowBlur = 0; // reset
-            }
-
-            // ==========================================
-            // 🔥 CONTROL DE DENSIDAD DE MALLA (EDITA AQUÍ) 🔥
-            // ==========================================
-            // 1 = Malla completa (Máximo detalle, red tupida tipo avatar)
-            // 2 = Mitad de líneas (Balance perfecto rendimiento/calidad, recomendada)
-            // 3 o 4 = Malla muy ligera (Si ves que bajan los FPS)
-            const DENSIDAD_MALLA = 4; 
-
-            // 1. MALLA TESSELATION (RED GENERAL)
-            if (window.FACEMESH_TESSELATION) {
-                targetCtx.strokeStyle = "#C0C0C070";
-                targetCtx.lineWidth = 1;
-                targetCtx.beginPath();
-                // Iteramos saltando según la densidad elegida
-                for (let i = 0; i < window.FACEMESH_TESSELATION.length; i += DENSIDAD_MALLA) {
-                    const [a, b] = window.FACEMESH_TESSELATION[i];
-                    const p1 = face[a]; const p2 = face[b];
-                    if (p1 && p2) {
-                        targetCtx.moveTo(mapX(p1.x), mapY(p1.y));
-                        targetCtx.lineTo(mapX(p2.x), mapY(p2.y));
-                    }
-                }
-                targetCtx.stroke();
-            }
-
-            // 2. DETALLES FINOS CLAVE (Ojos, Cejas, Ovalo, Labios) - No se reducen para no perder la expresión
-            const drawFeature = (featureMap, color) => {
-                if (!featureMap) return;
-                targetCtx.strokeStyle = color;
-                targetCtx.lineWidth = 1;
-                targetCtx.beginPath();
-                for (let i = 0; i < featureMap.length; i++) {
-                    const [a, b] = featureMap[i];
-                    const p1 = face[a]; const p2 = face[b];
-                    if (p1 && p2) {
-                        targetCtx.moveTo(mapX(p1.x), mapY(p1.y));
-                        targetCtx.lineTo(mapX(p2.x), mapY(p2.y));
-                    }
-                }
-                targetCtx.stroke();
-            };
-
-            drawFeature(window.FACEMESH_RIGHT_EYE, "#FF0000");
-            drawFeature(window.FACEMESH_RIGHT_EYEBROW, "#FF0000");
-            drawFeature(window.FACEMESH_LEFT_EYE, "#FF0000");
-            drawFeature(window.FACEMESH_LEFT_EYEBROW, "#FF0000");
-            drawFeature(window.FACEMESH_FACE_OVAL, "#E0E0E0");
-            drawFeature(window.FACEMESH_LIPS, "#FF0000");
-
-            // 3. PUNTOS NODALES GLOBALES (Reducidos según DENSIDAD_MALLA para no saturar)
-            targetCtx.fillStyle = '#FFFF00'; 
-            targetCtx.beginPath();
-            for(let i=0; i<face.length; i += DENSIDAD_MALLA) {
-                const p = face[i];
-                if(p) {
-                    targetCtx.moveTo(mapX(p.x), mapY(p.y));
-                    targetCtx.arc(mapX(p.x), mapY(p.y), 0.5, 0, Math.PI*2);
-                }
-            }
-            targetCtx.fill();
+            drewFace = true;
+        }
+        if (pose && pose.keypoints) {
+            pose.keypoints.forEach(kp => {
+                if (!kp || kp.score < AI_SENSITIVITY * 0.6) return;
+                const ax = mapX(kp.x), ay = mapY(kp.y);
+                if (ax < bboxMinX) bboxMinX = ax; if (ay < bboxMinY) bboxMinY = ay;
+                if (ax > bboxMaxX) bboxMaxX = ax; if (ay > bboxMaxY) bboxMaxY = ay;
+            });
+            drewPose = true;
         }
 
-        // =====================
-        // 🦴 SLS (ANATOMÍA CORRECTA Y ANCLAJE CUELLO)
-        // =====================
-        if (pose && pose.keypoints && pose.keypoints.length > 0) {
-            drewSomething = true;
-            const k = pose.keypoints;
-            
-            // Huesos clásicos del cuerpo
-            const bones = [
-                [0,1], [0,2], // Nariz unida a los Ojos
-                [5,7],[7,9],[6,8],[8,10], // Brazos
-                [5,11],[6,12],[11,12],[5,6], // Torso
-                [11,13],[13,15],[12,14],[14,16] // Piernas
+        if (bboxMinX !== Infinity) {
+            const pad = 12;
+            const rawX = bboxMinX - pad, rawY = bboxMinY - pad;
+            const rawW = (bboxMaxX - bboxMinX) + pad * 2;
+            const rawH = (bboxMaxY - bboxMinY) + pad * 2;
+
+            const key = targetIdx ?? 0;
+            if (!_smoothBBox[key]) {
+                _smoothBBox[key] = { x: rawX, y: rawY, w: rawW, h: rawH };
+            } else {
+                const EMA = 0.15;
+                _smoothBBox[key].x = _smoothBBox[key].x * (1-EMA) + rawX * EMA;
+                _smoothBBox[key].y = _smoothBBox[key].y * (1-EMA) + rawY * EMA;
+                _smoothBBox[key].w = _smoothBBox[key].w * (1-EMA) + rawW * EMA;
+                _smoothBBox[key].h = _smoothBBox[key].h * (1-EMA) + rawH * EMA;
+            }
+
+            const sb = _smoothBBox[key];
+            const areaRef = sb.w * sb.h;
+            const THRESH = dW * dH * 0.08;
+            const snap = areaRef > THRESH
+                ? { x: sb.x, y: sb.y, w: sb.w, h: sb.h }
+                : { x: sb.x, y: sb.y, w: sb.w * 0.95, h: sb.h * 0.95 };
+
+            targetCtx.save();
+            targetCtx.strokeStyle = `rgba(255,20,20,${0.35 + pulse * 0.45})`;
+            targetCtx.lineWidth   = 3.5 + pulse * 2;
+            targetCtx.shadowBlur  = 12 + pulse * 18;
+            targetCtx.shadowColor = `rgba(255,0,0,${0.6 + pulse * 0.4})`;
+            targetCtx.strokeRect(snap.x, snap.y, snap.w, snap.h);
+            targetCtx.strokeStyle = `rgba(255,60,60,${0.7 + pulse * 0.3})`;
+            targetCtx.lineWidth   = 1.5;
+            targetCtx.shadowBlur  = 0;
+            targetCtx.strokeRect(snap.x + 2, snap.y + 2, snap.w - 4, snap.h - 4);
+            targetCtx.restore();
+        }
+
+        if (drewFace) {
+            const DENSIDAD = 4;
+
+            if (window.FACEMESH_TESSELATION) {
+                targetCtx.beginPath();
+                targetCtx.strokeStyle = "rgba(200,200,200,0.35)";
+                targetCtx.lineWidth = 0.8;
+                for (let i = 0; i < window.FACEMESH_TESSELATION.length; i += DENSIDAD) {
+                    const [a, b] = window.FACEMESH_TESSELATION[i];
+                    const p1 = face[a], p2 = face[b];
+                    if (p1 && p2) { targetCtx.moveTo(mapX(p1.x), mapY(p1.y)); targetCtx.lineTo(mapX(p2.x), mapY(p2.y)); }
+                }
+                targetCtx.stroke();
+            }
+
+            if (window.FACEMESH_FACE_OVAL) {
+                targetCtx.beginPath();
+                targetCtx.strokeStyle = "rgba(220,220,220,0.75)";
+                targetCtx.lineWidth = 1.2;
+                for (let i = 0; i < window.FACEMESH_FACE_OVAL.length; i++) {
+                    const [a, b] = window.FACEMESH_FACE_OVAL[i];
+                    const p1 = face[a], p2 = face[b];
+                    if (p1 && p2) { targetCtx.moveTo(mapX(p1.x), mapY(p1.y)); targetCtx.lineTo(mapX(p2.x), mapY(p2.y)); }
+                }
+                targetCtx.stroke();
+            }
+
+            if (window.FACEMESH_LIPS) {
+                targetCtx.beginPath();
+                targetCtx.strokeStyle = "rgba(255,60,60,0.85)";
+                targetCtx.lineWidth = 1.2;
+                for (let i = 0; i < window.FACEMESH_LIPS.length; i++) {
+                    const [a, b] = window.FACEMESH_LIPS[i];
+                    const p1 = face[a], p2 = face[b];
+                    if (p1 && p2) { targetCtx.moveTo(mapX(p1.x), mapY(p1.y)); targetCtx.lineTo(mapX(p2.x), mapY(p2.y)); }
+                }
+                targetCtx.stroke();
+            }
+
+            const eyeFeatures = [
+                window.FACEMESH_RIGHT_EYE, window.FACEMESH_LEFT_EYE,
+                window.FACEMESH_RIGHT_EYEBROW, window.FACEMESH_LEFT_EYEBROW
             ];
-            
+            eyeFeatures.forEach(feat => {
+                if (!feat) return;
+                targetCtx.beginPath();
+                targetCtx.strokeStyle = "rgba(255,60,60,0.80)";
+                targetCtx.lineWidth = 1.0;
+                for (let i = 0; i < feat.length; i++) {
+                    const [a, b] = feat[i];
+                    const p1 = face[a], p2 = face[b];
+                    if (p1 && p2) { targetCtx.moveTo(mapX(p1.x), mapY(p1.y)); targetCtx.lineTo(mapX(p2.x), mapY(p2.y)); }
+                }
+                targetCtx.stroke();
+            });
+        }
+
+        if (drewPose && pose.keypoints && pose.keypoints.length > 0) {
+            const k = pose.keypoints;
+
+            const bones = [
+                [5,7],[7,9],
+                [6,8],[8,10],
+                [5,6],
+                [5,11],[6,12],
+                [11,12],
+                [11,13],[13,15],
+                [12,14],[14,16]
+            ];
+
+            targetCtx.save();
             targetCtx.strokeStyle = "#ff00ff";
-            targetCtx.lineWidth = 2.5;
+            targetCtx.lineWidth   = 4;
+            targetCtx.lineCap     = 'round';
+            targetCtx.lineJoin    = 'round';
+            targetCtx.shadowBlur  = 6;
+            targetCtx.shadowColor = "rgba(255,0,255,0.6)";
             targetCtx.beginPath();
-            
-            bones.forEach(([a,b]) => {
-                const p1 = k[a]; const p2 = k[b];
+            bones.forEach(([a, b]) => {
+                const p1 = k[a], p2 = k[b];
                 if (!p1 || !p2 || p1.score < AI_SENSITIVITY || p2.score < AI_SENSITIVITY) return;
                 targetCtx.moveTo(mapX(p1.x), mapY(p1.y));
                 targetCtx.lineTo(mapX(p2.x), mapY(p2.y));
             });
             targetCtx.stroke();
 
-            // LÍNEA DE CUELLO (Nariz conectada al centro de los hombros, SÓLO si se detecta cuerpo)
-            const nose = k[0];
-            const lShoulder = k[5];
-            const rShoulder = k[6];
-            
-            if (nose && lShoulder && rShoulder && 
-                nose.score >= AI_SENSITIVITY && 
-                lShoulder.score >= AI_SENSITIVITY && 
-                rShoulder.score >= AI_SENSITIVITY) {
-                
-                // Calcula el punto medio clavicular
-                const midX = (mapX(lShoulder.x) + mapX(rShoulder.x)) / 2;
-                const midY = (mapY(lShoulder.y) + mapY(rShoulder.y)) / 2;
-                
+            const nose = k[0], ls = k[5], rs = k[6];
+            if (nose && ls && rs && nose.score >= AI_SENSITIVITY && ls.score >= AI_SENSITIVITY && rs.score >= AI_SENSITIVITY) {
+                const midX = (mapX(ls.x) + mapX(rs.x)) / 2;
+                const midY = (mapY(ls.y) + mapY(rs.y)) / 2;
                 targetCtx.beginPath();
                 targetCtx.moveTo(mapX(nose.x), mapY(nose.y));
                 targetCtx.lineTo(midX, midY);
                 targetCtx.stroke();
             }
+            targetCtx.restore();
 
-            // 🔴 ARTICULACIONES BRILLANTES
-            k.forEach((p, i) => {
-                if(i === 3 || i === 4 || p.score < AI_SENSITIVITY) return; // omitir orejas
+            const nodeIndices = [0, 5,6,7,8,9,10,11,12,13,14,15,16];
+            nodeIndices.forEach(i => {
+                const p = k[i];
+                if (!p || p.score < AI_SENSITIVITY) return;
+                const px = mapX(p.x), py = mapY(p.y);
                 targetCtx.beginPath();
-                targetCtx.arc(mapX(p.x), mapY(p.y), 3.5, 0, Math.PI * 2);
-                targetCtx.fillStyle = "#ff0000";
-                targetCtx.shadowBlur = 10;
+                targetCtx.arc(px, py, 5 + pulse * 4, 0, Math.PI * 2);
+                targetCtx.fillStyle = `rgba(255,0,0,${0.12 + pulse * 0.18})`;
+                targetCtx.shadowBlur = 0;
+                targetCtx.fill();
+                targetCtx.beginPath();
+                targetCtx.arc(px, py, 3, 0, Math.PI * 2);
+                targetCtx.fillStyle = "#ff3333";
+                targetCtx.shadowBlur  = 8 + pulse * 14;
                 targetCtx.shadowColor = "#ff0000";
                 targetCtx.fill();
+                targetCtx.shadowBlur = 0;
             });
-            targetCtx.shadowBlur = 0; 
         }
 
-        // =====================
-        // 👁️ PRESENCIA (SOLO SI NO HAY NADA)
-        // =====================
-        if (!drewSomething && window.motionLevel > 0.02) {
-            targetCtx.strokeStyle = "rgba(255,0,0,0.4)";
-            targetCtx.lineWidth = 1;
+        if (!drewFace && !drewPose && window.motionLevel > 0.025) {
+            targetCtx.save();
+            targetCtx.strokeStyle = `rgba(255,0,0,${0.2 + pulse * 0.25})`;
+            targetCtx.lineWidth   = 1.5;
+            targetCtx.shadowBlur  = 8 + pulse * 8;
+            targetCtx.shadowColor = "rgba(255,0,0,0.5)";
             targetCtx.strokeRect(dW * 0.35 + dX, dH * 0.2 + dY, dW * 0.3, dH * 0.6);
+            targetCtx.restore();
         }
     }
 
@@ -2348,7 +3273,6 @@ const paranormalQuestions = [
                     if(state.filter === 'night') { ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)'; } 
                     else if(state.filter === 'thermal') { ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)'; } 
                     else if(state.filter === 'urbex') { ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%)'; } 
-                    else if(state.filter === 'edge') { ctx.filter = 'grayscale(100%) invert(100%) sepia(100%) hue-rotate(180deg) saturate(3.0) contrast(1.5) brightness(0.4)'; }
                     else { ctx.filter = 'none'; }
                     
                     ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH);
@@ -2371,42 +3295,23 @@ const paranormalQuestions = [
                 }
             }
 
-            // APLICACIÓN DEL RENDERING HÍBRIDO (FACE + SLS)
             if (state.isSLS && !state.isLidar) {
-                 const sFace = (smoothedFaces && smoothedFaces.length > 0) ? smoothedFaces[0] : null;
-                 const sPose = (smoothedPoses && smoothedPoses.length > 0) ? smoothedPoses[0] : null;
+                const renderPoses = (smoothedPoses && smoothedPoses.length > 0) ? smoothedPoses : [];
+                const renderFaces = (smoothedFaces && smoothedFaces.length > 0) ? smoothedFaces : [];
 
-                 // FIX 2: Fallback visual si no hay detección
-                 if (!sFace && !sPose) { drawFallbackSilhouette(); }
+                const nPoses  = renderPoses.length;
+                const nFaces  = renderFaces.length;
 
-                 if (isTransmitting) {
-                     drawHybrid(ctx, sFace, sPose);
-                     // FIX 1: Dibujar personas adicionales (multi-persona)
-                     if (targetPoses && targetPoses.length > 1) {
-                         for (let pi = 1; pi < targetPoses.length; pi++) {
-                             drawHybrid(ctx, null, targetPoses[pi]);
-                         }
-                     }
-                 }
-                 // SOLO LOCAL
-                 drawHybrid(audioLayerCtx, sFace, sPose);
-                 // FIX 1: Personas adicionales en canvas local
-                 if (targetPoses && targetPoses.length > 1) {
-                     for (let pi = 1; pi < targetPoses.length; pi++) {
-                         drawHybrid(audioLayerCtx, null, targetPoses[pi]);
-                     }
-                 }
-            }
+                if (!nPoses && !nFaces && (Date.now() - (window._slsStartTime||0)) > 800) {
+                    drawFallbackSilhouette();
+                }
 
-            // APLICACIÓN RENDERING EDGE
-            if (state.isEdge && !state.isLidar) {
-                if (el.video.readyState >= 2) {
-                    const { dX, dY, dW, dH } = window.drawCoords;
-                    if (isTransmitting) {
-                        drawEDGE(ctx, cW, cH, dX, dY, dW, dH);
-                    }
-                    // SOLO LOCAL
-                    drawEDGE(audioLayerCtx, cW, cH, dX, dY, dW, dH);
+                const nTargets = Math.max(nPoses, nFaces);
+                for (let ti = 0; ti < nTargets; ti++) {
+                    const pose = (ti < nPoses) ? renderPoses[ti] : null;
+                    const face = (ti < nFaces) ? renderFaces[ti] : null;
+                    if (isTransmitting) drawHybrid(ctx, face, pose, ti);
+                    drawHybrid(audioLayerCtx, face, pose, ti);
                 }
             }
             
@@ -2417,7 +3322,7 @@ const paranormalQuestions = [
             if (isTransmitting) drawBurnInHUD(ctx, cW, cH, animState.hudScale);
             drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale);
             
-            if (state.isPareidolia && !performanceLagging) {
+            if (state.isPareidolia) {
                  if (isTransmitting) drawCanvasScanBoxes(ctx, cW, cH);
                  drawCanvasScanBoxes(audioLayerCtx, cW, cH);
             }
@@ -2427,10 +3332,13 @@ const paranormalQuestions = [
                  drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale);
             }
             
+            // FIX M10: drawAudioVisualizer una sola vez (análisis + lógica EVP).
+            // Antes: se llamaba dos veces por frame → doble getByteTimeDomainData,
+            // doble cálculo RMS, doble sorteo EVP (posibles disparos duplicados).
             if (state.isAudioScan) {
-            if (isTransmitting) drawAudioVisualizer(ctx, cW, cH);
-            drawAudioVisualizer(audioLayerCtx, cW, cH);
-        }
+                drawAudioVisualizer(audioLayerCtx, cW, cH);        // análisis + EVP (una vez)
+                if (isTransmitting) ctx.drawImage(el.audioCanvas, 0, 0); // copiar al stream
+            }
 
         if ('requestVideoFrameCallback' in el.video) {
              el.video.requestVideoFrameCallback(renderLoop);
@@ -2447,7 +3355,8 @@ const paranormalQuestions = [
     let watchdogZeroFps = 0;
     setInterval(() => {
         if (document.visibilityState !== 'visible') return;
-        if (isRestartingCamera) return; 
+        if (isRestartingCamera) return;
+        if (isAIProcessing) return;
 
         if (currentFps === 0 && el.video.readyState >= 2) {
             watchdogZeroFps++;
@@ -2474,7 +3383,6 @@ const paranormalQuestions = [
         if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
         updateClock(); 
         
-        // Dynamic FPS Check
         if (currentFps < 15) { performanceLagging = true; } 
         else if (currentFps >= 25) { performanceLagging = false; }
 
@@ -2522,7 +3430,13 @@ const paranormalQuestions = [
             const connection = peerCommand.connect(commandTarget);
             connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
             connection.on('data', handleCommand);
-            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) peerCommand.destroy(); });
+            connection.on('close', () => {
+                showToast("Estudio desconectado", true);
+                conn = null;
+                if(peerCommand) { peerCommand.destroy(); peerCommand = null; }
+                // N-A2: destruir video sender también — evita stream huérfano consumiendo CPU/batería
+                if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; }
+            });
             connection.on('error', (e) => { console.error("Data error", e); });
         });
         
@@ -2560,7 +3474,7 @@ const paranormalQuestions = [
         if(cmd.type === 'cmd' || cmd.category === 'cam') {
             const action = cmd.action; const value = cmd.value;
             if(action === 'filter') { 
-                const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'edge': 'btn-edge', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; 
+                const map = { 'night':'btn-night', 'thermal':'btn-thermal', 'urbex':'btn-urbex', 'sls':'btn-sls', 'lidar':'btn-heatmap', 'normal': null }; 
                 setFilter(value, document.getElementById(map[value])); 
             }
             else if(action === 'flash') toggleTorch(value); 
@@ -2574,7 +3488,6 @@ const paranormalQuestions = [
         }
     }
 
-    // FIX 5: Envío de estado completo al estudio (todos los filtros + audio)
     function sendScanDataToStudio() {
         if (!conn || !conn.open) return;
         try {
@@ -2585,7 +3498,6 @@ const paranormalQuestions = [
                     neg:   state.filter === 'thermal',
                     urbx:  state.filter === 'urbex',
                     lidar: state.isLidar,
-                    xray:  state.isEdge,
                     sls:   state.isSLS,
                     vision: state.isPareidolia
                 },
@@ -2601,9 +3513,9 @@ const paranormalQuestions = [
     function setFilter(f, btn) {
         if(state.filter === f && f !== 'normal') f = 'normal'; 
         state.filter = f; 
-        state.isSLS = (f === 'sls'); 
+        state.isSLS   = (f === 'sls');
+        if (state.isSLS) window._slsStartTime = Date.now();
         state.isLidar = (f === 'lidar');
-        state.isEdge = (f === 'edge');
         
         document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active-state')); if(btn && f !== 'normal') btn.classList.add('active-state');
         
@@ -2612,17 +3524,13 @@ const paranormalQuestions = [
             if(f === 'night') document.body.classList.add('filter-night-vision'); 
             else if(f === 'thermal') document.body.classList.add('filter-thermal'); 
             else if(f === 'urbex') document.body.classList.add('filter-urbex'); 
-            else if(f === 'edge') document.body.classList.add('filter-edge'); 
-            else if(f === 'sls') document.body.classList.add('filter-pareidolia'); 
         }
         
         if(f === 'night' || f === 'thermal') toggleTorch(true); else toggleTorch(false);
-        // FIX 7: limpiar TODOS los estados de pose al cambiar filtro — evita líneas pegadas
         targetPoses = []; smoothedPoses = []; faces = []; smoothedFaces = [];
         currentPose = null; prevPose = null; predictedPose = null;
         lidarMask = null; lastLidarMask = null; window.motionLevel = 0;
 
-        // FIX 5: reportar estado al estudio tras cada cambio de filtro
         sendScanDataToStudio();
     }
 
@@ -2642,7 +3550,6 @@ const paranormalQuestions = [
         }
         if (scanInterval) clearInterval(scanInterval);
         scanInterval = setInterval(() => {
-            if (performanceLagging) return; // Prevent spawning if CPU is struggling
             const box = scanBoxPool.find(b => b.style.display === 'none');
             if (box) {
                 const size = Math.floor(Math.random() * 80) + 40;
@@ -2651,7 +3558,7 @@ const paranormalQuestions = [
                 box.style.width = `${size}px`; box.style.height = `${size}px`; box.style.left = `${x}px`; box.style.top = `${y}px`;
                 box.style.display = 'block';
                 box.style.animation = 'none';
-                void box.offsetHeight; // trigger reflow
+                void box.offsetHeight;
                 box.style.animation = null;
                 setTimeout(() => { box.style.display = 'none'; }, 800);
             }
@@ -2669,19 +3576,38 @@ const paranormalQuestions = [
     async function triggerPareidolia() {
         const video = el.video; if(!AI_API_KEY) return; if(isAIProcessing || isTtsPlaying) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
-        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; startScanningEffect();
+        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; currentAiImgEl = null; startScanningEffect();
         
-        // Optimize resolution for Pareidolia payload (320x240)
         aiSnapCtx.drawImage(video, 0, 0, 320, 320);
-        // FIX 7: Usar toBlob para preview local (evita fuga de memoria con base64 en memoria)
-        aiSnapCanvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); currentAiImage = url; setTimeout(() => URL.revokeObjectURL(url), 30000); } }, 'image/jpeg', 0.8);
+        aiSnapCanvas.toBlob((blob) => {
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                currentAiImage = url;
+                const img = new Image();
+                img.onload = () => { currentAiImgEl = img; };
+                img.src = url;
+                // No revocar por timer — se revoca cuando el texto se resetea (en aiTextTimer)
+            }
+        }, 'image/jpeg', 0.8);
         const base64 = aiSnapCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         const prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         
         try {
             let attempts = 0, success = false, textResult = "Analizando...";
+            // N-M2: watchdog externo de 20s — si todos los retries cuelgan, liberar isAIProcessing
+            const _aiTimeout = setTimeout(() => {
+                if (isAIProcessing) {
+                    console.warn("N-M2: AI timeout — forzando isAIProcessing=false");
+                    isAIProcessing = false;
+                    currentAiText = "";
+                    if (state.isPareidolia) startScanningEffect();
+                }
+            }, 20000);
             while(attempts < 3 && !success) {
                 try {
+                    // N-M2: AbortController con 8s por intento — evita fetch colgado
+                    const ac = new AbortController();
+                    const reqTimer = setTimeout(() => ac.abort(), 8000);
                     if (CURRENT_AI_PROVIDER === 'groq') {
                         const resp = await fetch(`https://api.groq.com/openai/v1/chat/completions`, { 
                             method: 'POST', headers: { 'Authorization': `Bearer ${AI_API_KEY}`, 'Content-Type': 'application/json' }, 
@@ -2689,8 +3615,10 @@ const paranormalQuestions = [
                                 model: CURRENT_AI_MODEL, 
                                 messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } }] }],
                                 max_tokens: 50, temperature: 0.7
-                            }) 
+                            }),
+                            signal: ac.signal
                         });
+                        clearTimeout(reqTimer);
                         const data = await resp.json(); 
                         if (resp.ok && data.choices && data.choices[0].message) { success = true; textResult = data.choices[0].message.content; } 
                         else { 
@@ -2700,17 +3628,31 @@ const paranormalQuestions = [
                     } else {
                         const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CURRENT_AI_MODEL}:generateContent?key=${AI_API_KEY}`, { 
                             method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }) 
+                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }),
+                            signal: ac.signal
                         });
+                        clearTimeout(reqTimer);
                         const data = await resp.json(); 
                         if (data.candidates && data.candidates[0].content) { success = true; textResult = data.candidates[0].content.parts[0].text; } 
                         else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
                     }
                 } catch(err) { attempts++; await new Promise(r => setTimeout(r, 1000)); }
             }
+            clearTimeout(_aiTimeout);
             let text = textResult.replace(/[*_]/g, '').trim();
-            stopScanningEffect(); currentAiText = text; // FIX 6: currentAiImage ya fue seteado por toBlob callback 
-            clearTimeout(aiTextTimer); aiTextTimer = setTimeout(() => { currentAiText = ""; currentAiImage = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
+            stopScanningEffect(); currentAiText = text;
+            clearTimeout(aiTextTimer);
+            // FIX A8: revocación del blob URL DENTRO del timer (9s) — no en setTimeout separado.
+            // Evita que URL.revokeObjectURL() se ejecute antes de que drawAIBurnIn
+            // termine de usar la imagen en el canvas temporal.
+            aiTextTimer = setTimeout(() => {
+                // Revocar blob URL cuando la imagen ya no se usa
+                if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} }
+                currentAiText = "";
+                currentAiImage = null;
+                currentAiImgEl = null;
+                if (state.isPareidolia) startScanningEffect();
+            }, 9000);
             
             if (conn && conn.open) { 
                 conn.send({ 
@@ -2729,31 +3671,63 @@ const paranormalQuestions = [
     function schedulePareidolia() {
         if(!isPareidoliaActive) return;
         triggerPareidolia();
-        // Dynamic wait time of 20 - 25 seconds
         let delay = 20000 + Math.random() * 5000;
         pareidoliaInterval = setTimeout(schedulePareidolia, delay);
     }
 
     function togglePareidolia(btnElement) {
-        if(!AI_API_KEY) { showToast("SIN API KEY — CONFIGURA EN ⚙ AJUSTES", true); return; } // FIX 4: sin alert()
-        const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = !isPareidoliaActive; state.isPareidolia = isPareidoliaActive;
+        if(!AI_API_KEY) { showToast("SIN API KEY — CONFIGURA EN ⚙ AJUSTES", true); return; }
+        const _nextActive = !isPareidoliaActive;
+        if (_nextActive) {
+            // Verificar disponibilidad de TTS antes de activar IA VISION
+            const elOk = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
+            const vrOk = voicerssRemaining > 0;
+            if (!elOk && !vrOk) {
+                ttsNoDisponible('sin créditos para activar IA VISION');
+                return;
+            }
+        }
+        const btn = btnElement || document.getElementById('btn-ia');
+        isPareidoliaActive = _nextActive; state.isPareidolia = isPareidoliaActive;
         
         if(isPareidoliaActive) {
-            // FIX 6: no aplicar filter-pareidolia al body — solo SLS lo usa como overlay CSS
-            // VISION no necesita filtro CSS en el video, usa canvas overlay con drawHybrid
-            if(btn) btn.classList.add('active-state'); speakText("VISIÓN ACTIVADA"); 
+            if(btn) btn.classList.add('active-state');
             animState.hudTarget = 0.0; animState.aiTarget = 1.0;
-            currentAiText = ""; currentAiImage = null; startScanningEffect(); 
+            currentAiText = ""; currentAiImage = null; currentAiImgEl = null;
+            lastPareidoliaCall = 0; isAIProcessing = false;
+            aiScannerTimer = 0; aiScannerState = 0;
+            startScanningEffect();
             clearTimeout(pareidoliaInterval);
-            schedulePareidolia();
+            // Anuncio Juana natural — luego arrancar análisis
+            speakAnnouncement('VISION ACTIVADA').then(() => {
+                if (!isPareidoliaActive) return;
+                pareidoliaInterval = setTimeout(() => {
+                    if (isPareidoliaActive) schedulePareidolia();
+                }, 4000 + Math.random() * 2000);
+            }).catch(() => {
+                pareidoliaInterval = setTimeout(() => {
+                    if (isPareidoliaActive) schedulePareidolia();
+                }, 4000 + Math.random() * 2000);
+            });
         } else {
-            if(cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.currentTime = 0; }
-            if(btn) btn.classList.remove('active-state'); speakText("VISIÓN DESACTIVADA"); // FIX 6: sin filter-pareidolia 
+            if(btn) btn.classList.remove('active-state');
             animState.hudTarget = 1.0; animState.aiTarget = 0.0;
-            clearTimeout(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); currentAiText = ""; currentAiImage = null;
+            // Kill todo en curso
+            clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
+            if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+            if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            isTtsPlaying = false; isSpookySpeaking = false;
+            isAIProcessing = false; stopScanningEffect();
+            currentAiText = "";
+            if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} }
+            currentAiImage = null; currentAiImgEl = null;
+            lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0;
+            // Anuncio de desactivación
+            speakAnnouncement('VISION DESACTIVADA').catch(() => {});
         }
         showMenus();
-        sendScanDataToStudio(); // FIX 5: reportar estado vision al estudio
+        sendScanDataToStudio();
     }
 
     let isCleanUI = false;
@@ -2780,8 +3754,30 @@ const paranormalQuestions = [
         
         for(const step of ["CONECTANDO...", "IDENTIFICANDO...", "VERIFICANDO..."]) { status.innerText = step; await new Promise(r => setTimeout(r, 400)); }
         
-        let provider = k.startsWith('gsk_') ? 'groq' : 'gemini';
+        // N-A1: detección de proveedor por prefijo de clave
+        // sk_ (no gsk_) → ElevenLabs | gsk_ → Groq | resto → Gemini
+        let provider = k.startsWith('gsk_') ? 'groq' : k.startsWith('sk_') ? 'elevenlabs' : 'gemini';
         let workingModel = null;
+
+        if (provider === 'elevenlabs') {
+            // Validar key ElevenLabs: endpoint /user no consume créditos
+            try {
+                const r = await fetch('https://api.elevenlabs.io/v1/user', {
+                    headers: { 'xi-api-key': k }
+                });
+                if (r.ok) {
+                    workingModel = 'eleven_multilingual_v2';
+                    localStorage.setItem('obr_el_key', k);
+                    status.innerText = '✅ ELEVENLABS OK';
+                    status.style.color = '#00ff41';
+                } else {
+                    status.innerText = '❌ ELEVENLABS: KEY INVÁLIDA';
+                    status.style.color = 'red';
+                }
+            } catch(e) { status.innerText = '❌ ELEVENLABS: ERROR RED'; status.style.color = 'red'; }
+            input.disabled = false; btn.disabled = false;
+            return;
+        }
         
         if (provider === 'groq') {
             try {
@@ -2819,13 +3815,19 @@ const paranormalQuestions = [
 
     function saveSettings() { 
         const rawIp = document.getElementById('mtx-host').value.trim();
-        if(!rawIp) { showToast("Ingresa un ID válido", true); return; }
-        state.studioId = rawIp; localStorage.setItem('obr_studio_id', state.studioId);
-        showToast("Config Guardada"); document.getElementById('settings-modal').classList.remove('active');
+        if (rawIp) {
+            state.studioId = rawIp;
+            localStorage.setItem('obr_studio_id', state.studioId);
+        }
+        saveTTSFilters();
+        showToast("Config Guardada");
+        document.getElementById('settings-modal').classList.remove('active');
     }
 
     function openSettings() { 
         updateTTSStatusUI();
+        initTTSModeUI();
+        loadTTSFilterPanel();
         document.getElementById('settings-modal').classList.add('active'); 
     }
     
@@ -2889,6 +3891,93 @@ const paranormalQuestions = [
         if(btn) btn.classList.add('active-state'); 
         setTimeout(()=>btn?.classList.remove('active-state'), 200); 
     }
+
+    // ── Exponer funciones al scope global ──
+    // Preview de Google TTS en el panel de settings
+    window.previewGoogleTTS = async function() { // alias — internamente usa VoiceRSS
+        const btn = document.getElementById('btn-tts-preview');
+        const txt = document.getElementById('tts-preview-text').value.trim() || 'Hola, esto es una prueba de voz';
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        await initAudioEngine();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume().catch(()=>{});
+        if (!ttsSource) initTTSPipeline();
+        // Leer filtros del DOM en tiempo real (incluyendo pitch)
+        applyGoogleTTSFilters(true, true);
+        const fP = readFiltersFromDOM();
+
+        // Intentar con decode→BufferSource para pitch real
+        const audioUrl = await getVoiceRSSAudio(txt);
+        if (!audioUrl) { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } return; }
+        const src = audioUrl;
+        try {
+            const resp = await fetch(src);
+            const arrBuf = await resp.arrayBuffer();
+            const rawBuf = await audioCtx.decodeAudioData(arrBuf);
+            // Preview usa el mismo pipeline offline: pitch+EQ primero, luego rate
+            // Preview: escucha como suena la voz con los filtros del panel (sin AUDIO SCAN)
+            await _ensureContextRunning();
+            const fP2 = readFiltersFromDOM();
+            const bufSrc = await playBlobWithFilters(rawBuf, fP2.rate, true);
+            bufSrc.start(0);
+            bufSrc.onended = () => {
+                _activeBufSrc = null;
+                if (btn) { btn.disabled = false; btn.textContent = '🔊'; }
+            };
+        } catch(e) {
+            // Fallback sin pitch
+            cloudTTSPlayer.src = src;
+            cloudTTSPlayer.playbackRate = fP.rate; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
+            cloudTTSPlayer.play().catch(()=>{});
+            cloudTTSPlayer.onended = () => { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } };
+        }
+        setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } }, 14000);
+    };
+
+    // Guardar filtros TTS desde el panel de settings
+    window.saveTTSFilters = function() {
+        const g = (id) => document.getElementById(id);
+        if (!g('tts-f-pitch')) return;
+        if (g('tts-f-rate'))  localStorage.setItem('obr_tts_f_rate',  g('tts-f-rate').value);
+        if (g('tts-f-pitch')) localStorage.setItem('obr_tts_f_pitch', g('tts-f-pitch').value);
+        updateTTSFilterLabels();
+    };
+
+    // Actualizar labels de sliders en tiempo real
+    window.updateTTSFilterLabels = function() {
+        // Labels ya no son necesarios — los inputs muestran su propio valor
+    };
+
+    // Cargar valores de filtros en el panel al abrir settings
+    window.loadTTSFilterPanel = function() {
+        const ls = (k, def) => localStorage.getItem(k) !== null ? localStorage.getItem(k) : def;
+        const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+        set('tts-f-rate',  ls('obr_tts_f_rate',  '0'));
+        set('tts-f-pitch', ls('obr_tts_f_pitch', '-530'));
+        updateTTSFilterLabels();
+    };
+
+    window.resetTTSFilters = function() {
+        ['obr_tts_f_rate', 'obr_tts_f_pitch'].forEach(k => localStorage.removeItem(k));
+        loadTTSFilterPanel();
+        showToast('FILTROS RESETEADOS — USANDO CÓDIGO BASE');
+    };
+
+    window.initApp          = initApp;
+    window.retryCam         = retryCam;
+    window.openSettings     = openSettings;
+    window.saveSettings     = saveSettings;
+    window.setFilter        = setFilter;
+    window.setTTSMode       = setTTSMode;
+    window.togglePareidolia = togglePareidolia;
+    window.toggleAudioScanner = toggleAudioScanner;
+    window.toggleCleanUI    = toggleCleanUI;
+    window.validateAndSaveKey = validateAndSaveKey;
+    window.openConnect      = openConnect;
+    window.startHybridTransmission = startHybridTransmission;
+    window.resetZoom        = resetZoom;
+    window.playLocalMedia   = playLocalMedia;
+    window.stopLocalMedia   = stopLocalMedia;
+    window.showCamError     = showCamError;
 </script>
 </body>
 </html>
