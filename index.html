@@ -226,7 +226,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.83 (anuncio Juana + EVP tras interacción + pitch -530)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.1.84 (IA VISION sin mp3 + offCtx no-block + barrido fade-in + grid settings)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -268,11 +268,11 @@
                 </button>
             </div>
 
-            <!-- ②③ FILA MEDIA: ESTUDIO + IA (izquierda) | PREVIEW TTS (derecha) -->
-            <div class="flex gap-3 mb-3">
+            <!-- ②③④ FILA MEDIA: ESTUDIO | IA | TTS ENGINE en 3 columnas -->
+            <div class="grid grid-cols-3 gap-2 mb-3">
 
-                <!-- Columna izquierda: ESTUDIO + IA apilados -->
-                <div class="flex flex-col gap-3 flex-1 min-w-0">
+                <!-- Columna 1+2: ESTUDIO + IA en sub-grid -->
+                <div class="col-span-2 flex flex-col gap-2 min-w-0">
 
                     <!-- ② RED ESTUDIO — DOCK -->
                     <div class="bg-black/50 p-3 rounded border border-cyan-900">
@@ -301,8 +301,8 @@
                     </div>
                 </div>
 
-                <!-- Columna derecha: ESTADO TTS ENGINE compacto -->
-                <div class="bg-black/50 p-3 rounded border border-gray-800 flex flex-col" style="min-width:160px;max-width:210px;">
+                <!-- Columna 3: ESTADO TTS ENGINE compacto -->
+                <div class="bg-black/50 p-2 rounded border border-gray-800 flex flex-col">
                     <h3 class="text-[10px] font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1 uppercase tracking-wider">TTS ENGINE</h3>
                     <div class="flex flex-col gap-1 mb-3 flex-1">
                         <div class="text-[9px] font-mono text-gray-400">Motor: <span id="tts-engine-status" class="text-green-400">ELEVENLABS</span></div>
@@ -966,8 +966,8 @@ const paranormalQuestions = [
     sweepAudio.preload  = 'auto';
 
     const responseAudio = new Audio('./respuesta.mp3');
-    responseAudio.loop  = true;   // loop = true: correr durante toda la respuesta
-    responseAudio.volume = 0.5;
+    responseAudio.loop  = true;
+    responseAudio.volume = 0.68; // +0.18 sobre barrido (0.22→0.68, sobresale claramente)
     responseAudio.preload = 'auto';
 
     let sweepFileAvailable    = false;
@@ -1007,7 +1007,7 @@ const paranormalQuestions = [
                 // Subir respuesta.mp3 y dejarlo corriendo — timer independiente (FIX C3)
                 responseAudio.currentTime = 0;
                 responseAudio.play().catch(() => {});
-                _fadeVolume(responseAudio, 0.55, 300);
+                _fadeVolume(responseAudio, 0.68, 300); // sube a 0.68 (sobresale del barrido)
                 // Intro de ~700ms antes de la voz
                 setTimeout(resolve, 700);
             } else {
@@ -1352,8 +1352,7 @@ const paranormalQuestions = [
         }
         if (!audioUrl) { isTtsPlaying = false; ttsNoDisponible('sin audio'); return; }
         updateTTSStatusUI();
-
-        await playResponseIntro();
+        // IA VISION no usa barrido.mp3 ni respuesta.mp3 — esos son solo de AUDIO SCAN
 
         const _isBlobIA = audioUrl && audioUrl.startsWith('blob:');
 
@@ -1374,7 +1373,7 @@ const paranormalQuestions = [
                 src3.start(0);
                 src3.onended = () => {
                     clearTimeout(_ttsWatchdog); _activeBufSrc = null;
-                    isTtsPlaying = false; playResponseEnd();
+                    isTtsPlaying = false; // IA VISION sin playResponseEnd
                     if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
                     try { URL.revokeObjectURL(audioUrl); } catch(e){}
                 };
@@ -1396,7 +1395,7 @@ const paranormalQuestions = [
             return;
         }
         cloudTTSPlayer.addEventListener('ended', () => {
-            clearTimeout(_ttsWatchdog); isTtsPlaying = false; playResponseEnd();
+            clearTimeout(_ttsWatchdog); isTtsPlaying = false;
             if (!isRecognizing && state.isAudioScan) setTimeout(() => safeStartSpeechRec(), 300);
         }, { once: true });
     }
@@ -2153,8 +2152,18 @@ const paranormalQuestions = [
         offSrc.start(0);
 
         let processed;
-        try { processed = await offCtx.startRendering(); }
-        catch(e) { processed = srcBuffer; }
+        try {
+            // Usar requestIdleCallback si disponible para no bloquear el render
+            processed = await new Promise((resolve, reject) => {
+                const doRender = () => offCtx.startRendering().then(resolve).catch(reject);
+                if (window.requestIdleCallback) {
+                    requestIdleCallback(doRender, { timeout: 500 });
+                } else {
+                    // Ceder al event loop un frame antes de renderizar
+                    setTimeout(doRender, 0);
+                }
+            });
+        } catch(e) { processed = srcBuffer; }
 
         // ── PASO 2: Reproducir con la velocidad deseada (pitch NO cambia) ──
         // El pitch ya está "grabado" en el buffer del paso 1.
@@ -2449,14 +2458,19 @@ const paranormalQuestions = [
                 speechRec = null; isRecognizing = false;
             }
             _initSpeechRecOnly();
-            startSweepAudio();
             window._audioScanStartTime = Date.now();
-            window._evpNextGap = 999999; // bloquear EVP hasta primera interacción del usuario
-            window._waitingFirstInteraction = true; // flag para esperar primer habla
-            // Anuncio Juana natural — EVP NO se activa hasta que el usuario hable primero
+            window._evpNextGap = 999999;
+            window._waitingFirstInteraction = true;
+            // 1. Anuncio Juana — 2. barrido con fade-in — 3. mic
             speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
+                // Barrido arranca tras el anuncio con fade-in suave
+                sweepAudio.volume = 0;
+                sweepAudio.currentTime = 0;
+                sweepAudio.play().catch(() => {});
+                _fadeVolume(sweepAudio, 0.22, 1200); // sube en 1.2s
                 setTimeout(() => safeStartSpeechRec(), 300);
             }).catch(() => {
+                startSweepAudio();
                 setTimeout(() => safeStartSpeechRec(), 300);
             });
         } else {
