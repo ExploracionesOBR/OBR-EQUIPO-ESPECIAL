@@ -406,6 +406,26 @@ self.addEventListener('fetch', e => {
 
     let sharedMicMode = true; // BANDERA GLOBAL MIC COMPARTIDO
 
+    // ── SMART EVP ENGINE v2: Umbrales de detección por AnalyserNode ──────────
+    // Ajusta estos valores para calibrar sensibilidad sin tocar el resto del código
+    const EVP_DETECT = {
+        WHISPER_AVG_THRESHOLD: 18,   // 0-255: promedio mínimo para considerar susurro
+        WHISPER_SUSTAINED_MS:  800,  // ms sostenidos para confirmar susurro real
+        SPIKE_DELTA_THRESHOLD: 45,   // delta entre frames para detectar pico brusco
+        SILENCE_MAX_THRESHOLD: 8,    // promedio máx para considerar silencio real
+        SILENCE_SUSTAINED_MS:  2500, // ms en silencio antes de activar SR
+        SR_COOLDOWN_MS:        3000, // ms mínimos entre activaciones de SR
+        SR_LISTEN_TIMEOUT_MS:  6000, // ms máximos que SR espera un resultado
+    };
+
+    // ── SMART EVP: Variables de estado del detector AnalyserNode ──────────────
+    let _evpDetectLoop   = null; // intervalID del loop de detección (setInterval)
+    let _evpPrevAvg      = 0;   // promedio del frame anterior (para detección de spike)
+    let _evpWhisperStart = 0;   // timestamp inicio de susurro sostenido
+    let _evpSilenceStart = 0;   // timestamp inicio de silencio sostenido
+    let _evpLastSrTime   = 0;   // timestamp de la última activación de SR
+    let _evpSrTimeout    = null; // timeout watchdog de SR (máx tiempo escucha)
+
     // ──────────────────────────────────────────────────────────────
     // CRÉDITOS TTS
     // ElevenLabs: 10000 chars/mes, reset día 15
@@ -1116,13 +1136,23 @@ const paranormalQuestions = [
         }
     }
 
-    // safeStartSpeechRec: EXACTAMENTE igual a la referencia v6.1.50
+    // safeStartSpeechRec: activación controlada con watchdog integrado
     // Clave: isRecognizing = true ANTES de start() → sin ventana de race condition
+    // Watchdog: si SR no devuelve resultado en SR_LISTEN_TIMEOUT_MS, forzar abort
     function safeStartSpeechRec() {
         if (speechRec && state.isAudioScan && !isTtsPlaying && !isSpookySpeaking && !isRecognizing) {
             try { 
                 isRecognizing = true; 
-                speechRec.start(); 
+                speechRec.start();
+                // SMART EVP: watchdog por sesión de escucha — evita SR colgado
+                clearTimeout(_evpSrTimeout);
+                _evpSrTimeout = setTimeout(() => {
+                    if (isRecognizing) {
+                        console.warn('[EVP] SR timeout — forzando abort para liberar audio focus');
+                        try { speechRec.abort(); } catch(e) {}
+                        isRecognizing = false;
+                    }
+                }, EVP_DETECT.SR_LISTEN_TIMEOUT_MS);
             } catch(e) { 
                 isRecognizing = false; 
             }
@@ -2249,20 +2279,11 @@ const paranormalQuestions = [
         if (_ttsHighFilter) { _ttsHighFilter.gain.value = 0; }
     }
 
-    // ── Watchdog periódico del mic ─────────────────────────────────────────
+    // ── Watchdog periódico del AudioContext ──────────────────────────────────
+    // SMART EVP: SR ya NO se reinicia desde aquí — lo gestiona startEvpDetectLoop.
+    // Este watchdog solo mantiene el AudioContext activo (previene suspend en iOS/Android).
     setInterval(() => {
         if (!state.isAudioScan) return;
-        if (!speechRec) return;
-        // Mic corre SIEMPRE que AUDIO SCAN esté activo — incluso durante TTS
-        // El guard isTtsPlaying en onresult evita disparar respuestas
-        if (!isRecognizing) {
-            try {
-                isRecognizing = true;
-                speechRec.start();
-            } catch(e) {
-                isRecognizing = false;
-            }
-        }
         const ctx = audioCtx || evpAudioCtx;
         if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     }, 3000);
@@ -2333,22 +2354,127 @@ const paranormalQuestions = [
         _initSpeechRecOnly();
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // SMART EVP ENGINE v2 — Motor de detección por AnalyserNode
+    // Detecta susurros, picos y silencios ANTES de activar SpeechRecognition.
+    // El micrófono NUNCA se reinicia. SR solo corre cuando hay evento real.
+    // Compatible con TikTok Live: SR en modo one-shot libera audio focus entre usos.
+    // ════════════════════════════════════════════════════════════════════════
+
+    // isAudioActive: confirma que el AnalyserNode tiene señal real del micrófono
+    function isAudioActive() {
+        if (!audioAnalyser || !audioDataArray) return false;
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) sum += audioDataArray[i];
+        return (sum / audioDataArray.length) > 1; // >1 = mic activo con señal real
+    }
+
+    // detectEvpEvent: analiza el frame de frecuencia actual
+    // Retorna: 'spike' | 'whisper' | 'silence' | null
+    // NOTA: llama a getByteFrequencyData internamente — no duplicar con isAudioActive
+    function detectEvpEvent() {
+        if (!audioAnalyser || !audioDataArray) return null;
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) sum += audioDataArray[i];
+        const avg   = sum / audioDataArray.length;
+        const delta = Math.abs(avg - _evpPrevAvg);
+        _evpPrevAvg = avg;
+        const now = Date.now();
+
+        // ── SPIKE: subida brusca de energía entre frames consecutivos ──────
+        if (delta > EVP_DETECT.SPIKE_DELTA_THRESHOLD && avg > EVP_DETECT.WHISPER_AVG_THRESHOLD) {
+            _evpWhisperStart = 0;
+            _evpSilenceStart = 0;
+            return 'spike';
+        }
+
+        // ── SILENCIO: promedio muy bajo sostenido ──────────────────────────
+        if (avg <= EVP_DETECT.SILENCE_MAX_THRESHOLD) {
+            if (_evpSilenceStart === 0) _evpSilenceStart = now;
+            _evpWhisperStart = 0;
+            if (now - _evpSilenceStart >= EVP_DETECT.SILENCE_SUSTAINED_MS) {
+                _evpSilenceStart = now; // reset → no vuelve a disparar hasta próximo ciclo
+                return 'silence';
+            }
+            return null;
+        }
+        _evpSilenceStart = 0;
+
+        // ── SUSURRO: señal baja pero sostenida (entre silencio y voz normal) ─
+        if (avg >= EVP_DETECT.WHISPER_AVG_THRESHOLD && avg < 60) {
+            if (_evpWhisperStart === 0) _evpWhisperStart = now;
+            if (now - _evpWhisperStart >= EVP_DETECT.WHISPER_SUSTAINED_MS) {
+                _evpWhisperStart = now; // reset para próximo ciclo
+                return 'whisper';
+            }
+        } else {
+            _evpWhisperStart = 0;
+        }
+
+        return null;
+    }
+
+    // startEvpDetectLoop: arranca el loop de detección con setInterval a 100ms
+    // — Solo activa SR cuando detectEvpEvent() devuelve un evento válido
+    // — Respeta cooldown entre activaciones y bloqueos de TTS
+    // — Bajo consumo: 100ms vs requestAnimationFrame (60fps)
+    function startEvpDetectLoop() {
+        stopEvpDetectLoop(); // evitar instancias duplicadas
+        _evpPrevAvg      = 0;
+        _evpWhisperStart = 0;
+        _evpSilenceStart = 0;
+        _evpLastSrTime   = 0;
+        console.log('[EVP] Loop de detección AnalyserNode iniciado');
+
+        _evpDetectLoop = setInterval(() => {
+            if (!state.isAudioScan) return;
+            if (!isAudioActive()) return; // mic sin señal → skip (ahorra CPU)
+
+            const evpEvent   = detectEvpEvent();
+            if (!evpEvent) return;
+
+            const now        = Date.now();
+            const cooldownOk = (now - _evpLastSrTime) >= EVP_DETECT.SR_COOLDOWN_MS;
+            const canStart   = !isRecognizing && !isTtsPlaying && !isSpookySpeaking && cooldownOk;
+
+            if (canStart) {
+                _evpLastSrTime = now;
+                console.log('[EVP] Evento "' + evpEvent + '" → activando SR one-shot');
+                safeStartSpeechRec();
+            }
+        }, 100); // 100ms = ~10 muestras/s, suficiente para detectar eventos de audio
+    }
+
+    // stopEvpDetectLoop: detiene el loop limpiamente y resetea estado
+    function stopEvpDetectLoop() {
+        if (_evpDetectLoop) { clearInterval(_evpDetectLoop); _evpDetectLoop = null; }
+        clearTimeout(_evpSrTimeout);
+        _evpPrevAvg      = 0;
+        _evpWhisperStart = 0;
+        _evpSilenceStart = 0;
+        console.log('[EVP] Loop de detección detenido');
+    }
+
     function _initSpeechRecOnly() {
         if (speechRec) return;
         if (!('webkitSpeechRecognition' in window)) return;
         if ('webkitSpeechRecognition' in window) {
             speechRec = new webkitSpeechRecognition();
-            speechRec.continuous     = true;
-            speechRec.interimResults = true;
+            speechRec.continuous     = false; // SMART EVP: one-shot — SR libera audio focus tras cada sesión
+            speechRec.interimResults = false; // SMART EVP: solo resultados finales — sin polling constante
             speechRec.lang           = 'es-MX';
 
             speechRec.onstart = () => { isRecognizing = true; };
             speechRec.onerror = (e) => {
                 isRecognizing = false;
-                if (e.error !== 'not-allowed' && e.error !== 'service-not-allowed') {
-                    if (state.isAudioScan && !isTtsPlaying && !isSpookySpeaking) {
-                        setTimeout(() => safeStartSpeechRec(), 300);
-                    }
+                clearTimeout(_evpSrTimeout); // limpiar watchdog al error
+                // SMART EVP: no reiniciar SR en onerror — el EVP loop lo gestionará
+                // según detectEvpEvent(). Evita reinicio en bucle por error de red/audio.
+                if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                    console.warn('[EVP] SR error crítico (permiso):', e.error);
                 }
             };
 
@@ -2419,15 +2545,14 @@ const paranormalQuestions = [
                 }
             };
 
-            // FIX M11: delay adaptativo — si TTS activo al disparar onend,
-            // esperar 2s en lugar de no reiniciar. Sin fix: onend con
-            // isTtsPlaying=true → no reinicia → silencio hasta watchdog de 3s.
+            // SMART EVP: onend limpia flags — el EVP loop (startEvpDetectLoop)
+            // decide cuándo volver a activar SR según audio real del entorno.
+            // Sin reinicio en bucle → sin conflicto con TikTok Live ni bucle de errores.
             speechRec.onend = () => {
                 isRecognizing = false;
-                window._liveUserText = ''; // limpiar transcripción en vivo
-                if (state.isAudioScan) {
-                    setTimeout(() => safeStartSpeechRec(), 500);
-                }
+                clearTimeout(_evpSrTimeout); // liberar watchdog de sesión
+                window._liveUserText = '';   // limpiar transcripción en vivo
+                // SR no se reinicia aquí — el EVP loop lo activará al próximo evento real
             };
         }
 
@@ -2468,16 +2593,17 @@ const paranormalQuestions = [
                 sweepAudio.currentTime = 0;
                 sweepAudio.play().catch(() => {});
                 _fadeVolume(sweepAudio, 0.22, 1200); // sube en 1.2s
-                setTimeout(() => safeStartSpeechRec(), 300);
+                startEvpDetectLoop(); // SMART EVP: loop AnalyserNode activa SR solo al detectar audio real
             }).catch(() => {
                 startSweepAudio();
-                setTimeout(() => safeStartSpeechRec(), 300);
+                startEvpDetectLoop(); // SMART EVP: loop AnalyserNode como fallback
             });
         } else {
             if (btn)    btn.classList.remove('active');
             if (btnMenu) btnMenu.classList.remove('active-state');
             stopSweepAudio();
             safeStopSpeechRec();
+            stopEvpDetectLoop(); // SMART EVP: detener loop de detección AnalyserNode
             // Kill todo TTS en curso
             clearTimeout(_ttsWatchdog);
             if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
