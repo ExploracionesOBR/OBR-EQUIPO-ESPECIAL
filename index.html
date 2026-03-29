@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.4.5 (AUDIO SCAN FIX)</title> 
+    <title>CAMARA OBR PRO v6.4.6 (HUD FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -215,7 +215,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.4.5 (Audio Engine Fix + Safe Auto-Wake)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.4.6 (HUD Fix - Visual Cleanup)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -665,7 +665,6 @@ const paranormalQuestions = [
 "estas detras de nosotros","estas en este cuarto","estas en este lugar",
 "quieres hablar","quieres comunicarse","quieres que te ayudemos"
 ];
-
     let evpHistorial = [];
 
     function obtenerEVP() {
@@ -949,7 +948,11 @@ const paranormalQuestions = [
         if (canvasScanBoxes.length > 20) canvasScanBoxes = canvasScanBoxes.slice(-20); 
         if (targetPoses.length > 15) targetPoses.length = 15;
         if(ctx && ctx.beginPath) ctx.beginPath(); if(audioLayerCtx && audioLayerCtx.beginPath) audioLayerCtx.beginPath();
-        if (!state.isPareidolia && !state.isSLS) { if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; }
+        if (!state.isPareidolia && !state.isSLS) { 
+            if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } 
+            currentAiImage = null; currentAiImgEl = null; 
+            window._aiImageCache = null; 
+        }
         if (peerCommand && (peerCommand.disconnected || peerCommand.destroyed)) { try { peerCommand.destroy(); } catch(e){} peerCommand = null; conn = null; }
         if (peerVideoSender && (peerVideoSender.disconnected || peerVideoSender.destroyed)) { try { peerVideoSender.destroy(); } catch(e){} peerVideoSender = null; }
     }
@@ -1020,10 +1023,9 @@ const paranormalQuestions = [
 
     function retryCam() { document.getElementById('cam-error-panel').style.display = 'none'; const btn = document.querySelector('.load-btn'); if (btn) btn.style.display = ''; updateProgress(0, 'PRESIONA INICIAR CÁMARA'); }
 
-    // --- RECONEXIÓN SEGURA EN CALIENTE (DEEP RECOVERY) ---
     async function reconnectAudioNode() {
         const now = Date.now();
-        if (now - lastReconnectTime < 4000) return; // Debounce de seguridad
+        if (now - lastReconnectTime < 4000) return; 
         lastReconnectTime = now;
 
         if (audioCtx && micGainNode) {
@@ -1037,7 +1039,6 @@ const paranormalQuestions = [
                     needNewStream = true;
                 } else {
                     const track = audioStream.getAudioTracks()[0];
-                    // Si el track original fue apagado por Android (SpeechRecognition toma foco)
                     if (!track || track.readyState === 'ended' || track.muted) {
                         needNewStream = true;
                     }
@@ -1075,7 +1076,6 @@ const paranormalQuestions = [
         }
     }
 
-    // --- INICIALIZADOR UNIFICADO ---
     let audioEngineInitialized = false;
 
     async function initAudioEngine() {
@@ -1121,17 +1121,14 @@ const paranormalQuestions = [
             compressor.threshold.value = -18; compressor.knee.value = 20;
             compressor.ratio.value = 8; compressor.attack.value = 0.002; compressor.release.value = 0.15;
 
-            // FLUJO DIRECTO HACIA EL ANALYSER
             micSource.connect(micGainNode);
             micGainNode.connect(audioAnalyser);
 
-            // SINK SILENCIOSO (Fuerza la ejecución continua del grafo para el analyser)
             const silentSink = audioCtx.createGain();
             silentSink.gain.value = 0.0001; 
             audioAnalyser.connect(silentSink);
             silentSink.connect(audioCtx.destination);
 
-            // RAMA INDEPENDIENTE PARA WEBRTC
             micGainNode.connect(compressor);
             compressor.connect(mixDestination);
 
@@ -1444,7 +1441,6 @@ const paranormalQuestions = [
                 sweepAudio.volume = 0; sweepAudio.currentTime = 0; sweepAudio.play().catch(() => {});
                 _fadeVolume(sweepAudio, 0.22, 1200); 
                 
-                // CRÍTICO: Forzar anclaje del Hardware una vez termina el anuncio en Android
                 setTimeout(() => {
                     lastReconnectTime = 0;
                     reconnectAudioNode();
@@ -1514,13 +1510,6 @@ const paranormalQuestions = [
         const rmsLevel = Math.sqrt(rmsSum / bufferLength);
         const amplitude = maxVal - minVal; 
         
-        // Debugging de señal de hardware real
-        if (!window._lastLogTime || Date.now() - window._lastLogTime > 2000) {
-            const hasSignal = amplitude > 1 && !isBufferFrozen;
-            console.log(`[Audio Watchdog] RMS: ${rmsLevel.toFixed(4)} | Amp: ${amplitude} | Frozen: ${isBufferFrozen} | Signal: ${hasSignal ? 'OK' : 'DEAD'}`);
-            window._lastLogTime = Date.now();
-        }
-        
         const isHardwareDead = isBufferFrozen || amplitude <= 1;
 
         if (!isHardwareDead) {
@@ -1529,7 +1518,7 @@ const paranormalQuestions = [
             if (Date.now() - lastValidAudioTime > 2500) {
                 console.warn("[Audio Watchdog] Pérdida de hardware detectada. Forzando reconexión...");
                 lastValidAudioTime = Date.now(); 
-                lastReconnectTime = 0; // Bypass del debounce protector para actuar inmediatamente
+                lastReconnectTime = 0; 
                 reconnectAudioNode();
             }
         }
@@ -1559,7 +1548,7 @@ const paranormalQuestions = [
         simulatedPikes = sp2; c.save();
 
         const screenScale  = Math.max(1.2, Math.min(4, 1920 / (window.innerWidth || 1920)));
-        const bottomY      = h * 0.84, waveHeight = 71 * screenScale, sensitivity = Math.min(9, 9 / screenScale * 1.5);
+        const bottomY      = h * 0.84, waveHeight = 71 * screenScale, sensitivity = Math.min(3.5, 3.5 / screenScale * 1.5);
         const clampH       = waveHeight * 0.95, clampY = (val) => Math.max(-clampH, Math.min(clampH, val));
 
         c.beginPath(); c.strokeStyle = 'rgba(0, 255, 255, 0.8)'; c.shadowColor = 'rgba(0, 255, 255, 0.8)'; c.shadowBlur = 15; c.lineWidth = screenScale * (window.innerWidth < 600 ? 3.5 : 1.5); c.lineJoin = 'round';
@@ -1689,17 +1678,27 @@ const paranormalQuestions = [
 
     function drawBurnInHUD(ctx, width, height, scale) {
         if(scale <= 0.01) return;
-        const HUD_TAMANO = 1.0, HUD_IZQUIERDA = 50, HUD_ARRIBA = 50;    
-        ctx.save(); const adjustedScale = scale * HUD_TAMANO; ctx.translate(HUD_IZQUIERDA, HUD_ARRIBA); ctx.scale(adjustedScale, adjustedScale);
+        const HUD_TAMANO = 1.35, HUD_IZQUIERDA = 50, HUD_ARRIBA = 50;    
+        ctx.save(); 
+        
+        ctx.globalAlpha = Math.max(0, Math.min(1, scale)); 
+        
+        const adjustedScale = scale * HUD_TAMANO; 
+        ctx.translate(HUD_IZQUIERDA, HUD_ARRIBA); 
+        ctx.scale(HUD_TAMANO, HUD_TAMANO); 
         ctx.shadowColor = "black"; ctx.shadowBlur = 4;
         if(logoImg.complete) ctx.drawImage(logoImg, 0, 0, 80, 80); 
         ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif"; ctx.fillText("EXPLORACIONES OBR", 90, 30); 
         const now = new Date(); ctx.fillStyle = "#ff3333"; ctx.font = "12px 'Share Tech Mono', monospace"; ctx.fillText(now.toLocaleDateString() + " - " + now.toLocaleTimeString(), 90, 50); 
         ctx.restore(); 
         if(state.isSLS) {
-            ctx.save(); ctx.translate(width / 2, 80); ctx.scale(scale * 1.3, scale * 1.3);
+            ctx.save(); 
+            ctx.globalAlpha = Math.max(0, Math.min(1, scale)); 
+            ctx.translate(width / 2, 80); 
+            ctx.scale(HUD_TAMANO * 1.3, HUD_TAMANO * 1.3);
             const bx = -40, by = 0; ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(bx, by, 80, 20); ctx.strokeStyle = "#d946ef"; ctx.lineWidth = 1; ctx.strokeRect(bx, by, 80, 20);
-            ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace"; ctx.textAlign = "center"; ctx.fillText("● SLS ACTIVO", 0, by + 13); ctx.restore();
+            ctx.fillStyle = "#d946ef"; ctx.font = "10px monospace"; ctx.textAlign = "center"; ctx.fillText("● SLS ACTIVO", 0, by + 13); 
+            ctx.restore();
         }
     }
 
@@ -1717,12 +1716,41 @@ const paranormalQuestions = [
 
     function drawAIBurnIn(c, w, h, scale) {
         if(scale <= 0.01) return;
-        c.save(); const bx = 14, by = 14, panelW = 320;
+        c.save();
+        
+        const smoothScale = 1 - Math.pow(1 - scale, 3);
+        c.globalAlpha = Math.max(0, Math.min(1, scale * 1.5)); 
+
+        const bx = 14, by = 14, panelW = 320;
         let displayTxt = currentAiText, isScanning = !(currentAiImgEl && currentAiImgEl.complete && currentAiImgEl.naturalWidth > 0); 
-        if (isScanning && !displayTxt) { aiScannerTimer++; if(aiScannerTimer > 150) { aiScannerState = (aiScannerState + 1) % 3; aiScannerTimer = 0; } if(aiScannerState === 0) displayTxt = "Analizando Entorno..."; else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`; else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%"; }
-        let borderColor = isScanning ? "#ff0000" : "#ff3333", bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)", imgH = 0; if (isScanning) imgH = 150; else if(currentAiImgEl && currentAiImgEl.naturalWidth > 0) imgH = panelW * (currentAiImgEl.naturalHeight / currentAiImgEl.naturalWidth);
-        const centerX = bx + panelW/2, centerY = by + imgH/2 + 20; c.translate(centerX, centerY); c.scale(scale, scale); c.translate(-centerX, -centerY);
-        if (!isScanning) { let txtH = 40; const totalH = imgH + txtH; c.fillStyle = bgColor; c.fillRect(bx, by, panelW, totalH); c.fillStyle = borderColor; c.fillRect(bx, by, 4, totalH); }
+        
+        if (isScanning && !displayTxt) { 
+            aiScannerTimer++; 
+            if(aiScannerTimer > 150) { aiScannerState = (aiScannerState + 1) % 3; aiScannerTimer = 0; } 
+            if(aiScannerState === 0) displayTxt = "Analizando Entorno..."; 
+            else if(aiScannerState === 1) displayTxt = `raw data: 0x${Math.floor(Math.random()*16777215).toString(16)}`; 
+            else if(aiScannerState === 2) displayTxt = "sensores:\n  lidar: on\n  temp: 14c\n  prox: 98%"; 
+        }
+        
+        let borderColor = isScanning ? "#ff0000" : "#ff3333";
+        let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)";
+        
+        let imgH = isScanning ? 150 : 240; 
+        
+        const centerX = bx + panelW/2, centerY = by + imgH/2 + 20; 
+        c.translate(centerX, centerY); 
+        c.scale(smoothScale, smoothScale); 
+        c.translate(-centerX, -centerY);
+
+        if (!isScanning) { 
+            let txtH = currentAiText ? Math.ceil(currentAiText.length / 25) * 18 + 20 : 40; 
+            const totalH = imgH + txtH; 
+            c.fillStyle = bgColor; 
+            c.fillRect(bx, by, panelW, totalH); 
+            c.fillStyle = borderColor; 
+            c.fillRect(bx, by, 4, totalH); 
+        }
+        
         if(imgH > 0) {
             if (isScanning) {
                 c.save(); const radarRadiusBase = 50, radarCx = bx + radarRadiusBase + 10, radarCy = by + radarRadiusBase + 10; c.translate(radarCx, radarCy);
@@ -1733,9 +1761,68 @@ const paranormalQuestions = [
                 drawBlade(0); drawBlade(Math.PI); c.restore();
                 const txtX = radarCx + radarRadiusBase + 15, txtY = radarCy; if (displayTxt.includes('\n')) { const lines = displayTxt.split('\n'); let lineY = txtY - 15; lines.forEach((l, idx) => { drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11); }); } else { drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12); }
             } else {
-                c.save(); try { const tmpC = document.createElement('canvas'); tmpC.width = panelW; tmpC.height = imgH; const tmpCtx = tmpC.getContext('2d'); tmpCtx.drawImage(currentAiImgEl, 0, 0, panelW, imgH); const iData = tmpCtx.getImageData(0, 0, panelW, imgH); const d = iData.data; for (let pi = 0; pi < d.length; pi += 4) { const gray = d[pi]*0.299 + d[pi+1]*0.587 + d[pi+2]*0.114, inv = 255 - gray, con = Math.min(255, Math.max(0, (inv - 128) * 1.5 + 128)); d[pi] = d[pi+1] = d[pi+2] = con; } tmpCtx.putImageData(iData, 0, 0); c.drawImage(tmpC, bx, by, panelW, imgH); } catch(e) { c.drawImage(currentAiImgEl, bx, by, panelW, imgH); } c.restore(); 
-                c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH); c.fillStyle = "#ffcccc"; c.font = "15px 'Share Tech Mono'"; let line = ''; let ly = by + imgH + 24; const resWords = currentAiText ? currentAiText.split(' ') : [];
-                for(let n = 0; n < resWords.length; n++) { let testLine = line + resWords[n] + ' '; if (c.measureText(testLine).width > (panelW - 20) && n > 0) { c.fillText(line.toLowerCase(), bx + 10, ly); line = resWords[n] + ' '; ly += 14; } else { line = testLine; } } c.fillText(line.toLowerCase(), bx + 10, ly);
+                c.save(); 
+                try { 
+                    if (!window._aiImageCache || window._lastAiImageSrc !== currentAiImgEl.src) {
+                        const tmpC = document.createElement('canvas'); 
+                        tmpC.width = panelW; tmpC.height = imgH; 
+                        const tmpCtx = tmpC.getContext('2d'); 
+                        
+                        let sW = currentAiImgEl.naturalWidth, sH = currentAiImgEl.naturalHeight;
+                        let ratio = Math.max(panelW / sW, imgH / sH);
+                        let cW = panelW / ratio, cH = imgH / ratio;
+                        let cx = (sW - cW) / 2, cy = (sH - cH) / 2;
+
+                        tmpCtx.drawImage(currentAiImgEl, cx, cy, cW, cH, 0, 0, panelW, imgH); 
+                        
+                        const iData = tmpCtx.getImageData(0, 0, panelW, imgH); 
+                        const d = iData.data; 
+                        for (let pi = 0; pi < d.length; pi += 4) { 
+                            const gray = d[pi]*0.299 + d[pi+1]*0.587 + d[pi+2]*0.114;
+                            const inv = 255 - gray;
+                            const con = Math.min(255, Math.max(0, (inv - 128) * 1.5 + 128)); 
+                            d[pi] = d[pi+1] = d[pi+2] = con; 
+                        } 
+                        tmpCtx.putImageData(iData, 0, 0); 
+                        
+                        window._aiImageCache = tmpC;
+                        window._lastAiImageSrc = currentAiImgEl.src;
+                    }
+                    c.drawImage(window._aiImageCache, bx, by, panelW, imgH); 
+                } catch(e) { 
+                    c.drawImage(currentAiImgEl, bx, by, panelW, imgH); 
+                } 
+                c.restore(); 
+                
+                c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH); 
+                
+                if (currentAiText) {
+                    c.fillStyle = "rgba(0,0,0,0.85)";
+                    let txtH = Math.ceil(currentAiText.length / 25) * 18 + 15;
+                    c.fillRect(bx + 4, by + imgH, panelW - 4, txtH); 
+
+                    c.fillStyle = "#ffffff"; 
+                    c.font = "bold 15px 'Share Tech Mono'"; 
+                    c.shadowColor = "#ff0000"; 
+                    c.shadowBlur = 8;
+
+                    let line = ''; 
+                    let ly = by + imgH + 20; 
+                    const resWords = currentAiText.split(' ');
+                    
+                    for(let n = 0; n < resWords.length; n++) { 
+                        let testLine = line + resWords[n] + ' '; 
+                        if (c.measureText(testLine).width > (panelW - 20) && n > 0) { 
+                            c.fillText(line.toLowerCase(), bx + 12, ly); 
+                            line = resWords[n] + ' '; 
+                            ly += 18; 
+                        } else { 
+                            line = testLine; 
+                        } 
+                    } 
+                    c.fillText(line.toLowerCase(), bx + 12, ly);
+                    c.shadowBlur = 0; 
+                }
             }
         } c.restore();
     }
@@ -1767,7 +1854,6 @@ const paranormalQuestions = [
         let faceBBox = null;
         let poseBBox = null;
 
-        // 1. BOUNDING BOX ROSTRO (Prioridad Absoluta)
         if (face && face.length > 0) {
             drewFace = true;
             const forehead = face[10];   
@@ -1796,7 +1882,6 @@ const paranormalQuestions = [
             }
         }
 
-        // 2. BOUNDING BOX CUERPO (Fallback)
         if (pose && pose.keypoints && pose.keypoints.length > 0) {
             drewPose = true;
             let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
@@ -1905,7 +1990,9 @@ const paranormalQuestions = [
             }
             
             const speed = 0.4; animState.hudScale += (animState.hudTarget - animState.hudScale) * speed; animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
-            if (isTransmitting) drawBurnInHUD(ctx, cW, cH, animState.hudScale); drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale);
+            if (isTransmitting) drawBurnInHUD(ctx, cW, cH, animState.hudScale); 
+            drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale);
+            
             if (state.isPareidolia) { if (isTransmitting) drawCanvasScanBoxes(ctx, cW, cH); drawCanvasScanBoxes(audioLayerCtx, cW, cH); }
             if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) { if (isTransmitting) drawAIBurnIn(ctx, cW, cH, animState.aiScale); drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale); }
             
@@ -2035,14 +2122,14 @@ const paranormalQuestions = [
                         if (resp.ok && data.choices && data.choices[0].message) { success = true; textResult = data.choices[0].message.content; } 
                         else { if(data.error && data.error.code === 'model_decommissioned') { textResult = "MODELO GROQ OBSOLETO"; success = true; break; } attempts++; await new Promise(r => setTimeout(r, 1000)); }
                     } else {
-                        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CURRENT_AI_MODEL}:generateContent?key=${AI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }), signal: ac.signal });
+                        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CURRENT_AI_MODEL}:generateContent?key=${AI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }), signal: ac.signal });
                         clearTimeout(reqTimer); const data = await resp.json(); 
                         if (data.candidates && data.candidates[0].content) { success = true; textResult = data.candidates[0].content.parts[0].text; } else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
                     }
                 } catch(err) { attempts++; await new Promise(r => setTimeout(r, 1000)); }
             }
             clearTimeout(_aiTimeout); let text = textResult.replace(/[*_]/g, '').trim(); stopScanningEffect(); currentAiText = text; clearTimeout(aiTextTimer);
-            aiTextTimer = setTimeout(() => { if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiText = ""; currentAiImage = null; currentAiImgEl = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
+            aiTextTimer = setTimeout(() => { if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiText = ""; currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
             if (conn && conn.open) conn.send({ type: 'ai-speech', text: text, forcePlay: true, source: 'vision' }); 
             speakText(text);
         } catch(e) { isAIProcessing = false; currentAiText = "error de señal"; setTimeout(() => { if(currentAiText === "error de señal") { currentAiText = ""; if (state.isPareidolia) startScanningEffect(); } }, 3000); }
@@ -2059,12 +2146,12 @@ const paranormalQuestions = [
         
         if(isPareidoliaActive) {
             if(btn) btn.classList.add('active-state'); animState.hudTarget = 0.0; animState.aiTarget = 1.0;
-            currentAiText = ""; currentAiImage = null; currentAiImgEl = null; lastPareidoliaCall = 0; isAIProcessing = false; aiScannerTimer = 0; aiScannerState = 0; startScanningEffect(); clearTimeout(pareidoliaInterval);
+            currentAiText = ""; currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; isAIProcessing = false; aiScannerTimer = 0; aiScannerState = 0; startScanningEffect(); clearTimeout(pareidoliaInterval);
             speakAnnouncement('VISION ACTIVADA').then(() => { if (!isPareidoliaActive) return; pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); }).catch(() => { pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); });
         } else {
             if(btn) btn.classList.remove('active-state'); animState.hudTarget = 1.0; animState.aiTarget = 0.0; clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
             if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } if (window.speechSynthesis) window.speechSynthesis.cancel();
-            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA').catch(() => {});
+            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA').catch(() => {});
         }
         showMenus(); sendScanDataToStudio();
     }
