@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.7.0 (EVP SPEED & VOL BALANCE)</title> 
+    <title>CAMARA OBR PRO v6.8.5 (AUDIO TRIGGERS & FX FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -215,7 +215,7 @@
     <div id="loading">
         <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
         <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.7.0 (Audio Volumes & Fleeting EVP Speed Fix)</p>
+        <p class="text-xs font-mono text-gray-500 mb-8">v6.8.5 (Audio Triggers & FX Fixes)</p>
         <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
         <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
         <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
@@ -420,7 +420,10 @@ self.addEventListener('fetch', e => {
     let ambientNoiseLevel = 0.01; 
     let cumulativeEVPEnergy = 0; 
 
-    // ── NUEVO: MEMORIA TEMPORAL DE CONTEXTO (EVP) ──────────────
+    // BLOQUEO DE ANUNCIOS
+    window._isAnnouncement = false;
+
+    // ── MEMORIA TEMPORAL DE CONTEXTO (EVP) ──────────────
     let evpContextMemory = []; 
     const evpFrasesAmbiguaMemoria = [
         "te escuché antes...", "aún sigo aquí", "recordé lo que dijiste...", 
@@ -739,7 +742,6 @@ const paranormalQuestions = [
         return { rate: TTS_FILTER_RATE_CODE + (hasRate ? ls('obr_tts_f_rate', 0.0) : 0.0), pitch: TTS_FILTER_PITCH_CODE + (hasPitch ? ls('obr_tts_f_pitch', -530) : 0) };
     }
 
-    // AJUSTE DE VOLUMEN DE BARRIDO Y RESPUESTA MÁS BAJO
     const sweepAudio    = new Audio('./barrido.mp3'); sweepAudio.loop = true; sweepAudio.volume = 0.12; sweepAudio.preload = 'auto';
     const responseAudio = new Audio('./respuesta.mp3'); responseAudio.loop = true; responseAudio.volume = 0.35; responseAudio.preload = 'auto';
 
@@ -759,23 +761,29 @@ const paranormalQuestions = [
     function playResponseStart() {
         return new Promise(resolve => {
             if (responseFileAvailable) {
-                _fadeVolume(sweepAudio, 0.02, 400); // Disminución drástica al hablar
-                responseAudio.currentTime = 0; responseAudio.play().catch(() => {});
-                _fadeVolume(responseAudio, 0.35, 300); // Tope reducido a 0.35
-                setTimeout(resolve, 700);
+                sweepAudio.pause();
+                sweepAudio.currentTime = 0;
+                
+                responseAudio.volume = 0.35; 
+                responseAudio.currentTime = 0; 
+                responseAudio.play().catch(() => {});
+                
+                resolve();
             } else resolve();
         });
     }
 
     function playResponseEnd() {
         if (!responseFileAvailable) return;
+        _fadeVolume(responseAudio, 0, 150);
         setTimeout(() => {
-            _fadeVolume(responseAudio, 0, 500);
-            setTimeout(() => {
-                _fadeVolume(sweepAudio, 0.12, 600); // Recupera solo a 0.12
-                setTimeout(() => { responseAudio.pause(); responseAudio.currentTime = 0; }, 600);
-            }, 200);
-        }, 600); 
+            responseAudio.pause();
+            responseAudio.currentTime = 0;
+            if (state.isAudioScan && !isTtsPlaying) {
+                sweepAudio.volume = 0.12;
+                sweepAudio.play().catch(() => {});
+            }
+        }, 150); 
     }
 
     function playResponseIntro() { return playResponseStart(); }
@@ -882,7 +890,7 @@ const paranormalQuestions = [
             try {
                 const resp3 = await fetch(audioUrl); const rawBuf3 = await audioCtx.decodeAudioData(await resp3.arrayBuffer());
                 await _ensureContextRunning();
-                const src3 = await playBlobWithFilters(rawBuf3, 0.94 + Math.random() * 0.03, 'iavision');
+                const src3 = await playBlobWithFilters(rawBuf3, 0.94 + Math.random() * 0.03, 'iavision', 'none');
                 src3.start(0);
                 src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); safeStartSpeechRec(); try { URL.revokeObjectURL(audioUrl); } catch(e){} };
                 return;
@@ -924,12 +932,15 @@ const paranormalQuestions = [
 
         try {
             const resp = await fetch(blobUrl); const rawBuf = await audioCtx.decodeAudioData(await resp.arrayBuffer());
-            
-            // VELOCIDAD AGRESIVA Y FUGAZ: Multiplicador entre 1.60 y 1.89 para sonar rápido como estación de radio
             const _dado = 1.60 + Math.random() * 0.29; 
             
+            const effectRoll = Math.random();
+            let effectType = 'none'; 
+            if (effectRoll < 0.60) effectType = 'reverb'; 
+            else if (effectRoll < 0.90) effectType = 'echo'; 
+            
             await _ensureContextRunning();
-            const src = await playBlobWithFilters(rawBuf, _dado, false); // Se manda el multiplicador
+            const src = await playBlobWithFilters(rawBuf, _dado, false, effectType);
             src.start(0); lastSpokenText = text; clearTimeout(speechTimer); speechTimer = setTimeout(() => { lastSpokenText = ""; }, 3500);
             
             src.onended = () => { 
@@ -939,10 +950,7 @@ const paranormalQuestions = [
                 clearTimeout(speechTimer); 
                 isTtsPlaying = false; 
                 isSpookySpeaking = false; 
-                
-                // FIX: El tiempo se marca cuando TERMINA de hablar, evitando que dispare en metralleta
                 lastEvpTime = Date.now(); 
-                
                 playResponseEnd(); 
                 safeStartSpeechRec(); 
                 try { URL.revokeObjectURL(blobUrl); } catch(e){} 
@@ -1034,7 +1042,14 @@ const paranormalQuestions = [
     document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState === 'visible') {
             requestWakeLock();
+            if (audioCtx && audioCtx.state === 'suspended' && state.isAudioScan) {
+                audioCtx.resume().catch(()=>{});
+            }
             if (videoStream) { const track = videoStream.getVideoTracks()[0]; if (!track || track.readyState === 'ended' || el.video.paused) restartCamera(); else el.video.play().catch(e => restartCamera()); }
+        } else {
+            if (audioCtx && audioCtx.state === 'running') {
+                audioCtx.suspend().catch(()=>{});
+            }
         }
     });
 
@@ -1044,12 +1059,19 @@ const paranormalQuestions = [
         if (isRestartingCamera || document.hidden) return; 
         isRestartingCamera = true;
         try {
-            if (videoStream) videoStream.getTracks().forEach(t => t.stop()); 
+            if (videoStream) videoStream.getVideoTracks().forEach(t => t.stop()); 
+            
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
+                audio: false, 
                 video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } 
             });
-            videoStream = stream; el.video.srcObject = stream; await el.video.play();
+            
+            const newVideoTrack = stream.getVideoTracks()[0];
+            const currentAudioTracks = audioStream ? audioStream.getAudioTracks() : [];
+            videoStream = new MediaStream([newVideoTrack, ...currentAudioTracks]);
+            
+            el.video.srcObject = videoStream; 
+            await el.video.play();
             const recInd = document.getElementById('recovery-indicator');
             if (recInd) { recInd.style.display = 'flex'; void recInd.offsetWidth; recInd.style.opacity = '1'; setTimeout(() => { recInd.style.opacity = '0'; setTimeout(() => { if(recInd.style.opacity === '0') recInd.style.display = 'none'; }, 500); }, 2500); }
         } catch(e) {} finally { setTimeout(() => { isRestartingCamera = false; }, 3000); }
@@ -1080,7 +1102,7 @@ const paranormalQuestions = [
 
         if (audioCtx && micGainNode) {
             try {
-                if (audioCtx.state === 'suspended') {
+                if (audioCtx.state === 'suspended' && !document.hidden) {
                     audioCtx.resume().catch(()=>{});
                 }
                 
@@ -1098,7 +1120,7 @@ const paranormalQuestions = [
                     console.warn("[Audio Watchdog] Track original muerto/mudo. Regenerando sin recargar...");
                     try {
                         const newStream = await navigator.mediaDevices.getUserMedia({ 
-                            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } 
+                            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                         });
                         audioStream = newStream;
                         if (videoStream) {
@@ -1130,7 +1152,7 @@ const paranormalQuestions = [
 
     async function initAudioEngine() {
         if (audioEngineInitialized && audioCtx) {
-            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            if (audioCtx.state === 'suspended' && !document.hidden) audioCtx.resume().catch(() => {});
             return;
         }
 
@@ -1141,17 +1163,17 @@ const paranormalQuestions = [
         }
 
         audioCtx.onstatechange = () => {
-            if (audioCtx.state === 'suspended' && state.isAudioScan) {
+            if (audioCtx.state === 'suspended' && state.isAudioScan && !document.hidden) {
                 audioCtx.resume().catch(()=>{});
             }
         };
 
-        if (audioCtx.state === 'suspended') await audioCtx.resume().catch(()=>{});
+        if (audioCtx.state === 'suspended' && !document.hidden) await audioCtx.resume().catch(()=>{});
 
         if (!audioStream) {
             try {
                 audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
                 });
             } catch(e) { console.warn("Mic access denied:", e); return; }
         }
@@ -1199,9 +1221,11 @@ const paranormalQuestions = [
         unlockAudioContext(); const btn = document.querySelector('.load-btn'); if (btn) btn.style.display = 'none';
         document.getElementById('cam-error-panel').style.display = 'none'; requestWakeLock(); updateProgress(10, "SOLICITANDO PERMISO DE CÁMARA...");
 
+        const safeAudioConfig = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
         const constraintSets = [
-            { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 }, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
-            { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
+            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
+            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
             { audio: true, video: { facingMode: { ideal: 'environment' } } }
         ];
 
@@ -1285,13 +1309,12 @@ const paranormalQuestions = [
         while (ctx.state !== 'running' && tries < 10) { await ctx.resume().catch(() => {}); await new Promise(r => setTimeout(r, 30)); tries++; }
     }
 
-    async function playBlobWithFilters(srcBuffer, finalRateMulti, useDom) {
+    async function playBlobWithFilters(srcBuffer, finalRateMulti, useDom, effectType = 'none') {
         const pf = (useDom === 'iavision') ? { rate: 1.0, pitch: 0 } : (useDom ? readFiltersFromDOM() : getTTSFilters());
         
         let baseRate = isFinite(pf.rate) ? pf.rate : 1.5; 
         let speedRate = baseRate;
         
-        // Efecto ráfaga: multiplicamos el baseRate para alcanzar velocidades ultra rápidas
         if (finalRateMulti !== null && typeof finalRateMulti === 'number' && isFinite(finalRateMulti)) {
             speedRate = baseRate * finalRateMulti;
         }
@@ -1327,7 +1350,58 @@ const paranormalQuestions = [
         src.playbackRate.value = speedRate; 
         src.detune.value = 0;
         
-        if (ttsMainGain) src.connect(ttsMainGain); else src.connect(audioCtx.destination);
+        let lastNode = src;
+
+        if (effectType === 'reverb') {
+            if (!window._reverbImpulse) {
+                const len = audioCtx.sampleRate * 1.5; 
+                const imp = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+                for (let c = 0; c < 2; c++) {
+                    const chData = imp.getChannelData(c);
+                    for (let i = 0; i < len; i++) {
+                        chData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); 
+                    }
+                }
+                window._reverbImpulse = imp;
+            }
+            const convolver = audioCtx.createConvolver();
+            convolver.buffer = window._reverbImpulse;
+            
+            const wetGain = audioCtx.createGain(); wetGain.gain.value = 0.5;
+            const dryGain = audioCtx.createGain(); dryGain.gain.value = 0.8;
+            
+            lastNode.connect(dryGain);
+            lastNode.connect(convolver);
+            convolver.connect(wetGain);
+            
+            const mixNode = audioCtx.createGain();
+            dryGain.connect(mixNode);
+            wetGain.connect(mixNode);
+            lastNode = mixNode;
+            
+        } else if (effectType === 'echo') {
+            const delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.25 + Math.random() * 0.2; 
+            
+            const feedback = audioCtx.createGain();
+            feedback.gain.value = 0.35; 
+            
+            const echoVolume = audioCtx.createGain();
+            echoVolume.gain.value = 0.3; // 30% echo volume to make it realistic
+            
+            lastNode.connect(delay);
+            delay.connect(feedback);
+            feedback.connect(delay);
+            
+            delay.connect(echoVolume);
+            
+            const mixNode = audioCtx.createGain();
+            lastNode.connect(mixNode); 
+            echoVolume.connect(mixNode);    
+            lastNode = mixNode;
+        }
+        
+        if (ttsMainGain) lastNode.connect(ttsMainGain); else lastNode.connect(audioCtx.destination);
         
         _activeBufSrc = src; 
         return src;
@@ -1341,7 +1415,6 @@ const paranormalQuestions = [
         _ttsBassFilter = ctx1.createBiquadFilter(); _ttsBassFilter.type = 'lowshelf';
         _ttsHighFilter = ctx1.createBiquadFilter(); _ttsHighFilter.type = 'highshelf';
         
-        // AUMENTO SUSTANCIAL DEL VOLUMEN DEL TTS (de 1.5 a 3.0)
         ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 3.0; ttsGainNode = ttsMainGain;
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
@@ -1360,7 +1433,7 @@ const paranormalQuestions = [
     }
 
     function applyGoogleTTSFilters(isGoogle, useDom) {
-        if (!ttsMainGain) return; ttsMainGain.gain.value = 3.0; // Mantiene el volumen fuerte
+        if (!ttsMainGain) return; ttsMainGain.gain.value = 3.0; 
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
@@ -1514,6 +1587,7 @@ const paranormalQuestions = [
             window._waitingFirstInteraction = true;
             lastValidAudioTime = Date.now(); 
             
+            window._isAnnouncement = true; 
             speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
                 sweepAudio.volume = 0; sweepAudio.currentTime = 0; sweepAudio.play().catch(() => {});
                 _fadeVolume(sweepAudio, 0.12, 1200); 
@@ -1522,6 +1596,8 @@ const paranormalQuestions = [
                     lastReconnectTime = 0;
                     reconnectAudioNode();
                     safeStartSpeechRec();
+                    window._isAnnouncement = false; 
+                    lastEvpTime = Date.now(); 
                 }, 150);
             }).catch(() => {
                 startSweepAudio();
@@ -1529,6 +1605,8 @@ const paranormalQuestions = [
                     lastReconnectTime = 0;
                     reconnectAudioNode();
                     safeStartSpeechRec();
+                    window._isAnnouncement = false; 
+                    lastEvpTime = Date.now(); 
                 }, 150);
             });
         } else {
@@ -1543,10 +1621,16 @@ const paranormalQuestions = [
             
             isTtsPlaying = false; isSpookySpeaking = false;
             lastSpokenText = ''; clearTimeout(speechTimer);
-            lastEvpTime = 0; window._evpNextGap = 8000;
+            lastEvpTime = Date.now() + 99999; 
             simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01;
             evpContextMemory = []; 
-            speakAnnouncement('ESPIRIT BOX DESACTIVADO').catch(() => {});
+            
+            window._isAnnouncement = true; 
+            speakAnnouncement('ESPIRIT BOX DESACTIVADO').then(() => {
+                window._isAnnouncement = false;
+            }).catch(() => {
+                window._isAnnouncement = false;
+            });
         }
         sendScanDataToStudio();
     }
@@ -1600,10 +1684,14 @@ const paranormalQuestions = [
             }
         }
 
+        const isUserTalkingNow = window._liveUserText && window._liveUserLastUpdate && (Date.now() - window._liveUserLastUpdate < 1500);
+
         ambientNoiseLevel = ambientNoiseLevel * 0.985 + rmsLevel * 0.015;
         const dynamicThreshold = ambientNoiseLevel * 2.2 + 0.015;
 
-        if (!isSpookySpeaking && !isTtsPlaying && rmsLevel > dynamicThreshold) cumulativeEVPEnergy += (rmsLevel - dynamicThreshold) * 8.0;
+        if (!isSpookySpeaking && !isTtsPlaying && !isUserTalkingNow && rmsLevel > dynamicThreshold) {
+            cumulativeEVPEnergy += (rmsLevel - dynamicThreshold) * 10.0;
+        }
         cumulativeEVPEnergy *= 0.93; cumulativeEVPEnergy = Math.max(0, Math.min(100, cumulativeEVPEnergy));
 
         const visualBins = 128, step = Math.floor(bufferLength / visualBins), displayWidth = Math.min(w * 0.92, 1400);
@@ -1627,6 +1715,7 @@ const paranormalQuestions = [
         const screenScale  = Math.max(1.2, Math.min(4, 1920 / (window.innerWidth || 1920)));
         const bottomY      = h * 0.84, waveHeight = 71 * screenScale, sensitivity = Math.min(3.5, 3.5 / screenScale * 1.5);
         const clampH       = waveHeight * 0.95, clampY = (val) => Math.max(-clampH, Math.min(clampH, val));
+        const textFS       = Math.round(23 * screenScale);
 
         c.beginPath(); c.strokeStyle = 'rgba(0, 255, 255, 0.8)'; c.shadowColor = 'rgba(0, 255, 255, 0.8)'; c.shadowBlur = 15; c.lineWidth = screenScale * (window.innerWidth < 600 ? 3.5 : 1.5); c.lineJoin = 'round';
         let x = startX;
@@ -1657,15 +1746,12 @@ const paranormalQuestions = [
         }
         c.stroke();
 
-        const _userTalking = speechActive && !isTtsPlaying && !isSpookySpeaking; const textFS = Math.round(23 * screenScale);
-        if (window._liveUserText && window._liveUserLastUpdate && !_userTalking && (Date.now() - window._liveUserLastUpdate > 2500)) window._liveUserText = '';
-
         let _userAlpha = 1.0;
         if (window._liveUserFadeStart) {
             const elapsed = performance.now() - window._liveUserFadeStart; const fadeDur = window._liveUserFadeDuration || 800; _userAlpha = Math.max(0, 1 - elapsed / fadeDur);
             if (_userAlpha <= 0) { window._liveUserFadeStart = null; window._liveUserText = ''; }
         }
-        if ((_userTalking || _userAlpha < 1) && window._liveUserText && _userAlpha > 0) {
+        if ((isUserTalkingNow || _userAlpha < 1) && window._liveUserText && _userAlpha > 0) {
             c.globalAlpha = _userAlpha; const userLabel = window._liveUserText.toUpperCase(); c.font = `bold ${textFS}px 'Share Tech Mono'`; c.textAlign = "center"; const uY = bottomY - 55 * screenScale;
             c.shadowColor = "rgba(0, 200, 255, 0.3)"; c.shadowBlur = 28 * screenScale; c.fillStyle = "rgba(0, 220, 255, 0.15)"; c.fillText(userLabel, w / 2, uY);
             c.shadowColor = "rgba(0, 220, 255, 0.9)"; c.shadowBlur = 10 * screenScale; c.fillStyle = "rgba(0, 220, 255, 0.9)"; c.fillText(userLabel, w / 2, uY);
@@ -1682,10 +1768,12 @@ const paranormalQuestions = [
         c.restore();
 
         const now_evp = Date.now(); const micActive = audioAnalyser && audioDataArray && currentMaxVolume > 0.001;
-        const isSilent = micActive && currentMaxVolume < dynamicThreshold * 1.2, hasEnergy = cumulativeEVPEnergy > 18, hasSpike = micActive && rmsLevel > dynamicThreshold * 3.5 && !speechActive;
+        const isSilent = micActive && currentMaxVolume < dynamicThreshold * 1.2 && !isUserTalkingNow; 
+        const hasEnergy = cumulativeEVPEnergy > 18;
+        const hasSpike = micActive && rmsLevel > dynamicThreshold * 3.0 && !isUserTalkingNow; 
         const afterQuestion = (now_evp - lastQuestionTime) < 5000, timeSinceLastEvp = now_evp - lastEvpTime;
         
-        const shouldTrigger = micActive && (isSilent || hasEnergy || hasSpike) && !isSpookySpeaking && !isTtsPlaying && timeSinceLastEvp > (window._evpNextGap || 8000) && Math.random() > (afterQuestion ? 0.25 : 0.55);
+        const shouldTrigger = micActive && (isSilent || hasEnergy || hasSpike) && !isSpookySpeaking && !isTtsPlaying && !window._isAnnouncement && timeSinceLastEvp > (window._evpNextGap || 8000) && Math.random() > (afterQuestion ? 0.25 : 0.55);
 
         if (shouldTrigger) {
             
@@ -2339,7 +2427,7 @@ const paranormalQuestions = [
         if (!audioUrl) { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } return; }
         try {
             const resp = await fetch(audioUrl); const rawBuf = await audioCtx.decodeAudioData(await resp.arrayBuffer());
-            await _ensureContextRunning(); const fP2 = readFiltersFromDOM(); const bufSrc = await playBlobWithFilters(rawBuf, null, true);
+            await _ensureContextRunning(); const fP2 = readFiltersFromDOM(); const bufSrc = await playBlobWithFilters(rawBuf, null, true, 'none');
             bufSrc.start(0); bufSrc.onended = () => { _activeBufSrc = null; if (btn) { btn.disabled = false; btn.textContent = '🔊'; } };
         } catch(e) { cloudTTSPlayer.src = audioUrl; cloudTTSPlayer.playbackRate = fP.rate; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load(); cloudTTSPlayer.play().catch(()=>{}); cloudTTSPlayer.onended = () => { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } }; }
         setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = '🔊'; } }, 14000);
