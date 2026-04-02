@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.8.5 (AUDIO TRIGGERS & FX FIX)</title> 
+    <title>CAMARA OBR PRO v6.9.5 (REMOTE SPEECH & AUDIO FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -123,11 +123,16 @@
         #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; transition: transform 0.3s, opacity 0.3s; }
         #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 
-        /* Custom Scrollbar for Modal Body to make it clean on Mobile con Neon Rojo */
+        /* Custom Scrollbar for Modal Body */
+        .custom-scrollbar, .custom-scrollbar * { touch-action: pan-y !important; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(20,0,0,0.6); border-radius: 4px; border: 1px solid rgba(255,0,0,0.2); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,0,0,0.6); border-radius: 4px; border: 1px solid #ff3333; box-shadow: inset 0 0 5px rgba(255,0,0,0.8); }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff0000; }
+
+        /* Mic Sender Utils */
+        .pulsing { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.5; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.5; transform: scale(0.95); } }
     </style>
 </head>
 <body>
@@ -187,6 +192,7 @@
         </div>
         
         <div id="telemetry-container">
+            <div class="stat-row"><span id="mic-remote-status" class="text-red-500 font-bold">MIC REM: OFFLINE</span></div>
             <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()" style="display:none;">
                 <span>AUDIO SCAN</span><i class="fas fa-microphone text-[10px]"></i>
             </div>
@@ -213,12 +219,35 @@
     </div>
 
     <div id="loading">
-        <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
-        <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-        <p class="text-xs font-mono text-gray-500 mb-8">v6.8.5 (Audio Triggers & FX Fixes)</p>
-        <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden"><div id="progress-bar"></div></div>
-        <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
-        <button class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
+        <div id="main-startup-ui" class="flex flex-col items-center justify-center w-full h-full">
+            <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
+            <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
+            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.5 (Remote Speech & Audio Fix)</p>
+            <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden" id="progress-container"><div id="progress-bar"></div></div>
+            <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
+            
+            <button id="main-cam-btn" class="mt-8 px-8 py-3 bg-red-900/20 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-900/50 transition load-btn" onclick="initApp()">INICIAR CÁMARA</button>
+            <button class="mt-4 px-6 py-2 bg-transparent border border-gray-700 text-gray-400 font-mono text-xs rounded hover:bg-gray-800 transition load-btn" onclick="initMicSenderMode()">🎤 MODO MIC SENDER</button>
+        </div>
+
+        <div id="mic-sender-ui" style="display:none;" class="flex flex-col items-center justify-center w-full h-full max-w-sm px-6">
+            <h2 class="text-2xl font-bold font-orbitron text-red-500 mb-2">OBR MIC SENDER</h2>
+            <p class="text-xs text-gray-500 mb-8 text-center font-mono">Transmisión de audio & voz al dispositivo principal</p>
+            
+            <div class="w-full bg-black/50 border border-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center">
+                <div class="w-full mb-6 text-left">
+                    <label class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 block font-mono">ID de Estudio (Receptor)</label>
+                    <input type="text" id="sender-studio-id" placeholder="EJ: local" class="w-full bg-black border border-gray-700 text-white p-3 text-center uppercase rounded outline-none focus:border-red-500 font-mono">
+                </div>
+
+                <div id="mic-sender-status" class="text-gray-400 font-bold tracking-widest mb-6 font-mono text-center">ESPERANDO...</div>
+                
+                <button id="btn-start-sender" onclick="startRemoteMic()" class="w-full px-8 py-4 bg-red-900/30 border border-red-600 text-red-500 font-bold font-orbitron rounded hover:bg-red-700 hover:text-white transition-colors text-lg">CONECTAR MIC</button>
+                <button id="btn-stop-sender" onclick="stopRemoteMic()" class="w-full px-8 py-3 bg-gray-800 text-gray-400 font-bold font-orbitron rounded hover:text-white transition-colors hidden">DETENER TRANSMISIÓN</button>
+            </div>
+
+            <button onclick="location.reload()" class="text-xs text-gray-500 underline mt-8 font-mono">Volver a Cámara</button>
+        </div>
 
         <div id="cam-error-panel" style="display:none; margin-top:20px; width:300px; border:1px solid #ff3333; border-radius:6px; background:rgba(30,0,0,0.95); padding:16px; text-align:center;">
             <div style="font-size:2rem; margin-bottom:8px;">🚫</div>
@@ -400,19 +429,14 @@ self.addEventListener('fetch', e => {
     let micGainNode = null; 
     let audioAnalyser = null;
     let audioDataArray = null;
-    let speechRec = null;
     let mixDestination = null;
 
-    let speechActive = false;    
-    let speechShouldRun = false; 
-    let speechStarting = false;  
-
-    let lastSpokenText = "";
-    let speechTimer = null;
     let isSpookySpeaking = false; 
     let isTtsPlaying = false; 
     let lastQuestionTime = 0; 
     let lastEvpTime = 0; 
+    let speechTimer = null;
+    let lastSpokenText = "";
     
     let lastValidAudioTime = Date.now();
     let lastReconnectTime = 0; 
@@ -420,11 +444,237 @@ self.addEventListener('fetch', e => {
     let ambientNoiseLevel = 0.01; 
     let cumulativeEVPEnergy = 0; 
 
-    // BLOQUEO DE ANUNCIOS
+    // BLOQUEO DE ANUNCIOS Y MEMORIA
     window._isAnnouncement = false;
-
-    // ── MEMORIA TEMPORAL DE CONTEXTO (EVP) ──────────────
     let evpContextMemory = []; 
+    
+    // RECEPTOR REMOTO DE MICRÓFONO
+    window.remoteMicStream = null;
+    let remoteMicPeer = null;
+    let remoteDataConn = null;
+
+    function initRemoteMicReceiver() {
+        const myId = 'obr-cam-main-' + (state.studioId || 'local');
+        if (remoteMicPeer) remoteMicPeer.destroy();
+        
+        remoteMicPeer = new Peer(myId, PEER_CONFIG);
+        remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo:', id));
+        
+        // ── NUEVO: RECIBIR TEXTO DE VOZ DEL SENDER ──
+        remoteMicPeer.on('connection', (conn) => {
+            remoteDataConn = conn;
+            conn.on('data', (data) => {
+                if (data.type === 'remote-speech' && state.isAudioScan && !window._isAnnouncement && !isTtsPlaying && !isSpookySpeaking) {
+                    const txt = normalizarTexto(data.text);
+                    if (txt) {
+                        window._liveUserText = txt.toUpperCase();
+                        window._liveUserLastUpdate = Date.now();
+                    }
+                    if (data.isFinal && txt.trim()) {
+                        procesarComandoEVP(txt);
+                    }
+                }
+            });
+        });
+
+        remoteMicPeer.on('call', (call) => {
+            call.answer(); // Solo responde
+            call.on('stream', (remoteStream) => {
+                window.remoteMicStream = remoteStream;
+                
+                // ── FIX: EVITAR QUE LA GRÁFICA SE QUEDE PEGADA ──
+                // Enlazar el stream WebRTC a un audio tag oculto fuerza al navegador a decodificar los paquetes continuamente.
+                let hiddenAudio = document.getElementById('hidden-webrtc-audio');
+                if (!hiddenAudio) {
+                    hiddenAudio = document.createElement('audio');
+                    hiddenAudio.id = 'hidden-webrtc-audio';
+                    hiddenAudio.autoplay = true;
+                    hiddenAudio.playsInline = true;
+                    hiddenAudio.muted = true; // Muteado para que no se escuche doble
+                    document.body.appendChild(hiddenAudio);
+                }
+                hiddenAudio.srcObject = remoteStream;
+
+                const statusEl = document.getElementById('mic-remote-status');
+                if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
+                showToast("MICRÓFONO REMOTO ENLAZADO", false);
+                
+                if (audioEngineInitialized && state.isAudioScan) reconnectAudioNode();
+            });
+            call.on('close', () => {
+                window.remoteMicStream = null;
+                const statusEl = document.getElementById('mic-remote-status');
+                if(statusEl) { statusEl.innerText = "MIC REM: OFFLINE"; statusEl.className = "text-red-500 font-bold"; }
+                showToast("MICRÓFONO REMOTO DESCONECTADO", true);
+                if (state.isAudioScan) toggleAudioScanner(); 
+            });
+        });
+        
+        remoteMicPeer.on('error', (err) => { console.warn("Error Receptor Mic:", err); });
+    }
+
+    // ── LÓGICA DEL TRANSMISOR (MIC SENDER) ──
+    let senderPeer = null;
+    let senderLocalStream = null;
+    let senderCurrentCall = null;
+    let senderReconnectTimer = null;
+    let senderDataConn = null;
+    let senderSpeechRec = null;
+
+    function initMicSenderMode() {
+        document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
+        document.getElementById('progress-container').style.display = 'none';
+        document.getElementById('progress-text').style.display = 'none';
+        
+        document.getElementById('main-startup-ui').style.display = 'none';
+        document.getElementById('mic-sender-ui').style.display = 'flex';
+        
+        const savedId = localStorage.getItem('obr_studio_id') || 'local';
+        document.getElementById('sender-studio-id').value = savedId;
+    }
+
+    function updateSenderUI(state) {
+        const statusEl = document.getElementById('mic-sender-status');
+        const btnStart = document.getElementById('btn-start-sender');
+        const btnStop = document.getElementById('btn-stop-sender');
+
+        if (state === 'online') {
+            statusEl.innerText = "EN LÍNEA (TRANSMITIENDO)";
+            statusEl.className = "text-green-500 font-bold tracking-widest pulsing mb-6 font-mono text-center";
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'block';
+        } else if (state === 'connecting') {
+            statusEl.innerText = "CONECTANDO...";
+            statusEl.className = "text-yellow-500 font-bold tracking-widest animate-pulse mb-6 font-mono text-center";
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'block';
+        } else if (state === 'error') {
+            statusEl.innerText = "ERROR / DESCONECTADO";
+            statusEl.className = "text-red-500 font-bold tracking-widest mb-6 font-mono text-center";
+            btnStart.style.display = 'block';
+            btnStop.style.display = 'none';
+        } else {
+            statusEl.innerText = "ESPERANDO...";
+            statusEl.className = "text-gray-400 font-bold tracking-widest mb-6 font-mono text-center";
+            btnStart.style.display = 'block';
+            btnStop.style.display = 'none';
+        }
+    }
+
+    function startSenderSpeech() {
+        if (!('webkitSpeechRecognition' in window)) {
+            console.warn("Speech recognition no soportado en este navegador.");
+            return;
+        }
+        if (senderSpeechRec) {
+            try { senderSpeechRec.stop(); } catch(e){}
+        }
+        senderSpeechRec = new webkitSpeechRecognition();
+        senderSpeechRec.continuous = true;
+        senderSpeechRec.interimResults = true;
+        senderSpeechRec.lang = 'es-MX';
+
+        senderSpeechRec.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                else interimTranscript += event.results[i][0].transcript;
+            }
+            const text = interimTranscript || finalTranscript;
+            if (text.trim() && senderDataConn && senderDataConn.open) {
+                senderDataConn.send({ type: 'remote-speech', text: text, isFinal: !!finalTranscript });
+            }
+        };
+
+        senderSpeechRec.onend = () => {
+            if (senderLocalStream) {
+                setTimeout(() => {
+                    try { senderSpeechRec.start(); } catch(e){}
+                }, 500);
+            }
+        };
+
+        try { senderSpeechRec.start(); } catch(e){}
+    }
+
+    function stopSenderSpeech() {
+        if (senderSpeechRec) {
+            senderSpeechRec.onend = null;
+            try { senderSpeechRec.stop(); } catch(e){}
+            senderSpeechRec = null;
+        }
+    }
+
+    async function startRemoteMic() {
+        const studioId = document.getElementById('sender-studio-id').value.trim() || 'local';
+        localStorage.setItem('obr_studio_id', studioId);
+        const targetId = 'obr-cam-main-' + studioId;
+        
+        updateSenderUI('connecting');
+        clearTimeout(senderReconnectTimer);
+
+        try {
+            if (!senderLocalStream) {
+                senderLocalStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+                    video: false
+                });
+            }
+
+            if (senderPeer) senderPeer.destroy();
+            senderPeer = new Peer(null, PEER_CONFIG);
+            
+            senderPeer.on('open', () => {
+                senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
+                senderDataConn = senderPeer.connect(targetId);
+                
+                senderDataConn.on('open', () => {
+                    console.log("Canal de datos (para voz) abierto");
+                });
+                
+                senderCurrentCall.on('error', (err) => {
+                    console.error("Call error:", err);
+                    updateSenderUI('error');
+                    senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+                });
+
+                senderCurrentCall.on('close', () => {
+                    updateSenderUI('error');
+                    senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+                });
+
+                startSenderSpeech();
+                updateSenderUI('online');
+            });
+
+            senderPeer.on('error', (err) => {
+                console.error("Peer error:", err);
+                updateSenderUI('error');
+                senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+            });
+
+            senderPeer.on('disconnected', () => {
+                senderPeer.reconnect();
+            });
+
+        } catch (err) {
+            console.error("Mic access denied:", err);
+            alert("No se pudo acceder al micrófono.");
+            updateSenderUI('error');
+        }
+    }
+
+    function stopRemoteMic() {
+        clearTimeout(senderReconnectTimer);
+        stopSenderSpeech();
+        if (senderDataConn) { senderDataConn.close(); senderDataConn = null; }
+        if (senderCurrentCall) senderCurrentCall.close();
+        if (senderPeer) { senderPeer.destroy(); senderPeer = null; }
+        if (senderLocalStream) { senderLocalStream.getTracks().forEach(t => t.stop()); senderLocalStream = null; }
+        updateSenderUI('offline');
+    }
+
     const evpFrasesAmbiguaMemoria = [
         "te escuché antes...", "aún sigo aquí", "recordé lo que dijiste...", 
         "tu pregunta...", "hace un momento...", "no lo sé", 
@@ -827,7 +1077,7 @@ const paranormalQuestions = [
 
     function ttsNoDisponible(origen) {
         showToast(`TTS NO DISPONIBLE — ${origen || 'SIN CRÉDITOS'}`, true);
-        if (state.isAudioScan) { state.isAudioScan = false; document.getElementById('mic-btn')?.classList.remove('active'); document.getElementById('btn-audio-menu')?.classList.remove('active-state'); stopSweepAudio(); safeStopSpeechRec(); simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01; isTtsPlaying = false; isSpookySpeaking = false; clearTimeout(_ttsWatchdog); if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } }
+        if (state.isAudioScan) { state.isAudioScan = false; document.getElementById('mic-btn')?.classList.remove('active'); document.getElementById('btn-audio-menu')?.classList.remove('active-state'); stopSweepAudio(); simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01; isTtsPlaying = false; isSpookySpeaking = false; clearTimeout(_ttsWatchdog); if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } }
         if (isPareidoliaActive) { isPareidoliaActive = false; state.isPareidolia = false; document.getElementById('btn-ia')?.classList.remove('active-state'); clearTimeout(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); }
         updateTTSStatusUI();
     }
@@ -847,8 +1097,8 @@ const paranormalQuestions = [
         } catch(e) { return null; }
     }
 
-    async function speakAnnouncement(text) {
-        if (!text || !state.isAudioScan && !isPareidoliaActive) return;
+    async function speakAnnouncement(text, force = false) {
+        if (!text || (!state.isAudioScan && !isPareidoliaActive && !force)) return;
         await initAudioEngine();
 
         const encoded = encodeURIComponent(text.substring(0, 200));
@@ -858,22 +1108,21 @@ const paranormalQuestions = [
         if (!blobUrl) return; 
 
         return new Promise(resolve => {
-            window._isAnnouncement = true; isTtsPlaying = true; safeStopSpeechRec();
+            window._isAnnouncement = true; isTtsPlaying = true; 
             cloudTTSPlayer.src = blobUrl; cloudTTSPlayer.playbackRate = 1.0; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
             cloudTTSPlayer.play().catch(() => {});
-            cloudTTSPlayer.addEventListener('ended', () => { isTtsPlaying = false; window._isAnnouncement = false; safeStartSpeechRec(); try { URL.revokeObjectURL(blobUrl); } catch(e) {} resolve(); }, { once: true });
+            cloudTTSPlayer.addEventListener('ended', () => { isTtsPlaying = false; window._isAnnouncement = false; try { URL.revokeObjectURL(blobUrl); } catch(e) {} resolve(); }, { once: true });
         });
     }
 
     async function speakText(text) {
         if (!text) return;
         isTtsPlaying = true; isSpookySpeaking = false;
-        safeStopSpeechRec(); 
         
         clearTimeout(_ttsWatchdog); _ttsWatchdog = setTimeout(() => { _resetTtsFlags(); }, 22000);
         await initAudioEngine();
 
-        const safeText = text.replace(/[*_#]/g, '').trim(); if (!safeText) { isTtsPlaying = false; safeStartSpeechRec(); return; }
+        const safeText = text.replace(/[*_#]/g, '').trim(); if (!safeText) { isTtsPlaying = false; return; }
 
         let audioUrl = null;
         if (ttsMode !== 'elevenlabs' && voicerssRemaining > 0) { usingFallbackTTS = true; audioUrl = await getVoiceRSSAudio(safeText); }
@@ -892,14 +1141,14 @@ const paranormalQuestions = [
                 await _ensureContextRunning();
                 const src3 = await playBlobWithFilters(rawBuf3, 0.94 + Math.random() * 0.03, 'iavision', 'none');
                 src3.start(0);
-                src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); safeStartSpeechRec(); try { URL.revokeObjectURL(audioUrl); } catch(e){} };
+                src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); try { URL.revokeObjectURL(audioUrl); } catch(e){} };
                 return;
             } catch(e) {}
         }
 
         cloudTTSPlayer.src = audioUrl; cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
-        try { await cloudTTSPlayer.play(); } catch(err) { isTtsPlaying = false; safeStartSpeechRec(); return; }
-        cloudTTSPlayer.addEventListener('ended', () => { clearTimeout(_ttsWatchdog); isTtsPlaying = false; lastEvpTime = Date.now(); safeStartSpeechRec(); }, { once: true });
+        try { await cloudTTSPlayer.play(); } catch(err) { isTtsPlaying = false; return; }
+        cloudTTSPlayer.addEventListener('ended', () => { clearTimeout(_ttsWatchdog); isTtsPlaying = false; lastEvpTime = Date.now(); }, { once: true });
     }
 
     let _activeBufSrc = null; 
@@ -907,13 +1156,11 @@ const paranormalQuestions = [
     function _resetTtsFlags() {
         isTtsPlaying = false; isSpookySpeaking = false; lastSpokenText = ""; clearTimeout(speechTimer); clearTimeout(_ttsWatchdog); _ttsWatchdog = null; lastEvpTime = Date.now() - 5000;
         if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
-        safeStartSpeechRec();
     }
 
     async function speakSpooky(text) {
         if (!text) return;
         isTtsPlaying = true; isSpookySpeaking = true;
-        safeStopSpeechRec(); 
 
         clearTimeout(_ttsWatchdog); _ttsWatchdog = setTimeout(() => { _resetTtsFlags(); }, 22000);
         const safeText = text.substring(0, 120); const randomVoice = getRandomVoice();
@@ -936,7 +1183,7 @@ const paranormalQuestions = [
             
             const effectRoll = Math.random();
             let effectType = 'none'; 
-            if (effectRoll < 0.60) effectType = 'reverb'; 
+            if (effectRoll < 0.45) effectType = 'reverb'; 
             else if (effectRoll < 0.90) effectType = 'echo'; 
             
             await _ensureContextRunning();
@@ -952,11 +1199,10 @@ const paranormalQuestions = [
                 isSpookySpeaking = false; 
                 lastEvpTime = Date.now(); 
                 playResponseEnd(); 
-                safeStartSpeechRec(); 
                 try { URL.revokeObjectURL(blobUrl); } catch(e){} 
             };
         } catch(err) {
-            lastSpokenText = ""; isTtsPlaying = false; isSpookySpeaking = false; lastEvpTime = Date.now(); safeStartSpeechRec();
+            lastSpokenText = ""; isTtsPlaying = false; isSpookySpeaking = false; lastEvpTime = Date.now(); 
         }
     }
 
@@ -1035,9 +1281,9 @@ const paranormalQuestions = [
 
     function stopLocalMedia() { const overlay = document.getElementById('local-media-overlay'), video = document.getElementById('local-video-player'); overlay.classList.remove('active'); setTimeout(() => { video.pause(); video.src = ""; }, 500); }
 
-    async function requestWakeLock() { if ('wakeLock' in navigator) try { await navigator.wakeLock.request('screen'); } catch (err) {} }
-
-    window.addEventListener('beforeunload', () => { if (videoStream) videoStream.getTracks().forEach(track => track.stop()); if (audioStream) audioStream.getTracks().forEach(track => track.stop()); });
+    window.addEventListener('beforeunload', () => { 
+        if (videoStream) videoStream.getTracks().forEach(track => track.stop()); 
+    });
 
     document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState === 'visible') {
@@ -1053,6 +1299,8 @@ const paranormalQuestions = [
         }
     });
 
+    async function requestWakeLock() { if ('wakeLock' in navigator) try { await navigator.wakeLock.request('screen'); } catch (err) {} }
+
     let isRestartingCamera = false;
 
     async function restartCamera() {
@@ -1067,8 +1315,7 @@ const paranormalQuestions = [
             });
             
             const newVideoTrack = stream.getVideoTracks()[0];
-            const currentAudioTracks = audioStream ? audioStream.getAudioTracks() : [];
-            videoStream = new MediaStream([newVideoTrack, ...currentAudioTracks]);
+            videoStream = new MediaStream([newVideoTrack]);
             
             el.video.srcObject = videoStream; 
             await el.video.play();
@@ -1079,21 +1326,22 @@ const paranormalQuestions = [
 
     window.onload = () => { 
         document.getElementById('api-key-internal').value = state.apiKey; document.getElementById('mtx-host').value = state.studioId; 
-        const btn = document.querySelector('.load-btn');
+        const btn = document.getElementById('main-cam-btn');
         const hasPerm = localStorage.getItem("camPermission") === "granted" || sessionStorage.getItem("camPermission") === "granted";
         if (btn && hasPerm) { btn.innerText = "▶ REANUDAR CÁMARA"; btn.style.borderColor = "#00ff41"; btn.style.color = "#00ff41"; }
     };
 
     function showCamError(title, msg, steps) {
-        const panel = document.getElementById('cam-error-panel'); const btn = document.querySelector('.load-btn');
-        if (btn) btn.style.display = 'none'; if (!panel) { alert(msg); return; }
+        const panel = document.getElementById('cam-error-panel'); 
+        document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none'); 
+        if (!panel) { alert(msg); return; }
         document.getElementById('cam-error-title').innerText = title; document.getElementById('cam-error-msg').innerText = msg;
         const stepsEl = document.getElementById('cam-error-steps');
         if (steps) { stepsEl.innerHTML = steps; stepsEl.style.display = 'block'; } else stepsEl.style.display = 'none';
         panel.style.display = 'block'; updateProgress(0, '');
     }
 
-    function retryCam() { document.getElementById('cam-error-panel').style.display = 'none'; const btn = document.querySelector('.load-btn'); if (btn) btn.style.display = ''; updateProgress(0, 'PRESIONA INICIAR CÁMARA'); }
+    function retryCam() { document.getElementById('cam-error-panel').style.display = 'none'; document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'block'); updateProgress(0, 'PRESIONA INICIAR CÁMARA'); }
 
     async function reconnectAudioNode() {
         const now = Date.now();
@@ -1106,31 +1354,13 @@ const paranormalQuestions = [
                     audioCtx.resume().catch(()=>{});
                 }
                 
-                let needNewStream = false;
-                if (!audioStream) {
-                    needNewStream = true;
-                } else {
-                    const track = audioStream.getAudioTracks()[0];
-                    if (!track || track.readyState === 'ended' || track.muted) {
-                        needNewStream = true;
+                if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
+                    console.warn("[Audio Watchdog] Stream remoto perdido.");
+                    if (state.isAudioScan) {
+                        showToast("SEÑAL DE MICRÓFONO REMOTA PERDIDA", true);
+                        toggleAudioScanner(); 
                     }
-                }
-
-                if (needNewStream) {
-                    console.warn("[Audio Watchdog] Track original muerto/mudo. Regenerando sin recargar...");
-                    try {
-                        const newStream = await navigator.mediaDevices.getUserMedia({ 
-                            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
-                        });
-                        audioStream = newStream;
-                        if (videoStream) {
-                            videoStream.getAudioTracks().forEach(t => { videoStream.removeTrack(t); t.stop(); });
-                            videoStream.addTrack(audioStream.getAudioTracks()[0]);
-                        }
-                    } catch(err) {
-                        console.error("[Audio Watchdog] Falló getUserMedia background:", err);
-                        return; 
-                    }
+                    return; 
                 }
                 
                 if (micSource) {
@@ -1138,10 +1368,9 @@ const paranormalQuestions = [
                     micSource = null;
                 }
                 
-                micSource = audioCtx.createMediaStreamSource(audioStream);
+                micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
                 micSource.connect(micGainNode);
-                
-                console.log("[Audio Watchdog] Reconstrucción exitosa del Source al Gain.");
+                console.log("[Audio Watchdog] Reconstrucción de stream remoto exitosa.");
             } catch(e) {
                 console.warn("[Audio Watchdog] Falló la reconexión:", e);
             }
@@ -1158,7 +1387,7 @@ const paranormalQuestions = [
 
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!audioCtx) {
-            audioCtx = new AC({ latencyHint: 'interactive' });
+            audioCtx = new AC({ latencyHint: 'playback' }); 
             evpAudioCtx = audioCtx;
         }
 
@@ -1170,18 +1399,17 @@ const paranormalQuestions = [
 
         if (audioCtx.state === 'suspended' && !document.hidden) await audioCtx.resume().catch(()=>{});
 
-        if (!audioStream) {
-            try {
-                audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-                });
-            } catch(e) { console.warn("Mic access denied:", e); return; }
+        if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
+            console.error("[Audio] Micrófono remoto no detectado.");
+            showToast("NO HAY MIC REMOTO CONECTADO", true);
+            if (state.isAudioScan) toggleAudioScanner();
+            return;
         }
 
         try {
             mixDestination = audioCtx.createMediaStreamDestination();
 
-            micSource = audioCtx.createMediaStreamSource(audioStream);
+            micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
             micGainNode = audioCtx.createGain();
             micGainNode.gain.value = 2.5; 
 
@@ -1206,27 +1434,27 @@ const paranormalQuestions = [
 
             if (!ttsSource) initTTSPipeline();
 
-            const audioTrack = audioStream.getAudioTracks()[0];
+            const audioTrack = window.remoteMicStream.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.onunmute = () => { reconnectAudioNode(); };
             }
 
-            _initSpeechRecOnly();
             audioEngineInitialized = true;
-            console.log("[Audio] Motor de audio unificado inicializado.");
+            console.log("[Audio] Motor de audio remoto inicializado.");
         } catch(e) { console.warn("Error en initAudioEngine:", e); }
     }
 
     async function initApp() {
-        unlockAudioContext(); const btn = document.querySelector('.load-btn'); if (btn) btn.style.display = 'none';
-        document.getElementById('cam-error-panel').style.display = 'none'; requestWakeLock(); updateProgress(10, "SOLICITANDO PERMISO DE CÁMARA...");
-
-        const safeAudioConfig = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+        unlockAudioContext(); 
+        document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
+        document.getElementById('cam-error-panel').style.display = 'none'; 
+        requestWakeLock(); 
+        updateProgress(10, "SOLICITANDO PERMISO DE CÁMARA...");
 
         const constraintSets = [
-            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
-            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
-            { audio: true, video: { facingMode: { ideal: 'environment' } } }
+            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
+            { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
+            { audio: false, video: { facingMode: { ideal: 'environment' } } }
         ];
 
         let stream = null; let lastError = null;
@@ -1236,13 +1464,17 @@ const paranormalQuestions = [
         }
 
         if (!stream) {
-            const e = lastError; localStorage.removeItem("camPermission"); if (btn) { btn.innerText = "INICIAR CÁMARA"; btn.style.borderColor = ""; btn.style.color = ""; }
+            const e = lastError; localStorage.removeItem("camPermission"); 
+            document.querySelectorAll('.load-btn').forEach(b => {
+                b.style.display = 'block'; 
+                if(b.id === 'main-cam-btn') { b.innerText = "INICIAR CÁMARA"; b.style.borderColor = ""; b.style.color = ""; }
+            });
             if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') showCamError('PERMISO DENEGADO', 'El navegador bloqueó el acceso a la cámara. Revisa los permisos.', null);
             else showCamError('ERROR DE CÁMARA', `${e.name}: ${e.message}`, null); return;
         }
 
         localStorage.setItem("camPermission", "granted"); try { sessionStorage.setItem("camPermission", "granted"); } catch(e){}
-        videoStream = stream; audioStream = stream; el.video.srcObject = stream; el.video.play().then(() => { fixCanvasSize(); }).catch(()=>{});
+        videoStream = stream; el.video.srcObject = stream; el.video.play().then(() => { fixCanvasSize(); }).catch(()=>{});
         
         updateProgress(30, "PRECARGANDO MEDIOS LOCALES..."); await preloadLocalAssets();
         updateProgress(50, "CALIBRANDO MOTORES IA...");
@@ -1264,7 +1496,7 @@ const paranormalQuestions = [
             if ('requestVideoFrameCallback' in el.video) el.video.requestVideoFrameCallback(renderLoop); else requestAnimationFrame(renderLoop);
             setInterval(telemetryLoop, 1000); requestAnimationFrame(detectionLoop);
 
-            await initAudioEngine();
+            initRemoteMicReceiver();
         }, 800);
     }
 
@@ -1387,7 +1619,7 @@ const paranormalQuestions = [
             feedback.gain.value = 0.35; 
             
             const echoVolume = audioCtx.createGain();
-            echoVolume.gain.value = 0.3; // 30% echo volume to make it realistic
+            echoVolume.gain.value = 0.3; 
             
             lastNode.connect(delay);
             delay.connect(feedback);
@@ -1437,100 +1669,6 @@ const paranormalQuestions = [
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
-    function safeStartSpeechRec() {
-        if (!speechRec || !state.isAudioScan || isTtsPlaying || isSpookySpeaking) return;
-        speechShouldRun = true;
-        
-        if (!speechActive && !speechStarting) {
-            speechStarting = true; 
-            try { 
-                speechRec.start(); 
-            } catch(e) { 
-                speechStarting = false; 
-                if(e.name === 'InvalidStateError') {
-                    speechActive = true; 
-                }
-            }
-        }
-    }
-
-    function safeStopSpeechRec() {
-        speechShouldRun = false;
-        if (speechRec && (speechActive || speechStarting)) {
-            try { speechRec.abort(); } catch(e) {}
-            speechActive = false;
-            speechStarting = false;
-        }
-    }
-
-    function _initSpeechRecOnly() {
-        if (speechRec) return;
-        if (!('webkitSpeechRecognition' in window)) return;
-        
-        speechRec = new webkitSpeechRecognition();
-        speechRec.continuous     = true;   
-        speechRec.interimResults = true;   
-        speechRec.lang           = 'es-MX';
-
-        speechRec.onstart = () => { 
-            speechStarting = false; 
-            speechActive = true; 
-        };
-
-        speechRec.onerror = (e) => {
-            speechStarting = false; 
-            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                console.warn('[EVP] Permiso SR revocado.');
-                speechShouldRun = false; 
-            }
-        };
-
-        speechRec.onend = () => {
-            speechActive = false;
-            speechStarting = false; 
-            window._liveUserText = ''; 
-            
-            if (speechShouldRun && state.isAudioScan && !isTtsPlaying && !isSpookySpeaking) {
-                setTimeout(() => {
-                    if (speechShouldRun && !speechActive && !speechStarting) {
-                        speechStarting = true; 
-                        try { 
-                            speechRec.start(); 
-                        } catch(e) { 
-                            speechStarting = false; 
-                        }
-                    }
-                }, 400); 
-            }
-        };
-
-        speechRec.onresult = (event) => {
-            if (!state.isAudioScan || window._isAnnouncement) return;
-
-            let finalTranscript = '';
-            let interimTranscript = '';
-
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-
-            const liveText = interimTranscript || finalTranscript;
-            if (liveText.trim()) {
-                window._liveUserText = normalizarTexto(liveText);
-                window._liveUserLastUpdate = Date.now();
-            }
-
-            if (finalTranscript.trim()) {
-                const txt = normalizarTexto(finalTranscript);
-                procesarComandoEVP(txt);
-            }
-        };
-    }
-
     function procesarComandoEVP(txt) {
         if (!txt) return;
         
@@ -1574,6 +1712,12 @@ const paranormalQuestions = [
         const btnMenu = document.getElementById('btn-audio-menu');
         
         if (state.isAudioScan) {
+            if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
+                state.isAudioScan = false;
+                showToast("NO HAY MIC REMOTO CONECTADO", true);
+                return;
+            }
+
             const elOk  = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
             const vrOk  = voicerssRemaining > 0;
             if (!elOk && !vrOk) { state.isAudioScan = false; ttsNoDisponible('sin créditos para activar AUDIO SCAN'); return; }
@@ -1595,7 +1739,6 @@ const paranormalQuestions = [
                 setTimeout(() => {
                     lastReconnectTime = 0;
                     reconnectAudioNode();
-                    safeStartSpeechRec();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
                 }, 150);
@@ -1604,7 +1747,6 @@ const paranormalQuestions = [
                 setTimeout(() => {
                     lastReconnectTime = 0;
                     reconnectAudioNode();
-                    safeStartSpeechRec();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
                 }, 150);
@@ -1612,7 +1754,6 @@ const paranormalQuestions = [
         } else {
             if (btn) btn.classList.remove('active'); if (btnMenu) btnMenu.classList.remove('active-state');
             stopSweepAudio();
-            safeStopSpeechRec();
             
             clearTimeout(_ttsWatchdog);
             if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
@@ -1626,7 +1767,7 @@ const paranormalQuestions = [
             evpContextMemory = []; 
             
             window._isAnnouncement = true; 
-            speakAnnouncement('ESPIRIT BOX DESACTIVADO').then(() => {
+            speakAnnouncement('ESPIRIT BOX DESACTIVADO', true).then(() => {
                 window._isAnnouncement = false;
             }).catch(() => {
                 window._isAnnouncement = false;
@@ -2353,7 +2494,7 @@ const paranormalQuestions = [
         } else {
             if(btn) btn.classList.remove('active-state'); animState.hudTarget = 1.0; animState.aiTarget = 0.0; clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
             if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } if (window.speechSynthesis) window.speechSynthesis.cancel();
-            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA').catch(() => {});
+            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA', true).catch(() => {});
         }
         showMenus(); sendScanDataToStudio();
     }
@@ -2454,7 +2595,7 @@ const paranormalQuestions = [
     
     window.resetTTSFilters = function() { ['obr_tts_f_rate', 'obr_tts_f_pitch'].forEach(k => localStorage.removeItem(k)); loadTTSFilterPanel(); showToast('FILTROS RESETEADOS — USANDO CÓDIGO BASE'); };
 
-    window.initApp          = initApp; window.retryCam         = retryCam; window.openSettings     = openSettings; window.saveSettings     = saveSettings; window.setFilter        = setFilter; window.setTTSMode       = setTTSMode; window.togglePareidolia = togglePareidolia; window.toggleAudioScanner = toggleAudioScanner; window.toggleCleanUI    = toggleCleanUI; window.validateAndSaveKey = validateAndSaveKey; window.openConnect      = openConnect; window.startHybridTransmission = startHybridTransmission; window.resetZoom        = resetZoom; window.playLocalMedia   = playLocalMedia; window.stopLocalMedia   = stopLocalMedia; window.showCamError     = showCamError;
+    window.initApp          = initApp; window.retryCam         = retryCam; window.openSettings     = openSettings; window.saveSettings     = saveSettings; window.setFilter        = setFilter; window.setTTSMode       = setTTSMode; window.togglePareidolia = togglePareidolia; window.toggleAudioScanner = toggleAudioScanner; window.toggleCleanUI    = toggleCleanUI; window.validateAndSaveKey = validateAndSaveKey; window.openConnect      = openConnect; window.startHybridTransmission = startHybridTransmission; window.resetZoom        = resetZoom; window.playLocalMedia   = playLocalMedia; window.stopLocalMedia   = stopLocalMedia; window.showCamError     = showCamError; window.initMicSenderMode = initMicSenderMode; window.startRemoteMic = startRemoteMic; window.stopRemoteMic = stopRemoteMic;
 </script>
 </body>
 </html>
