@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.9.5 (REMOTE SPEECH & AUDIO FIX)</title> 
+    <title>CAMARA OBR PRO v6.9.6 (REMOTE SPEECH & AUDIO FIX)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -129,6 +129,9 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(20,0,0,0.6); border-radius: 4px; border: 1px solid rgba(255,0,0,0.2); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,0,0,0.6); border-radius: 4px; border: 1px solid #ff3333; box-shadow: inset 0 0 5px rgba(255,0,0,0.8); }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff0000; }
+        
+        /* Modal Inputs Selectables */
+        .modal-bg input { -webkit-user-select: auto !important; user-select: auto !important; }
 
         /* Mic Sender Utils */
         .pulsing { animation: pulse 1.5s infinite; }
@@ -192,7 +195,7 @@
         </div>
         
         <div id="telemetry-container">
-            <div class="stat-row"><span id="mic-remote-status" class="text-red-500 font-bold">MIC REM: OFFLINE</span></div>
+            <div class="stat-row"><span id="mic-remote-status" class="text-gray-500 font-bold">MIC REM: OFFLINE</span></div>
             <div class="stat-row mic-toggle" id="mic-btn" onclick="toggleAudioScanner()" style="display:none;">
                 <span>AUDIO SCAN</span><i class="fas fa-microphone text-[10px]"></i>
             </div>
@@ -222,7 +225,7 @@
         <div id="main-startup-ui" class="flex flex-col items-center justify-center w-full h-full">
             <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
             <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.5 (Remote Speech & Audio Fix)</p>
+            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.6 (Audio Triggers & Memory Restored)</p>
             <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden" id="progress-container"><div id="progress-bar"></div></div>
             <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
             
@@ -235,9 +238,13 @@
             <p class="text-xs text-gray-500 mb-8 text-center font-mono">Transmisión de audio & voz al dispositivo principal</p>
             
             <div class="w-full bg-black/50 border border-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center">
-                <div class="w-full mb-6 text-left">
-                    <label class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 block font-mono">ID de Estudio (Receptor)</label>
+                <div class="w-full mb-3 text-left">
+                    <label class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 block font-mono">ID de Estudio</label>
                     <input type="text" id="sender-studio-id" placeholder="EJ: local" class="w-full bg-black border border-gray-700 text-white p-3 text-center uppercase rounded outline-none focus:border-red-500 font-mono">
+                </div>
+                <div class="w-full mb-6 text-left">
+                    <label class="text-[10px] text-gray-400 uppercase tracking-widest mb-1 block font-mono">Cámara Destino</label>
+                    <input type="text" id="sender-cam-name" placeholder="EJ: cam1" class="w-full bg-black border border-gray-700 text-white p-3 text-center uppercase rounded outline-none focus:border-red-500 font-mono">
                 </div>
 
                 <div id="mic-sender-status" class="text-gray-400 font-bold tracking-widest mb-6 font-mono text-center">ESPERANDO...</div>
@@ -448,19 +455,118 @@ self.addEventListener('fetch', e => {
     window._isAnnouncement = false;
     let evpContextMemory = []; 
     
-    // RECEPTOR REMOTO DE MICRÓFONO
+    // MICRÓFONOS ENRUTADOS Y RECONOCIMIENTO LOCAL
     window.remoteMicStream = null;
+    window.localMicStream = null;
     let remoteMicPeer = null;
     let remoteDataConn = null;
+    let speechRec = null;
+
+    function safeStartSpeechRec() {
+        if (!state.isAudioScan) return;
+        const usingLocalMic = (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0);
+        if (!usingLocalMic) return;
+
+        if (!('webkitSpeechRecognition' in window)) return;
+        
+        if (speechRec) return; // Evita reinicios innecesarios
+        
+        speechRec = new webkitSpeechRecognition();
+        speechRec.continuous = true;
+        speechRec.interimResults = true;
+        speechRec.lang = 'es-MX';
+
+        speechRec.onresult = (event) => {
+            if (!state.isAudioScan) return;
+            
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                else interimTranscript += event.results[i][0].transcript;
+            }
+            const text = interimTranscript || finalTranscript;
+            const txt = normalizarTexto(text);
+            
+            if (txt) {
+                window._liveUserText = txt.toUpperCase();
+                window._liveUserLastUpdate = Date.now();
+            }
+            
+            if (event.results[event.results.length-1].isFinal && txt.trim()) {
+                procesarComandoEVP(txt);
+            }
+        };
+
+        speechRec.onend = () => {
+            speechRec = null;
+            if (state.isAudioScan) {
+                setTimeout(() => { safeStartSpeechRec(); }, 500);
+            }
+        };
+
+        try { speechRec.start(); } catch(e){}
+    }
+
+    function safeStopSpeechRec() {
+        if (speechRec) {
+            speechRec.onend = null;
+            speechRec.onerror = null;
+            speechRec.onresult = null;
+            try { speechRec.stop(); } catch(e){}
+            speechRec = null;
+        }
+    }
+
+    function updateAudioRouting() {
+        if (!audioCtx || !micGainNode) return;
+        
+        if (micSource) {
+            micSource.disconnect();
+            micSource = null;
+        }
+
+        let activeStream = null;
+        
+        if (window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0) {
+            activeStream = window.remoteMicStream;
+            console.log("[Audio Routing] Usando MICRÓFONO REMOTO");
+            const statusEl = document.getElementById('mic-remote-status');
+            if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
+            safeStopSpeechRec();
+        } else if (window.localMicStream && window.localMicStream.getAudioTracks().length > 0) {
+            activeStream = window.localMicStream;
+            console.log("[Audio Routing] Usando MICRÓFONO LOCAL");
+            const statusEl = document.getElementById('mic-remote-status');
+            if(statusEl) { statusEl.innerText = "MIC LOCAL"; statusEl.className = "text-yellow-500 font-bold"; }
+            if (state.isAudioScan) safeStartSpeechRec();
+        }
+
+        if (activeStream) {
+            try {
+                micSource = audioCtx.createMediaStreamSource(activeStream);
+                micSource.connect(micGainNode);
+            } catch(e) {
+                console.error("Error routing audio:", e);
+            }
+        } else {
+            console.warn("[Audio Routing] No hay micrófonos disponibles");
+            const statusEl = document.getElementById('mic-remote-status');
+            if(statusEl) { statusEl.innerText = "MIC: OFFLINE"; statusEl.className = "text-red-500 font-bold"; }
+            safeStopSpeechRec();
+        }
+    }
 
     function initRemoteMicReceiver() {
-        const myId = 'obr-cam-main-' + (state.studioId || 'local');
+        const studioId = (state.studioId || 'local').replace(/[^a-zA-Z0-9-]/g, '-');
+        const camName = (state.cameraName || 'cam1').replace(/[^a-zA-Z0-9-]/g, '-');
+        const myId = `obr-mic-recv-${studioId}-${camName}`;
+        
         if (remoteMicPeer) remoteMicPeer.destroy();
         
         remoteMicPeer = new Peer(myId, PEER_CONFIG);
-        remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo:', id));
+        remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo en canal:', id));
         
-        // ── NUEVO: RECIBIR TEXTO DE VOZ DEL SENDER ──
         remoteMicPeer.on('connection', (conn) => {
             remoteDataConn = conn;
             conn.on('data', (data) => {
@@ -478,35 +584,28 @@ self.addEventListener('fetch', e => {
         });
 
         remoteMicPeer.on('call', (call) => {
-            call.answer(); // Solo responde
+            call.answer(); 
             call.on('stream', (remoteStream) => {
                 window.remoteMicStream = remoteStream;
                 
-                // ── FIX: EVITAR QUE LA GRÁFICA SE QUEDE PEGADA ──
-                // Enlazar el stream WebRTC a un audio tag oculto fuerza al navegador a decodificar los paquetes continuamente.
                 let hiddenAudio = document.getElementById('hidden-webrtc-audio');
                 if (!hiddenAudio) {
                     hiddenAudio = document.createElement('audio');
                     hiddenAudio.id = 'hidden-webrtc-audio';
                     hiddenAudio.autoplay = true;
                     hiddenAudio.playsInline = true;
-                    hiddenAudio.muted = true; // Muteado para que no se escuche doble
+                    hiddenAudio.muted = true;
                     document.body.appendChild(hiddenAudio);
                 }
                 hiddenAudio.srcObject = remoteStream;
 
-                const statusEl = document.getElementById('mic-remote-status');
-                if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
                 showToast("MICRÓFONO REMOTO ENLAZADO", false);
-                
-                if (audioEngineInitialized && state.isAudioScan) reconnectAudioNode();
+                updateAudioRouting();
             });
             call.on('close', () => {
                 window.remoteMicStream = null;
-                const statusEl = document.getElementById('mic-remote-status');
-                if(statusEl) { statusEl.innerText = "MIC REM: OFFLINE"; statusEl.className = "text-red-500 font-bold"; }
                 showToast("MICRÓFONO REMOTO DESCONECTADO", true);
-                if (state.isAudioScan) toggleAudioScanner(); 
+                updateAudioRouting();
             });
         });
         
@@ -520,6 +619,8 @@ self.addEventListener('fetch', e => {
     let senderReconnectTimer = null;
     let senderDataConn = null;
     let senderSpeechRec = null;
+    let isSenderActive = false;
+    let isConnectingSender = false;
 
     function initMicSenderMode() {
         document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
@@ -529,8 +630,8 @@ self.addEventListener('fetch', e => {
         document.getElementById('main-startup-ui').style.display = 'none';
         document.getElementById('mic-sender-ui').style.display = 'flex';
         
-        const savedId = localStorage.getItem('obr_studio_id') || 'local';
-        document.getElementById('sender-studio-id').value = savedId;
+        document.getElementById('sender-studio-id').value = localStorage.getItem('obr_studio_id') || 'local';
+        document.getElementById('sender-cam-name').value = localStorage.getItem('obr_camera_name') || 'cam1';
     }
 
     function updateSenderUI(state) {
@@ -588,7 +689,7 @@ self.addEventListener('fetch', e => {
         };
 
         senderSpeechRec.onend = () => {
-            if (senderLocalStream) {
+            if (senderLocalStream && isSenderActive) {
                 setTimeout(() => {
                     try { senderSpeechRec.start(); } catch(e){}
                 }, 500);
@@ -607,9 +708,17 @@ self.addEventListener('fetch', e => {
     }
 
     async function startRemoteMic() {
-        const studioId = document.getElementById('sender-studio-id').value.trim() || 'local';
+        if (isConnectingSender) return;
+        isConnectingSender = true;
+        isSenderActive = true;
+        
+        const studioId = (document.getElementById('sender-studio-id').value.trim() || 'local').replace(/[^a-zA-Z0-9-]/g, '-');
+        const camName = (document.getElementById('sender-cam-name').value.trim() || 'cam1').replace(/[^a-zA-Z0-9-]/g, '-');
+        
         localStorage.setItem('obr_studio_id', studioId);
-        const targetId = 'obr-cam-main-' + studioId;
+        localStorage.setItem('obr_camera_name', camName);
+        
+        const targetId = `obr-mic-recv-${studioId}-${camName}`;
         
         updateSenderUI('connecting');
         clearTimeout(senderReconnectTimer);
@@ -626,6 +735,7 @@ self.addEventListener('fetch', e => {
             senderPeer = new Peer(null, PEER_CONFIG);
             
             senderPeer.on('open', () => {
+                isConnectingSender = false;
                 senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
                 senderDataConn = senderPeer.connect(targetId);
                 
@@ -636,12 +746,12 @@ self.addEventListener('fetch', e => {
                 senderCurrentCall.on('error', (err) => {
                     console.error("Call error:", err);
                     updateSenderUI('error');
-                    senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+                    if (isSenderActive) senderReconnectTimer = setTimeout(startRemoteMic, 3000);
                 });
 
                 senderCurrentCall.on('close', () => {
                     updateSenderUI('error');
-                    senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+                    if (isSenderActive) senderReconnectTimer = setTimeout(startRemoteMic, 3000);
                 });
 
                 startSenderSpeech();
@@ -650,15 +760,17 @@ self.addEventListener('fetch', e => {
 
             senderPeer.on('error', (err) => {
                 console.error("Peer error:", err);
+                isConnectingSender = false;
                 updateSenderUI('error');
-                senderReconnectTimer = setTimeout(startRemoteMic, 3000);
+                if (isSenderActive) senderReconnectTimer = setTimeout(startRemoteMic, 3000);
             });
 
             senderPeer.on('disconnected', () => {
-                senderPeer.reconnect();
+                if (isSenderActive) senderPeer.reconnect();
             });
 
         } catch (err) {
+            isConnectingSender = false;
             console.error("Mic access denied:", err);
             alert("No se pudo acceder al micrófono.");
             updateSenderUI('error');
@@ -666,6 +778,8 @@ self.addEventListener('fetch', e => {
     }
 
     function stopRemoteMic() {
+        isSenderActive = false;
+        isConnectingSender = false;
         clearTimeout(senderReconnectTimer);
         stopSenderSpeech();
         if (senderDataConn) { senderDataConn.close(); senderDataConn = null; }
@@ -784,10 +898,45 @@ self.addEventListener('fetch', e => {
         apiKey: localStorage.getItem("obr_ai_key") || localStorage.getItem("obr_gemini_key") || "", 
         aiProvider: localStorage.getItem("obr_ai_provider") || "gemini",
         aiModel: localStorage.getItem("obr_ai_model") || "gemini-2.5-flash", 
-        studioId: localStorage.getItem("obr_studio_id") || "", filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 
+        studioId: localStorage.getItem("obr_studio_id") || "", 
+        cameraName: localStorage.getItem("obr_camera_name") || "cam1",
+        filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 
     };
     
-    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] } };
+    // --- CONFIGURACIÓN DE SERVIDOR TURN ---
+    const TURN_SERVER_IP = 'TU_IP_PUBLICA';
+    const TURN_USERNAME = 'user';
+    const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
+
+    const FORCE_TURN = false;
+    const DISABLE_ICE = false;
+
+    console.log("🚀 Modo TURN forzado:", FORCE_TURN);
+    console.log("🚀 ICE deshabilitado:", DISABLE_ICE);
+
+    const PEER_CONFIG = {
+        config: DISABLE_ICE ? {
+            iceServers: []
+        } : (FORCE_TURN ? {
+            iceTransportPolicy: 'relay',
+            iceServers: [
+                {
+                    urls: `turn:${TURN_SERVER_IP}:3478`,
+                    username: TURN_USERNAME,
+                    credential: TURN_PASSWORD
+                }
+            ]
+        } : {
+            iceServers: [
+                { urls: 'stun:stun1.l.google.com:19302' },
+                {
+                    urls: `turn:${TURN_SERVER_IP}:3478`,
+                    username: TURN_USERNAME,
+                    credential: TURN_PASSWORD
+                }
+            ]
+        })
+    };
     
     let AI_API_KEY = state.apiKey;
     let CURRENT_AI_MODEL = state.aiModel;
@@ -830,7 +979,7 @@ respuestas: ["frío", "dolor", "atrapado", "oscuro", "ayúdame", "vete", "triste
 },
 
 {
-triggers: ["cuantos son", "cuantos estan aqui", "cuantos hay", "hay muchos", "hay mas contigo", "cuantos espiritus"],
+triggers: ["cuantos son", "cuantos estan aqui", "cuantos hay", "hay multi", "hay mas contigo", "cuantos espiritus"],
 respuestas: ["somos muchos", "somos tres", "somos varios", "somos dos", "muchos", "no estas solo", "aqui estamos"]
 },
 
@@ -1077,7 +1226,7 @@ const paranormalQuestions = [
 
     function ttsNoDisponible(origen) {
         showToast(`TTS NO DISPONIBLE — ${origen || 'SIN CRÉDITOS'}`, true);
-        if (state.isAudioScan) { state.isAudioScan = false; document.getElementById('mic-btn')?.classList.remove('active'); document.getElementById('btn-audio-menu')?.classList.remove('active-state'); stopSweepAudio(); simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01; isTtsPlaying = false; isSpookySpeaking = false; clearTimeout(_ttsWatchdog); if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } }
+        if (state.isAudioScan) { state.isAudioScan = false; document.getElementById('mic-btn')?.classList.remove('active'); document.getElementById('btn-audio-menu')?.classList.remove('active-state'); stopSweepAudio(); safeStopSpeechRec(); simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01; isTtsPlaying = false; isSpookySpeaking = false; clearTimeout(_ttsWatchdog); if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } }
         if (isPareidoliaActive) { isPareidoliaActive = false; state.isPareidolia = false; document.getElementById('btn-ia')?.classList.remove('active-state'); clearTimeout(pareidoliaInterval); isAIProcessing = false; stopScanningEffect(); }
         updateTTSStatusUI();
     }
@@ -1108,7 +1257,7 @@ const paranormalQuestions = [
         if (!blobUrl) return; 
 
         return new Promise(resolve => {
-            window._isAnnouncement = true; isTtsPlaying = true; 
+            window._isAnnouncement = true; isTtsPlaying = true;
             cloudTTSPlayer.src = blobUrl; cloudTTSPlayer.playbackRate = 1.0; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
             cloudTTSPlayer.play().catch(() => {});
             cloudTTSPlayer.addEventListener('ended', () => { isTtsPlaying = false; window._isAnnouncement = false; try { URL.revokeObjectURL(blobUrl); } catch(e) {} resolve(); }, { once: true });
@@ -1183,7 +1332,7 @@ const paranormalQuestions = [
             
             const effectRoll = Math.random();
             let effectType = 'none'; 
-            if (effectRoll < 0.45) effectType = 'reverb'; 
+            if (effectRoll < 0.60) effectType = 'reverb'; 
             else if (effectRoll < 0.90) effectType = 'echo'; 
             
             await _ensureContextRunning();
@@ -1309,10 +1458,13 @@ const paranormalQuestions = [
         try {
             if (videoStream) videoStream.getVideoTracks().forEach(t => t.stop()); 
             
+            const safeAudioConfig = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: false, 
+                audio: safeAudioConfig, 
                 video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } 
             });
+            
+            window.localMicStream = stream;
             
             const newVideoTrack = stream.getVideoTracks()[0];
             videoStream = new MediaStream([newVideoTrack]);
@@ -1321,11 +1473,15 @@ const paranormalQuestions = [
             await el.video.play();
             const recInd = document.getElementById('recovery-indicator');
             if (recInd) { recInd.style.display = 'flex'; void recInd.offsetWidth; recInd.style.opacity = '1'; setTimeout(() => { recInd.style.opacity = '0'; setTimeout(() => { if(recInd.style.opacity === '0') recInd.style.display = 'none'; }, 500); }, 2500); }
+            
+            updateAudioRouting();
         } catch(e) {} finally { setTimeout(() => { isRestartingCamera = false; }, 3000); }
     }
 
     window.onload = () => { 
-        document.getElementById('api-key-internal').value = state.apiKey; document.getElementById('mtx-host').value = state.studioId; 
+        document.getElementById('api-key-internal').value = state.apiKey; 
+        document.getElementById('mtx-host').value = state.studioId; 
+        document.getElementById('stream-name').value = state.cameraName;
         const btn = document.getElementById('main-cam-btn');
         const hasPerm = localStorage.getItem("camPermission") === "granted" || sessionStorage.getItem("camPermission") === "granted";
         if (btn && hasPerm) { btn.innerText = "▶ REANUDAR CÁMARA"; btn.style.borderColor = "#00ff41"; btn.style.color = "#00ff41"; }
@@ -1353,24 +1509,7 @@ const paranormalQuestions = [
                 if (audioCtx.state === 'suspended' && !document.hidden) {
                     audioCtx.resume().catch(()=>{});
                 }
-                
-                if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
-                    console.warn("[Audio Watchdog] Stream remoto perdido.");
-                    if (state.isAudioScan) {
-                        showToast("SEÑAL DE MICRÓFONO REMOTA PERDIDA", true);
-                        toggleAudioScanner(); 
-                    }
-                    return; 
-                }
-                
-                if (micSource) {
-                    micSource.disconnect();
-                    micSource = null;
-                }
-                
-                micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
-                micSource.connect(micGainNode);
-                console.log("[Audio Watchdog] Reconstrucción de stream remoto exitosa.");
+                updateAudioRouting();
             } catch(e) {
                 console.warn("[Audio Watchdog] Falló la reconexión:", e);
             }
@@ -1399,9 +1538,9 @@ const paranormalQuestions = [
 
         if (audioCtx.state === 'suspended' && !document.hidden) await audioCtx.resume().catch(()=>{});
 
-        if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
-            console.error("[Audio] Micrófono remoto no detectado.");
-            showToast("NO HAY MIC REMOTO CONECTADO", true);
+        if ((!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) && (!window.localMicStream || window.localMicStream.getAudioTracks().length === 0)) {
+            console.error("[Audio] Ningún micrófono detectado (ni local ni remoto).");
+            showToast("NO HAY MICRÓFONOS DISPONIBLES", true);
             if (state.isAudioScan) toggleAudioScanner();
             return;
         }
@@ -1409,7 +1548,6 @@ const paranormalQuestions = [
         try {
             mixDestination = audioCtx.createMediaStreamDestination();
 
-            micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
             micGainNode = audioCtx.createGain();
             micGainNode.gain.value = 2.5; 
 
@@ -1421,7 +1559,6 @@ const paranormalQuestions = [
             compressor.threshold.value = -18; compressor.knee.value = 20;
             compressor.ratio.value = 8; compressor.attack.value = 0.002; compressor.release.value = 0.15;
 
-            micSource.connect(micGainNode);
             micGainNode.connect(audioAnalyser);
 
             const silentSink = audioCtx.createGain();
@@ -1431,16 +1568,21 @@ const paranormalQuestions = [
 
             micGainNode.connect(compressor);
             compressor.connect(mixDestination);
+            
+            updateAudioRouting();
 
-            if (!ttsSource) initTTSPipeline();
-
-            const audioTrack = window.remoteMicStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.onunmute = () => { reconnectAudioNode(); };
+            if (!ttsSource) {
+                initTTSPipeline();
+            } else {
+                if (mixDestination) {
+                    try { if(ttsMainGain) ttsMainGain.connect(mixDestination); } catch(e){}
+                    try { if(window._sweepSource) window._sweepSource.connect(mixDestination); } catch(e){}
+                    try { if(window._respSource) window._respSource.connect(mixDestination); } catch(e){}
+                }
             }
 
             audioEngineInitialized = true;
-            console.log("[Audio] Motor de audio remoto inicializado.");
+            console.log("[Audio] Motor de audio remoto/local inicializado.");
         } catch(e) { console.warn("Error en initAudioEngine:", e); }
     }
 
@@ -1449,12 +1591,13 @@ const paranormalQuestions = [
         document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
         document.getElementById('cam-error-panel').style.display = 'none'; 
         requestWakeLock(); 
-        updateProgress(10, "SOLICITANDO PERMISO DE CÁMARA...");
+        updateProgress(10, "SOLICITANDO PERMISOS...");
 
+        const safeAudioConfig = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
         const constraintSets = [
-            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
-            { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
-            { audio: false, video: { facingMode: { ideal: 'environment' } } }
+            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
+            { audio: safeAudioConfig, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
+            { audio: true, video: { facingMode: { ideal: 'environment' } } }
         ];
 
         let stream = null; let lastError = null;
@@ -1474,7 +1617,9 @@ const paranormalQuestions = [
         }
 
         localStorage.setItem("camPermission", "granted"); try { sessionStorage.setItem("camPermission", "granted"); } catch(e){}
-        videoStream = stream; el.video.srcObject = stream; el.video.play().then(() => { fixCanvasSize(); }).catch(()=>{});
+        window.localMicStream = stream;
+        videoStream = new MediaStream(stream.getVideoTracks()); 
+        el.video.srcObject = videoStream; el.video.play().then(() => { fixCanvasSize(); }).catch(()=>{});
         
         updateProgress(30, "PRECARGANDO MEDIOS LOCALES..."); await preloadLocalAssets();
         updateProgress(50, "CALIBRANDO MOTORES IA...");
@@ -1651,8 +1796,20 @@ const paranormalQuestions = [
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
         ttsMainGain.connect(ctx1.destination);
+        
+        try { 
+            if (!window._sweepSource) window._sweepSource = ctx1.createMediaElementSource(sweepAudio); 
+            window._sweepSource.connect(ctx1.destination); 
+        } catch(e){}
+        try { 
+            if (!window._respSource) window._respSource = ctx1.createMediaElementSource(responseAudio); 
+            window._respSource.connect(ctx1.destination); 
+        } catch(e){}
+
         if (mixDestination) {
             try { ttsMainGain.connect(mixDestination); } catch(e){}
+            try { if(window._sweepSource) window._sweepSource.connect(mixDestination); } catch(e){}
+            try { if(window._respSource) window._respSource.connect(mixDestination); } catch(e){}
         }
         applyGoogleTTSFilters(false);
     }
@@ -1690,7 +1847,9 @@ const paranormalQuestions = [
 
         if (isQuestion) lastQuestionTime = Date.now();
 
-        if (isQuestion && state.isAudioScan && !isSpookySpeaking && !isTtsPlaying && (Date.now() - lastEvpTime > 1500)) {
+        let forceImmediateResponse = isQuestion || Math.random() > 0.7;
+
+        if (forceImmediateResponse && state.isAudioScan && !isSpookySpeaking && !isTtsPlaying && (Date.now() - lastEvpTime > 1500)) {
             window._liveUserFadeStart = performance.now();
             window._liveUserFadeDuration = 400; 
             
@@ -1699,7 +1858,15 @@ const paranormalQuestions = [
             window._liveUserLastUpdate = 0;
             
             setTimeout(() => {
-                const respText = matchedCat ? matchedCat.respuestas[Math.floor(Math.random() * matchedCat.respuestas.length)] : obtenerRespuestaContextual(txt);
+                let respText;
+                if (matchedCat) {
+                    respText = matchedCat.respuestas[Math.floor(Math.random() * matchedCat.respuestas.length)];
+                } else if (isQuestion) {
+                    respText = obtenerRespuestaContextual(txt);
+                } else {
+                    respText = evpFrasesAmbiguaMemoria[Math.floor(Math.random() * evpFrasesAmbiguaMemoria.length)];
+                }
+                
                 if (conn && conn.open) conn.send({type: 'ai-speech', text: respText});
                 speakSpooky(respText);
             }, 1500 + Math.random() * 1000); 
@@ -1712,12 +1879,6 @@ const paranormalQuestions = [
         const btnMenu = document.getElementById('btn-audio-menu');
         
         if (state.isAudioScan) {
-            if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
-                state.isAudioScan = false;
-                showToast("NO HAY MIC REMOTO CONECTADO", true);
-                return;
-            }
-
             const elOk  = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
             const vrOk  = voicerssRemaining > 0;
             if (!elOk && !vrOk) { state.isAudioScan = false; ttsNoDisponible('sin créditos para activar AUDIO SCAN'); return; }
@@ -1741,6 +1902,7 @@ const paranormalQuestions = [
                     reconnectAudioNode();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
+                    safeStartSpeechRec(); 
                 }, 150);
             }).catch(() => {
                 startSweepAudio();
@@ -1749,6 +1911,7 @@ const paranormalQuestions = [
                     reconnectAudioNode();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
+                    safeStartSpeechRec(); 
                 }, 150);
             });
         } else {
@@ -1759,6 +1922,8 @@ const paranormalQuestions = [
             if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
             if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
             if (window.speechSynthesis) window.speechSynthesis.cancel();
+            
+            safeStopSpeechRec(); 
             
             isTtsPlaying = false; isSpookySpeaking = false;
             lastSpokenText = ''; clearTimeout(speechTimer);
@@ -1831,7 +1996,7 @@ const paranormalQuestions = [
         const dynamicThreshold = ambientNoiseLevel * 2.2 + 0.015;
 
         if (!isSpookySpeaking && !isTtsPlaying && !isUserTalkingNow && rmsLevel > dynamicThreshold) {
-            cumulativeEVPEnergy += (rmsLevel - dynamicThreshold) * 10.0;
+            cumulativeEVPEnergy += (rmsLevel - dynamicThreshold) * 15.0; 
         }
         cumulativeEVPEnergy *= 0.93; cumulativeEVPEnergy = Math.max(0, Math.min(100, cumulativeEVPEnergy));
 
@@ -1892,38 +2057,119 @@ const paranormalQuestions = [
             const elapsed = performance.now() - window._liveUserFadeStart; const fadeDur = window._liveUserFadeDuration || 800; _userAlpha = Math.max(0, 1 - elapsed / fadeDur);
             if (_userAlpha <= 0) { window._liveUserFadeStart = null; window._liveUserText = ''; }
         }
+        
         if ((isUserTalkingNow || _userAlpha < 1) && window._liveUserText && _userAlpha > 0) {
-            c.globalAlpha = _userAlpha; const userLabel = window._liveUserText.toUpperCase(); c.font = `bold ${textFS}px 'Share Tech Mono'`; c.textAlign = "center"; const uY = bottomY - 55 * screenScale;
-            c.shadowColor = "rgba(0, 200, 255, 0.3)"; c.shadowBlur = 28 * screenScale; c.fillStyle = "rgba(0, 220, 255, 0.15)"; c.fillText(userLabel, w / 2, uY);
-            c.shadowColor = "rgba(0, 220, 255, 0.9)"; c.shadowBlur = 10 * screenScale; c.fillStyle = "rgba(0, 220, 255, 0.9)"; c.fillText(userLabel, w / 2, uY);
-            c.shadowColor = "rgba(120, 240, 255, 1)"; c.shadowBlur = 3 * screenScale; c.fillStyle = "rgba(210, 250, 255, 1)"; c.fillText(userLabel, w / 2, uY); c.globalAlpha = 1.0;
+            c.save();
+            c.globalAlpha = _userAlpha * 0.85; 
+            const userLabel = window._liveUserText.toUpperCase(); c.font = `bold ${textFS}px 'Share Tech Mono'`; c.textAlign = "center"; const uY = bottomY - 55 * screenScale;
+            
+            c.fillStyle = "rgba(255, 255, 255, 0.85)"; 
+            c.shadowColor = "#00d4ff";
+            
+            c.shadowBlur = 40 * screenScale; c.fillText(userLabel, w / 2, uY);
+            c.shadowBlur = 20 * screenScale; c.fillText(userLabel, w / 2, uY);
+            c.shadowBlur = 10 * screenScale; c.fillText(userLabel, w / 2, uY);
+            c.shadowBlur = 5 * screenScale;  c.fillText(userLabel, w / 2, uY);
+            
+            c.restore();
         }
 
         if (lastSpokenText) {
-            const label = lastSpokenText.toUpperCase(), evpY = bottomY - 28 * screenScale, flash = (Math.sin(now * 0.018) + 1) * 0.5;
-            c.font = `bold ${textFS}px 'Share Tech Mono'`; c.textAlign = "center";
-            c.shadowColor = `rgba(255, 0, 0, ${0.2 + flash * 0.2})`; c.shadowBlur = 32 * screenScale; c.fillStyle = `rgba(255, 20, 0, ${0.1 + flash * 0.15})`; c.fillText(label, w / 2, evpY);
-            c.shadowColor = "rgba(255, 0, 0, 0.9)"; c.shadowBlur = 14 * screenScale; c.fillStyle = "rgba(255, 30, 10, 0.95)"; c.fillText(label, w / 2, evpY);
-            c.shadowColor = "rgba(255, 180, 100, 1)"; c.shadowBlur = 4 * screenScale; c.fillStyle = "rgba(255, 230, 200, 1)"; c.fillText(label, w / 2, evpY);
+            const label = lastSpokenText.toUpperCase();
+            const evpY = bottomY - 28 * screenScale; 
+
+            c.save();
+            c.globalAlpha = 0.85; 
+
+            if (!window._evpTextCanvas) {
+                window._evpTextCanvas = document.createElement('canvas');
+                window._evpTextCtx = window._evpTextCanvas.getContext('2d', {willReadFrequently: true});
+                window._lastRenderedEvpText = "";
+            }
+            const tCanv = window._evpTextCanvas;
+            const tCtx = window._evpTextCtx;
+
+            c.font = `bold ${textFS}px 'Share Tech Mono'`; 
+            const txtW = c.measureText(label).width;
+
+            if (txtW > 0 && textFS > 0) {
+                const reqW = Math.ceil(txtW + textFS * 4);
+                const reqH = Math.ceil(textFS * 3);
+
+                if (label !== window._lastRenderedEvpText || tCanv.width !== reqW || tCanv.height !== reqH) {
+                    tCanv.width = reqW;
+                    tCanv.height = reqH;
+                    tCtx.clearRect(0, 0, reqW, reqH);
+
+                    const cx = reqW / 2;
+                    const cy = reqH / 2;
+
+                    tCtx.font = `bold ${textFS}px 'Share Tech Mono'`;
+                    tCtx.textAlign = "center";
+                    tCtx.textBaseline = "middle";
+
+                    tCtx.fillStyle = "rgba(255, 255, 255, 0.85)"; 
+                    tCtx.shadowColor = "#ab0202";
+                    
+                    tCtx.shadowBlur = 40 * screenScale; tCtx.fillText(label, cx, cy);
+                    tCtx.shadowBlur = 20 * screenScale; tCtx.fillText(label, cx, cy);
+                    tCtx.shadowBlur = 10 * screenScale; tCtx.fillText(label, cx, cy);
+                    tCtx.shadowBlur = 5 * screenScale;  tCtx.fillText(label, cx, cy);
+
+                    tCtx.globalCompositeOperation = "destination-out";
+                    
+                    tCtx.save();
+                    tCtx.translate(cx, cy);
+                    tCtx.rotate((120 * Math.PI) / 180); 
+                    
+                    for(let i=0; i<18; i++) {
+                        tCtx.fillStyle = `rgba(0,0,0,${0.6 + Math.random() * 0.4})`;
+                        const cutW = (Math.random() * 0.3 + 0.05) * reqW; 
+                        const cutH = (Math.random() * 2 + 0.5) * screenScale;
+                        const rx = (Math.random() - 0.5) * reqW * 2;
+                        const ry = (Math.random() - 0.5) * (reqH + reqW); 
+                        tCtx.fillRect(rx, ry, cutW, cutH);
+                    }
+                    tCtx.restore();
+                    
+                    for(let i = 0; i < 300; i++) {
+                        tCtx.fillStyle = `rgba(0,0,0,${0.4 + Math.random() * 0.4})`;
+                        tCtx.fillRect(Math.random() * reqW, Math.random() * reqH, Math.random() * 3 * screenScale, Math.random() * 2 * screenScale);
+                    }
+
+                    tCtx.globalCompositeOperation = "source-over";
+                    window._lastRenderedEvpText = label;
+                }
+                c.drawImage(tCanv, (w / 2) - (reqW / 2), evpY - (reqH / 2));
+            }
+            c.restore();
         }
         c.restore();
 
-        const now_evp = Date.now(); const micActive = audioAnalyser && audioDataArray && currentMaxVolume > 0.001;
-        const isSilent = micActive && currentMaxVolume < dynamicThreshold * 1.2 && !isUserTalkingNow; 
-        const hasEnergy = cumulativeEVPEnergy > 18;
-        const hasSpike = micActive && rmsLevel > dynamicThreshold * 3.0 && !isUserTalkingNow; 
-        const afterQuestion = (now_evp - lastQuestionTime) < 5000, timeSinceLastEvp = now_evp - lastEvpTime;
+        const now_evp = Date.now(); 
+        const micActive = !!(audioAnalyser && audioDataArray && !isBufferFrozen);
         
-        const shouldTrigger = micActive && (isSilent || hasEnergy || hasSpike) && !isSpookySpeaking && !isTtsPlaying && !window._isAnnouncement && timeSinceLastEvp > (window._evpNextGap || 8000) && Math.random() > (afterQuestion ? 0.25 : 0.55);
+        const isSilent = micActive && currentMaxVolume < (dynamicThreshold * 1.5) && !isUserTalkingNow; 
+        const hasEnergy = cumulativeEVPEnergy > 12; 
+        const hasSpike = micActive && rmsLevel > (dynamicThreshold * 2.2) && !isUserTalkingNow; 
+        
+        const afterQuestion = (now_evp - lastQuestionTime) < 8000; 
+        const timeSinceLastEvp = now_evp - lastEvpTime;
+        
+        let currentGap = window._evpNextGap || 8000;
+        
+        if (hasSpike && currentGap > 1500) currentGap = 1500;
+        if (hasEnergy && currentGap > 3000) currentGap = 3000;
+
+        const triggerProb = afterQuestion ? 0.20 : (hasSpike ? 0.15 : (hasEnergy ? 0.35 : 0.65));
+        const shouldTrigger = micActive && (isSilent || hasEnergy || hasSpike) && !isSpookySpeaking && !isTtsPlaying && !window._isAnnouncement && timeSinceLastEvp > currentGap && Math.random() > triggerProb;
 
         if (shouldTrigger) {
             
             lastEvpTime = Date.now() + 99999; 
             
-            if (afterQuestion) {
-                window._evpNextGap = 2000 + Math.random() * 2000; 
-            } else if (window._waitingFirstInteraction) {
-                window._evpNextGap = 20000 + Math.random() * 20000; 
+            if (afterQuestion || window._waitingFirstInteraction) {
+                window._evpNextGap = afterQuestion ? (2000 + Math.random() * 2000) : (20000 + Math.random() * 20000); 
             } else {
                 const dado = Math.random();
                 if (dado < 0.25) {
@@ -2304,42 +2550,84 @@ const paranormalQuestions = [
         ctx.clearRect(0, 0, cW, cH); audioLayerCtx.clearRect(0, 0, cW, cH); updateSmoothing();
         
         if (vW && vH) {
-                const vRatio = vW / vH, cRatio = cW / cH; let dW, dH, dX, dY;
-                if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
-                window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            const vRatio = vW / vH, cRatio = cW / cH; let dW, dH, dX, dY;
+            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+            window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            
+            if (isTransmitting) {
+                ctx.save();
+                if(state.filter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
+                else if(state.filter === 'thermal') ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
+                else if(state.filter === 'urbex') ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%)';
+                else ctx.filter = 'none';
                 
-                if (isTransmitting) {
-                    ctx.save();
-                    if(state.filter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
-                    else if(state.filter === 'thermal') ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
-                    else if(state.filter === 'urbex') ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%)';
-                    else ctx.filter = 'none';
-                    ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH); ctx.restore(); 
-                    if(state.filter === 'night') { if(!scanlineCanvas) initScanlines(cW, cH); ctx.drawImage(scanlineCanvas, 0, 0); }
-                    if (state.isLidar) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0, cW, cH); drawLidarEffect(ctx, cW, cH, frameCount); }
+                // Aplicar recorte de Zoom por software si está activo para la transmisión
+                if (window._softwareZoomActive && state.zoom > 1) {
+                    const zX = vW * (window._zoomXPct || 0.5);
+                    const zY = vH * (window._zoomYPct || 0.5);
+                    const viewW = vW / state.zoom;
+                    const viewH = vH / state.zoom;
+                    const srcX = Math.max(0, Math.min(vW - viewW, zX - viewW / 2));
+                    const srcY = Math.max(0, Math.min(vH - viewH, zY - viewH / 2));
+                    ctx.drawImage(el.video, srcX, srcY, viewW, viewH, dX, dY, dW, dH);
+                } else {
+                    ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH); 
                 }
                 
-                if (state.isLidar) { audioLayerCtx.fillStyle = 'rgba(0,0,0,0.25)'; audioLayerCtx.fillRect(0,0, cW, cH); drawLidarEffect(audioLayerCtx, cW, cH, frameCount); }
+                ctx.restore(); 
+                if(state.filter === 'night') { if(!scanlineCanvas) initScanlines(cW, cH); ctx.drawImage(scanlineCanvas, 0, 0); }
             }
+            
+            if (state.isLidar) { 
+                audioLayerCtx.fillStyle = 'rgba(0,0,0,0.25)'; 
+                audioLayerCtx.fillRect(0,0, cW, cH); 
+                drawLidarEffect(audioLayerCtx, cW, cH, frameCount); 
+            }
+        }
 
-            if (state.isSLS && !state.isLidar) {
-                const renderPoses = (smoothedPoses && smoothedPoses.length > 0) ? smoothedPoses : [];
-                const renderFaces = (smoothedFaces && smoothedFaces.length > 0) ? smoothedFaces : [];
-                const nPoses = renderPoses.length, nFaces = renderFaces.length;
-                if (!nPoses && !nFaces && (Date.now() - (window._slsStartTime||0)) > 800) drawFallbackSilhouette();
-                const nTargets = Math.max(nPoses, nFaces);
-                for (let ti = 0; ti < nTargets; ti++) {
-                    const pose = (ti < nPoses) ? renderPoses[ti] : null, face = (ti < nFaces) ? renderFaces[ti] : null;
-                    if (isTransmitting) drawHybrid(ctx, face, pose, ti); drawHybrid(audioLayerCtx, face, pose, ti);
-                }
+        if (state.isSLS && !state.isLidar) {
+            const renderPoses = (smoothedPoses && smoothedPoses.length > 0) ? smoothedPoses : [];
+            const renderFaces = (smoothedFaces && smoothedFaces.length > 0) ? smoothedFaces : [];
+            const nPoses = renderPoses.length, nFaces = renderFaces.length;
+            if (!nPoses && !nFaces && (Date.now() - (window._slsStartTime||0)) > 800) drawFallbackSilhouette();
+            const nTargets = Math.max(nPoses, nFaces);
+            for (let ti = 0; ti < nTargets; ti++) {
+                const pose = (ti < nPoses) ? renderPoses[ti] : null, face = (ti < nFaces) ? renderFaces[ti] : null;
+                drawHybrid(audioLayerCtx, face, pose, ti); 
+            }
+        }
+        
+        const speed = 0.4; animState.hudScale += (animState.hudTarget - animState.hudScale) * speed; animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
+        drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale); 
+        
+        if (state.isPareidolia) { drawCanvasScanBoxes(audioLayerCtx, cW, cH); } 
+        
+        if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) { drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale); } 
+        
+        if (state.isAudioScan) { drawAudioVisualizer(audioLayerCtx, cW, cH); } 
+
+        if (isTransmitting && window._streamCanvas && window._streamCtx) {
+            const sCtx = window._streamCtx;
+            if (window._streamCanvas.width !== cW) window._streamCanvas.width = cW;
+            if (window._streamCanvas.height !== cH) window._streamCanvas.height = cH;
+            
+            sCtx.clearRect(0, 0, cW, cH);
+            sCtx.save();
+            
+            if (window._softwareZoomActive && state.zoom > 1) {
+                const zX = cW * (window._zoomXPct || 0.5);
+                const zY = cH * (window._zoomYPct || 0.5);
+                sCtx.translate(zX, zY);
+                sCtx.scale(state.zoom, state.zoom);
+                sCtx.translate(-zX, -zY);
             }
             
-            const speed = 0.4; animState.hudScale += (animState.hudTarget - animState.hudScale) * speed; animState.aiScale += (animState.aiTarget - animState.aiScale) * speed;
-            if (isTransmitting) drawBurnInHUD(ctx, cW, cH, animState.hudScale); drawBurnInHUD(audioLayerCtx, cW, cH, animState.hudScale);
-            if (state.isPareidolia) { if (isTransmitting) drawCanvasScanBoxes(ctx, cW, cH); drawCanvasScanBoxes(audioLayerCtx, cW, cH); }
-            if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) { if (isTransmitting) drawAIBurnIn(ctx, cW, cH, animState.aiScale); drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale); }
+            sCtx.drawImage(el.canvas, 0, 0);
             
-            if (state.isAudioScan) { drawAudioVisualizer(audioLayerCtx, cW, cH); if (isTransmitting) ctx.drawImage(el.audioCanvas, 0, 0); }
+            sCtx.drawImage(el.audioCanvas, 0, 0);
+            
+            sCtx.restore();
+        }
 
         if ('requestVideoFrameCallback' in el.video) el.video.requestVideoFrameCallback(renderLoop); else requestAnimationFrame(renderLoop);
     }
@@ -2369,38 +2657,6 @@ const paranormalQuestions = [
         const statusEl = document.getElementById('status-text'), dotEl = document.getElementById('status-dot'), tallyEl = document.getElementById('tally-border');
         if(conn && conn.open) { statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; tallyEl.className = "online"; } 
         else { statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-red-900"; tallyEl.className = "preview"; }
-    }
-
-    function openConnect() { 
-        if (conn && conn.open) { if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } conn = null; showToast("ENLACE DESCONECTADO (AHORRO RED)", false); return; }
-        document.getElementById('connect-modal').classList.add('active'); 
-    }
-
-    async function startHybridTransmission() {
-        const name = document.getElementById('stream-name').value.trim(); if(!name) return;
-        const fullId = state.studioId; if(!fullId) { showToast("ID ESTUDIO VACIO", true); return; }
-        document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
-        
-        let baseId = fullId.trim().replace(/\s+/g, ''); if (baseId.endsWith("-8889")) baseId = baseId.slice(0, -5); baseId = baseId.replace(/\./g, '-'); 
-        const commandTarget = baseId, videoTarget = baseId + "-8889";
-        
-        if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG);
-        peerCommand.on('open', () => {
-            const connection = peerCommand.connect(commandTarget);
-            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
-            connection.on('data', handleCommand);
-            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } });
-            connection.on('error', (e) => { console.error("Data error", e); });
-        });
-        peerCommand.on('error', (err) => { showToast("Err CMD: " + err.type, true); try { peerCommand.destroy(); } catch(e){} });
-
-        if(peerVideoSender) peerVideoSender.destroy(); peerVideoSender = new Peer(null, PEER_CONFIG);
-        peerVideoSender.on('open', async () => {
-            const stream = el.canvas.captureStream(30); 
-            if (mixDestination && mixDestination.stream) mixDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track)); else if (audioStream) { const audioTracks = audioStream.getAudioTracks(); if(audioTracks.length > 0) stream.addTrack(audioTracks[0]); }
-            setTimeout(() => { const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } }); call.on('close', () => { if(peerVideoSender) peerVideoSender.destroy(); }); call.on('error', (e) => {}); showToast("Transmitiendo Video...", false); }, 1500);
-        });
-        peerVideoSender.on('error', (err) => { showToast("Err VID: " + err.type, true); try { peerVideoSender.destroy(); } catch(e){} });
     }
 
     function handleCommand(cmd) {
@@ -2537,7 +2793,76 @@ const paranormalQuestions = [
         input.disabled = false; btn.disabled = false;
     }
 
-    function saveSettings() { const rawIp = document.getElementById('mtx-host').value.trim(); if (rawIp) { state.studioId = rawIp; localStorage.setItem('obr_studio_id', state.studioId); } saveTTSFilters(); showToast("Config Guardada"); document.getElementById('settings-modal').classList.remove('active'); }
+    function openConnect() { 
+        const hostInput = document.getElementById('mtx-host').value.trim();
+        if (hostInput) {
+            state.studioId = hostInput;
+            localStorage.setItem('obr_studio_id', state.studioId);
+        }
+        if (conn && conn.open) { if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } conn = null; showToast("ENLACE DESCONECTADO (AHORRO RED)", false); return; }
+        document.getElementById('connect-modal').classList.add('active'); 
+    }
+
+    async function startHybridTransmission() {
+        const name = document.getElementById('stream-name').value.trim(); if(!name) return;
+        
+        const hostInput = document.getElementById('mtx-host').value.trim();
+        if (hostInput) {
+            state.studioId = hostInput;
+            localStorage.setItem('obr_studio_id', state.studioId);
+        }
+        
+        const fullId = state.studioId; if(!fullId) { showToast("ID ESTUDIO VACIO", true); return; }
+        document.getElementById('connect-modal').classList.remove('active'); showToast("Conectando...", false);
+        
+        let baseId = fullId.trim().replace(/\s+/g, ''); if (baseId.endsWith("-8889")) baseId = baseId.slice(0, -5); baseId = baseId.replace(/\./g, '-'); 
+        const commandTarget = baseId, videoTarget = baseId + "-8889";
+        
+        if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG);
+        peerCommand.on('open', () => {
+            const connection = peerCommand.connect(commandTarget);
+            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
+            connection.on('data', handleCommand);
+            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } });
+            connection.on('error', (e) => { console.error("Data error", e); });
+        });
+        peerCommand.on('error', (err) => { showToast("Err CMD: " + err.type, true); try { peerCommand.destroy(); } catch(e){} });
+
+        if(peerVideoSender) peerVideoSender.destroy(); peerVideoSender = new Peer(null, PEER_CONFIG);
+        peerVideoSender.on('open', async () => {
+            let streamCanvas = document.getElementById('stream-canvas');
+            if (!streamCanvas) {
+                streamCanvas = document.createElement('canvas');
+                streamCanvas.id = 'stream-canvas';
+                streamCanvas.style.display = 'none';
+                document.body.appendChild(streamCanvas);
+            }
+            window._streamCanvas = streamCanvas;
+            window._streamCtx = streamCanvas.getContext('2d');
+            
+            if (el.canvas) {
+                streamCanvas.width = el.canvas.width;
+                streamCanvas.height = el.canvas.height;
+            }
+            
+            const stream = streamCanvas.captureStream(30); 
+            if (mixDestination && mixDestination.stream) mixDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track)); else if (audioStream) { const audioTracks = audioStream.getAudioTracks(); if(audioTracks.length > 0) stream.addTrack(audioTracks[0]); }
+            setTimeout(() => { const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } }); call.on('close', () => { if(peerVideoSender) peerVideoSender.destroy(); }); call.on('error', (e) => {}); showToast("Transmitiendo Video...", false); }, 1500);
+        });
+        peerVideoSender.on('error', (err) => { showToast("Err VID: " + err.type, true); try { peerVideoSender.destroy(); } catch(e){} });
+    }
+
+    function saveSettings() { 
+        const rawIp = document.getElementById('mtx-host').value.trim(); 
+        if (rawIp) { state.studioId = rawIp; localStorage.setItem('obr_studio_id', state.studioId); } 
+        const camN = document.getElementById('stream-name').value.trim();
+        if (camN) { state.cameraName = camN; localStorage.setItem('obr_camera_name', state.cameraName); }
+        
+        saveTTSFilters(); 
+        initRemoteMicReceiver();
+        showToast("Config Guardada"); 
+        document.getElementById('settings-modal').classList.remove('active'); 
+    }
     function openSettings() { updateTTSStatusUI(); initTTSModeUI(); loadTTSFilterPanel(); document.getElementById('settings-modal').classList.add('active'); }
     
     let menuTimeout; const menus = [document.getElementById('menu-left'), document.getElementById('menu-right')];
@@ -2551,14 +2876,30 @@ const paranormalQuestions = [
             state.zoom = state.zoom === 1 ? 2.5 : 1; let hardwareZoomSuccess = false;
             const track = videoStream?.getVideoTracks()[0];
             if (track) { const caps = track.getCapabilities ? track.getCapabilities() : {}; if (caps.zoom) { try { const targetZoom = state.zoom === 1 ? Math.max(1.0, caps.zoom.min) : Math.min(caps.zoom.max, 2.0); await track.applyConstraints({ advanced: [{ zoom: targetZoom }] }); hardwareZoomSuccess = true; } catch (err) {} } }
-            if (!hardwareZoomSuccess) { const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; el.zoom.style.transform = `scale(${state.zoom})`; }
+            if (!hardwareZoomSuccess) { 
+                const w = window.innerWidth, h = window.innerHeight, xPct = (e.clientX / w) * 100, yPct = (e.clientY / h) * 100; 
+                el.zoom.style.transformOrigin = `${xPct}% ${yPct}%`; 
+                el.zoom.style.transform = `scale(${state.zoom})`; 
+                window._softwareZoomActive = state.zoom > 1;
+                window._zoomXPct = xPct / 100;
+                window._zoomYPct = yPct / 100;
+            } else {
+                window._softwareZoomActive = false;
+            }
             const ind = document.getElementById('zoom-target-indicator'); ind.style.left = e.clientX+'px'; ind.style.top = e.clientY+'px'; ind.classList.add('active'); setTimeout(()=>ind.classList.remove('active'),500); if(navigator.vibrate) navigator.vibrate(50); 
         }, 500); 
     });
     
     touchSurface.addEventListener('pointerup', () => clearTimeout(pressTimer)); touchSurface.addEventListener('pointermove', () => clearTimeout(pressTimer));
     
-    function resetZoom(btn) { state.zoom = 1; const track = videoStream?.getVideoTracks()[0]; if (track) { const caps = track.getCapabilities ? track.getCapabilities() : {}; if(caps.zoom) track.applyConstraints({ advanced: [{ zoom: Math.max(1.0, caps.zoom.min) }] }).catch(()=>{}); } el.zoom.style.transform = `scale(1)`; if(btn) btn.classList.add('active-state'); setTimeout(()=>btn?.classList.remove('active-state'), 200); }
+    function resetZoom(btn) { 
+        state.zoom = 1; 
+        window._softwareZoomActive = false;
+        const track = videoStream?.getVideoTracks()[0]; 
+        if (track) { const caps = track.getCapabilities ? track.getCapabilities() : {}; if(caps.zoom) track.applyConstraints({ advanced: [{ zoom: Math.max(1.0, caps.zoom.min) }] }).catch(()=>{}); } 
+        el.zoom.style.transform = `scale(1)`; 
+        if(btn) btn.classList.add('active-state'); setTimeout(()=>btn?.classList.remove('active-state'), 200); 
+    }
 
     window.previewGoogleTTS = async function() { 
         const btn = document.getElementById('btn-tts-preview'); const txt = document.getElementById('tts-preview-text').value.trim() || 'Hola, esto es una prueba de voz';
