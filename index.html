@@ -904,7 +904,8 @@ self.addEventListener('fetch', e => {
     };
     
     // --- CONFIGURACIÓN DE SERVIDOR TURN ---
-    const TURN_SERVER_IP = 'TU_IP_PUBLICA';
+    localStorage.removeItem("TURN_DOMAIN");
+    const TURN_DOMAIN = "exploracionesobr.duckdns.org";
     const TURN_USERNAME = 'user';
     const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
 
@@ -913,6 +914,7 @@ self.addEventListener('fetch', e => {
 
     console.log("🚀 Modo TURN forzado:", FORCE_TURN);
     console.log("🚀 ICE deshabilitado:", DISABLE_ICE);
+    console.log("TURN DOMAIN ACTIVO:", TURN_DOMAIN);
 
     const PEER_CONFIG = {
         config: DISABLE_ICE ? {
@@ -921,7 +923,7 @@ self.addEventListener('fetch', e => {
             iceTransportPolicy: 'relay',
             iceServers: [
                 {
-                    urls: `turn:${TURN_SERVER_IP}:3478`,
+                    urls: `turn:${TURN_DOMAIN}:3478`,
                     username: TURN_USERNAME,
                     credential: TURN_PASSWORD
                 }
@@ -930,7 +932,7 @@ self.addEventListener('fetch', e => {
             iceServers: [
                 { urls: 'stun:stun1.l.google.com:19302' },
                 {
-                    urls: `turn:${TURN_SERVER_IP}:3478`,
+                    urls: `turn:${TURN_DOMAIN}:3478`,
                     username: TURN_USERNAME,
                     credential: TURN_PASSWORD
                 }
@@ -957,123 +959,649 @@ self.addEventListener('fetch', e => {
     let aiScannerTimer = 0;
 
     const DIRECTORIO_EVP = [
+  {
+    triggers: ["que quieres", "que estas buscando", "por que estas aqui", "que buscas", "cual es tu proposito", "por que", "que deseas", "que necesitas"],
+    respuestas: ["luz", "tu alma", "a ustedes", "cuidarlos", "descansar", "tu miedo", "tu energía", "nada", "solo observo", "la verdad", "liberación", "compañía", "que me escuchen", "justicia", "paz"]
+  },
+  {
+    triggers: ["quien eres", "como te llamas", "cual es tu nombre", "quien es", "eres tu", "nombre", "identificate", "dime tu nombre"],
+    respuestas: ["no tengo nombre", "olvidado", "soy la sombra", "nadie", "el dueño", "el antiguo", "vigilante", "un alma", "espíritu", "alguien perdido", "soy yo", "no me recuerdas", "un pecador", "el que espera", "un amigo"]
+  },
+  {
+    triggers: ["aqui", "cerca", "detras", "alguien", "con nosotros", "estan", "acompanas", "estas vivo", "estas presente", "manifiestate"],
+    respuestas: ["sí", "aquí estoy", "siempre", "detrás de ti", "a tu lado", "muy cerca", "mirando", "en la oscuridad", "somos muchos", "cerca", "no estamos solos", "frente a ti", "te sigo", "escucha", "bajo tus pies", "en las paredes"]
+  },
+  {
+    triggers: ["puedes", "haz", "toca", "mueve", "senal", "hacer", "manifiestate", "habla", "di algo", "ruido", "golpea", "tira algo"],
+    respuestas: ["no", "cuesta mucho", "no puedo", "intento", "mira", "escucha", "falta energía", "no me dejan", "dame fuerza", "es difícil", "presta atención", "otra vez", "no quiero", "tal vez", "mírame", "ahora"]
+  },
+  {
+    triggers: ["bien", "enojado", "triste", "ayuda", "paso", "moriste", "como moriste", "cuando moriste", "duele", "sufres", "estas sufriendo"],
+    respuestas: ["frío", "dolor", "atrapado", "oscuro", "ayúdame", "vete", "triste", "enojado", "fuego", "no recuerdo", "sufriendo", "paz", "descanso", "hace frío", "miedo", "no sé", "traición", "sangre"]
+  },
+  {
+    triggers: ["cuantos son", "cuantos estan aqui", "cuantos hay", "hay multi", "hay mas contigo", "cuantos espiritus", "hay alguien mas"],
+    respuestas: ["somos muchos", "somos tres", "somos varios", "somos dos", "muchos", "no estas solo", "aqui estamos", "legión", "toda mi familia", "solo yo", "demasiados"]
+  },
+  {
+    triggers: ["te molestamos", "te incomodamos", "te enoja que estemos aqui", "te molesta nuestra presencia", "podemos estar aqui", "te enojas"],
+    respuestas: ["no", "un poco", "si", "no importa", "sigan", "quedense", "vete", "fuera", "me agrada", "interesante", "molesta la luz"]
+  },
+  {
+    triggers: ["que te paso", "que paso aqui", "que ocurrio", "que sucedio", "por que moriste", "como fue", "fue un accidente"],
+    respuestas: ["accidente", "fuego", "dolor", "caida", "oscuro", "no recuerdo", "triste", "asesinato", "enfermedad", "maldad", "me dejaron solo", "no desperté"]
+  },
+  {
+    triggers: ["estas atrapado", "no puedes salir", "estas perdido", "estas aqui para siempre", "puedes irte", "puedes cruzar"],
+    respuestas: ["si", "atrapado", "no puedo salir", "ayuda", "intento", "no se", "es mi hogar", "mi condena", "esperando la llave", "no hay salida"]
+  },
+  {
+    triggers: ["quieres ayuda", "necesitas ayuda", "podemos ayudarte", "quieres que te ayudemos", "que podemos hacer"],
+    respuestas: ["ayudame", "si", "no", "tal vez", "dame energia", "reza por mí", "encuentra mi cuerpo", "sácame de aquí", "escúchame"]
+  },
+  {
+    triggers: ["quieres que nos vayamos", "debemos irnos", "quieres que salgamos", "quieres que nos marchemos", "nos vamos"],
+    respuestas: ["vete", "quedate", "no", "si", "aun no", "sal ahora", "demasiado tarde", "no me dejes", "corre"]
+  },
+  {
+    triggers: ["hay niños aqui", "eres un niño", "hay un niño aqui", "eres pequeño", "cuantos años tienes"],
+    respuestas: ["niño", "madre", "padre", "solo", "frio", "jugamos?", "tengo miedo", "donde esta mamá", "pequeño"]
+  },
+  {
+    triggers: ["donde estas", "en donde estas", "puedes decir donde estas", "estas conmigo"],
+    respuestas: ["aqui", "detras", "arriba", "abajo", "cerca", "muy cerca", "en el rincón", "en la sombra", "en el techo"]
+  },
+  {
+    triggers: ["vivias aqui", "esta era tu casa", "este lugar era tuyo", "conoces este sitio"],
+    respuestas: ["mi casa", "si", "antes", "hace tiempo", "siempre", "mi santuario", "era hermoso", "ahora es ruina"]
+  },
+  {
+    triggers: ["dios", "crees en dios", "jesus", "religion", "rezar", "oracion"],
+    respuestas: ["luz", "lejos", "no está aquí", "silencio", "perdón", "tarde", "oscuridad", "ayuda"]
+  },
+  {
+    triggers: ["eres malo", "eres un demonio", "eres oscuro", "vienes del infierno", "quieres hacernos daño"],
+    respuestas: ["no soy malo", "tengo hambre", "oscuridad", "dolor", "tal vez", "tú eres malo", "infernal", "caos"]
+  },
 {
-triggers: ["que quieres", "que estas buscando", "por que estas aqui", "que buscas", "cual es tu proposito", "por que"],
-respuestas: ["luz", "tu alma", "a ustedes", "cuidarlos", "descansar", "tu miedo", "tu energía", "nada", "solo observo", "la verdad"]
-},
-{
-triggers: ["quien eres", "como te llamas", "cual es tu nombre", "quien es", "eres tu", "nombre"],
-respuestas: ["no tengo nombre", "olvidado", "soy la sombra", "nadie", "el dueño", "el antiguo", "vigilante", "un alma", "espíritu", "alguien perdido", "soy yo", "no me recuerdas"]
-},
-{
-triggers: ["aqui", "cerca", "detras", "alguien", "con nosotros", "estan", "acompanas", "estas vivo"],
-respuestas: ["sí", "aquí estoy", "siempre", "detrás de ti", "a tu lado", "muy cerca", "mirando", "en la oscuridad", "somos muchos", "cerca", "no estamos solos", "frente a ti", "te sigo", "escucha"]
-},
-{
-triggers: ["puedes", "haz", "toca", "mueve", "senal", "hacer", "manifiestate", "habla", "di algo", "ruido"],
-respuestas: ["no", "cuesta mucho", "no puedo", "intento", "mira", "escucha", "falta energía", "no me dejan", "dame fuerza", "es difícil", "presta atención", "otra vez", "no quiero", "tal vez"]
-},
-{
-triggers: ["bien", "enojado", "triste", "ayuda", "paso", "moriste", "como moriste", "cuando moriste", "duele", "sufres"],
-respuestas: ["frío", "dolor", "atrapado", "oscuro", "ayúdame", "vete", "triste", "enojado", "fuego", "no recuerdo", "sufriendo", "paz", "descanso", "hace frío", "miedo", "no sé"]
-},
+    triggers: ["quien eres", "como te llamas", "nombre", "identificate", "dime tu nombre", "quien es", "como te conocen"],
+    respuestas: ["no tengo nombre", "olvidado", "soy la sombra", "nadie", "el dueño", "el antiguo", "vigilante", "un alma", "espíritu", "alguien perdido", "soy yo", "no me recuerdas", "un pecador", "el que espera", "un amigo", "el primero", "el ultimo", "tu reflejo", "ceniza", "polvo", "un susurro", "el guardian", "el desterrado"]
+  },
+  {
+    triggers: ["cuantos años tienes", "que edad tienes", "eres viejo", "eres joven", "cuantos años", "edad"],
+    respuestas: ["siglos", "muchos", "no hay tiempo", "olvide contar", "siempre aqui", "joven", "viejo", "eterno", "milenios", "naci en sombras", "antes que tu", "no importa", "el tiempo murio"]
+  },
+  {
+    triggers: ["de donde eres", "donde naciste", "donde veniste", "de donde vienes", "cual es tu origen"],
+    respuestas: ["lejos", "de la tierra", "del frio", "de la oscuridad", "de aqui mismo", "del pasado", "de ningun lado", "del abismo", "del cielo", "del infierno", "del polvo", "de tus sueños"]
+  },
 
-{
-triggers: ["cuantos son", "cuantos estan aqui", "cuantos hay", "hay multi", "hay mas contigo", "cuantos espiritus"],
-respuestas: ["somos muchos", "somos tres", "somos varios", "somos dos", "muchos", "no estas solo", "aqui estamos"]
-},
+  // --- ESTADO Y UBICACIÓN ---
+  {
+    triggers: ["donde estas", "en donde estas", "estas aqui", "estas cerca", "donde te encuentras", "posicion", "ubicacion"],
+    respuestas: ["aqui", "detras", "arriba", "abajo", "cerca", "muy cerca", "en el rincón", "en la sombra", "en el techo", "frente a ti", "en el pasillo", "bajo el piso", "en tus pensamientos", "en la ventana", "en la puerta", "lejos", "en todas partes", "atrapado", "en el vacio"]
+  },
+  {
+    triggers: ["estas solo", "hay alguien mas", "estas acompañado", "estas con alguien", "cuantos son", "hay mas espiritus"],
+    respuestas: ["solo", "somos muchos", "somos tres", "varios", "el esta aqui", "ella mira", "nosotros", "legion", "con mi madre", "con mi padre", "no estas solo", "me cuidan", "me vigilan", "somos sombras"]
+  },
+  {
+    triggers: ["estas vivo", "estas muerto", "eres un fantasma", "eres un espiritu", "eres real"],
+    respuestas: ["ni vivo ni muerto", "estoy aqui", "vivi una vez", "carne y hueso no", "energia", "eco", "recuerdo", "soy real", "mas que tu", "un reflejo", "sombra", "vacio", "vete", "escucha"]
+  },
 
-{
-triggers: ["te molestamos", "te incomodamos", "te enoja que estemos aqui", "te molesta nuestra presencia"],
-respuestas: ["no", "un poco", "si", "no importa", "sigan", "quedense", "vete"]
-},
+  // --- LA MUERTE Y EL PASADO ---
+  {
+    triggers: ["como moriste", "que te paso", "que paso aqui", "causa de muerte", "te mataron", "fue un accidente", "que ocurrio"],
+    respuestas: ["accidente", "fuego", "dolor", "caida", "oscuro", "no recuerdo", "triste", "asesinato", "enfermedad", "maldad", "me dejaron solo", "no desperté", "veneno", "cuerda", "sangre", "traicion", "ahogado", "frio", "hambre", "golpes", "miedo"]
+  },
+  {
+    triggers: ["hace mucho", "cuando moriste", "en que año", "que fecha", "hace cuanto tiempo", "hace cuanto estas aqui"],
+    respuestas: ["hace mucho", "ayer", "no se", "el tiempo no existe", "siglos", "ayer mismo", "cuando era joven", "antes de la casa", "hace una eternidad", "1900", "mucho", "poco", "recientemente", "hace frio"]
+  },
+  {
+    triggers: ["vivias aqui", "esta era tu casa", "dueño", "propietario", "este lugar era tuyo", "donde vivias"],
+    respuestas: ["mi casa", "si", "antes", "hace tiempo", "siempre", "mi santuario", "era hermoso", "ahora es ruina", "mi cama", "mi cocina", "en el jardin", "todo era mio", "fui feliz", "fui triste"]
+  },
 
-{
-triggers: ["que te paso", "que paso aqui", "que ocurrio", "que sucedio", "por que moriste"],
-respuestas: ["accidente", "fuego", "dolor", "caida", "oscuro", "no recuerdo", "triste"]
-},
+  // --- SENTIMIENTOS Y ESTADO MENTAL ---
+  {
+    triggers: ["estas enojado", "tienes ira", "estas molesto", "te molesta nuestra presencia", "nos odias", "por que estas furioso"],
+    respuestas: ["si", "mucho", "no", "vete", "fuera", "tengo hambre", "duele", "por que vinieron", "mi lugar", "odio", "rabia", "quemado", "traicionado", "venganza", "sangre", "miedo"]
+  },
+  {
+    triggers: ["estas triste", "sufres", "te duele", "estas sufriendo", "lloras", "por que lloras", "tienes pena"],
+    respuestas: ["dolor", "tristeza", "soledad", "llanto", "nadie me escucha", "atrapado", "oscuro", "frio", "ayudame", "perdido", "sin luz", "extraño a mi madre", "sin salida", "piedad", "perdon"]
+  },
+  {
+    triggers: ["tienes miedo", "estas asustado", "quien te asusta", "le temes a algo", "que te da miedo"],
+    respuestas: ["el", "la oscuridad", "el hombre negro", "el diablo", "tu", "no se", "siempre", "mucho", "me miran", "me persiguen", "el abismo", "no puedo decir", "silencio", "shhh"]
+  },
 
-{
-triggers: ["estas atrapado", "no puedes salir", "estas perdido", "estas aqui para siempre"],
-respuestas: ["si", "atrapado", "no puedo salir", "ayuda", "intento", "no se"]
-},
+  // --- MANIFESTACIONES Y PEDIDOS ---
+  {
+    triggers: ["puedes tocar", "toca a alguien", "puedes mover algo", "haz un ruido", "golpea la pared", "tira algo", "danos una señal"],
+    respuestas: ["intento", "no puedo", "mucha energia", "mira", "escucha", "ahora", "tal vez", "ayudame", "dame fuerza", "no me dejan", "presta atencion", "otra vez", "no quiero", "dificil", "ya lo hice"]
+  },
+  {
+    triggers: ["habla mas fuerte", "puedes gritar", "di mi nombre", "repite lo que dije", "puedes comunicarte", "habla con nosotros"],
+    respuestas: ["estoy gritando", "no escuchas", "mi voz es debil", "mi garganta", "no tengo lengua", "escucha bien", "presta atencion", "vete", "ayuda", "nombre", "tu nombre", "no puedo"]
+  },
+  {
+    triggers: ["puedes vernos", "nos estas mirando", "que estamos haciendo", "que tengo en la mano", "puedes verme"],
+    respuestas: ["te veo", "luces", "miedo", "estas parado", "estas sentado", "mirando", "pecador", "carne", "sangre", "veo tu alma", "te sigo", "atras de ti", "luz blanca", "oscuro"]
+  },
 
-{
-triggers: ["quieres ayuda", "necesitas ayuda", "podemos ayudarte", "quieres que te ayudemos"],
-respuestas: ["ayudame", "si", "no", "tal vez", "dame energia"]
-},
+  // --- RELIGIÓN Y TRASCENDENCIA ---
+  {
+    triggers: ["dios", "jesus", "cristo", "crees en dios", "eres de la luz", "vienes de dios", "rezas", "oracion"],
+    respuestas: ["lejos", "no esta aqui", "silencio", "perdon", "tarde", "oscuridad", "ayuda", "luz", "blanco", "no lo veo", "me abandono", "no puedo entrar", "el cielo esta cerrado", "fuego", "shhh"]
+  },
+  {
+    triggers: ["infierno", "demonio", "diablo", "lucifer", "eres malo", "vienes del infierno", "eres oscuro", "eres un demonio"],
+    respuestas: ["esta aqui", "abajo", "fuego", "calor", "dolor", "el me manda", "soy malo", "oscuridad", "tu mundo", "carne", "pecado", "muerte", "sufrimiento", "el jefe", "el dueño"]
+  },
+  {
+    triggers: ["quieres ir a la luz", "quieres descansar", "quieres paz", "quieres cruzar", "necesitas el descanso eterno"],
+    respuestas: ["si", "no puedo", "ayudame", "guíame", "tengo miedo", "esta lejos", "no me dejan", "no hay luz", "estoy bien", "mi lugar", "atrapado", "todavia no", "falta algo", "mi cuerpo"]
+  },
 
-{
-triggers: ["quieres que nos vayamos", "debemos irnos", "quieres que salgamos", "quieres que nos marchemos"],
-respuestas: ["vete", "quedate", "no", "si", "aun no", "sal ahora"]
-},
+  // --- NIÑOS Y FAMILIA ---
+  {
+    triggers: ["eres un niño", "hay niños aqui", "eres una niña", "cuantos niños hay", "con quien juegas"],
+    respuestas: ["niño", "tengo frio", "donde esta mama", "juegas?", "escondite", "me perdi", "solo", "pelota", "risas", "lloro", "asustado", "el armario", "bajo la cama"]
+  },
+  {
+    triggers: ["donde estan tus padres", "donde esta tu mama", "donde esta tu papa", "tienes familia", "estas con tu familia"],
+    respuestas: ["se fueron", "me dejaron", "muertos", "no se", "en la tierra", "lejos", "conmigo", "bajo el arbol", "en la pared", "shhh", "vienen", "ahi vienen"]
+  },
 
-{
-triggers: ["puedes tocarnos", "puedes tocar algo", "puedes mover algo", "puedes hacer una señal"],
-respuestas: ["intento", "mira", "escucha", "tal vez", "no puedo", "dificil"]
-},
+  // --- INTERACCIÓN CON INVESTIGADORES ---
+  {
+    triggers: ["quieres que nos vayamos", "te molestamos", "debemos irnos", "quieres que salgamos", "nos podemos quedar"],
+    respuestas: ["vete", "sal ahora", "fuera", "quedate", "no me dejes", "tengo miedo solo", "me diviertes", "vete ya", "es peligroso", "corre", "si", "no", "pronto"]
+  },
+  {
+    triggers: ["que quieres de nosotros", "que necesitas", "que buscas", "que podemos darte", "quieres mi energia", "quieres mi alma"],
+    respuestas: ["tu alma", "tu miedo", "ayuda", "luz", "tu cuerpo", "calor", "energia", "que te vayas", "sangre", "justicia", "que me recuerden", "paz", "carne", "vida"]
+  },
+  {
+    triggers: ["puedes tocar este aparato", "toca la caja", "puedes encender la luz", "puedes hablar aqui", "puedes usar esta energia"],
+    respuestas: ["lo intento", "brilla", "duele", "ruido", "extraño", "mas energia", "dificil", "no se como", "mira", "ahora", "escucha"]
+  },
 
+  // --- ADVERTENCIAS Y AMENAZAS ---
+  {
+    triggers: ["va a pasar algo", "nos vas a hacer daño", "eres peligroso", "hay algo malo aqui", "peligro"],
+    respuestas: ["vete", "corre", "el viene", "peligro", "muerte", "sangre", "detras de ti", "no mires", "sal ya", "te matara", "cuidado", "escondete", "shhh", "ya esta aqui"]
+  },
+  {
+    triggers: ["quien te hizo daño", "quien te mato", "quien es el malo", "quien esta en las sombras", "quien es el"],
+    respuestas: ["el hombre", "ella", "mi padre", "mi madre", "el oscuro", "el diablo", "nadie", "un amigo", "traicion", "shhh", "no puedo decir", "el me mira", "el me escucha"]
+  },
 {
-triggers: ["hay niños aqui", "eres un niño", "hay un niño aqui"],
-respuestas: ["niño", "madre", "padre", "solo", "frio"]
-},
+    triggers: ["que tienes en la mano", "que es ese objeto", "que buscas en el suelo", "perdiste algo", "donde esta tu juguete"],
+    respuestas: ["mi medalla", "un cuchillo", "nada", "mi muñeca", "está roto", "la llave", "el anillo", "cenizas", "huesos", "está escondido", "mi tesoro", "tómalo", "no lo toques", "es mío", "oro"]
+  },
+  {
+    triggers: ["te gusta este regalo", "quieres este juguete", "puedes mover la pelota", "toca el dispositivo", "mira mi camara"],
+    respuestas: ["gracias", "no me gusta", "brilla", "rómpelo", "no sirve", "déjalo", "llévatelo", "sucio", "nuevo", "asusta", "míralo caer", "quema", "frío", "hazlo otra vez", "ya lo vi"]
+  },
 
+  // --- EL ENTORNO Y CLIMA (Triggers 16-30) ---
+  {
+    triggers: ["por que hace frio", "sientes el calor", "esta lloviendo", "te gusta la oscuridad", "por que se apago la luz"],
+    respuestas: ["mi aliento", "tengo hielo", "estoy helado", "el fuego quema", "mojado", "no hay sol", "me gusta", "así es mejor", "yo la apagué", "miedo a la luz", "negro", "el vacío", "niebla", "viento", "tormenta"]
+  },
+  {
+    triggers: ["donde duermes", "cual es tu rincon", "te gusta este cuarto", "donde te escondes", "que hay en el sotano"],
+    respuestas: ["en la pared", "bajo la cama", "en el ático", "en el armario", "aquí mismo", "no duermo", "nunca descanso", "el rincón oscuro", "donde no ves", "entre las sombras", "detrás del cuadro", "en el espejo", "debajo", "adentro", "lejos"]
+  },
+
+  // --- INTERACCIÓN DIRECTA Y ÓRDENES (Triggers 31-50) ---
+  {
+    triggers: ["puedes silbar", "puedes cantar", "puedes gritar mi nombre", "puedes susurrar", "haz un golpe fuerte"],
+    respuestas: ["escucha", "no tengo voz", "me duele", "shhh", "ahora", "presta atención", "estoy cansado", "otra vez", "no quiero", "tal vez luego", "mírame", "atrás", "golpe", "ruido", "eco", "viste?", "oíste?", "casi", "falta poco", "mucha luz"]
+  },
+  {
+    triggers: ["dame una señal clara", "haz que se mueva la mesa", "toca mi espalda", "toca mi mano", "puedes soplar"],
+    respuestas: ["no puedo", "intento", "ayúdame", "dame fuerza", "toma", "ahí", "atrás", "miedo", "no me dejan", "lo viste", "otra señal", "ya voy", "cerca", "lejos", "estoy débil", "necesito energía", "falta poco", "mira bien", "fíjate", "ahora"]
+  },
+
+  // --- PASADO Y ACCIONES (Triggers 51-70) ---
+  {
+    triggers: ["que hacias antes", "en que trabajabas", "eras feliz", "que te gustaba hacer", "tenias amigos"],
+    respuestas: ["cosecha", "hierro", "sangre", "música", "nada", "sufrir", "correr", "esconderme", "trabajo duro", "era rico", "pobre", "olvidado", "nadie", "solo", "con ellos", "jugaba", "leía", "rezaba", "lloraba", "moría"]
+  },
+  {
+    triggers: ["quien te hizo daño", "fue un hombre", "fue una mujer", "te traicionaron", "quien te empujo"],
+    respuestas: ["mi hermano", "mi padre", "él", "ella", "un extraño", "el jefe", "nadie", "yo mismo", "el fuego", "el agua", "la cuerda", "veneno", "mentiras", "el cuchillo", "la oscuridad", "un amigo", "el cura", "un soldado", "un loco", "shhh"]
+  },
+
+  // --- PREGUNTAS CRÍPTICAS (Triggers 71-85) ---
+  {
+    triggers: ["que hay del otro lado", "que ves tu", "como es el cielo", "como es el infierno", "que se siente morir"],
+    respuestas: ["vacío", "gris", "nada", "dolor", "frío", "paz", "espera", "oscuridad", "niebla", "muchas voces", "gritos", "silencio absoluto", "eterno", "pesadilla", "sueño", "lejos", "luz blanca", "sombras", "caos", "orden"]
+  },
+  {
+    triggers: ["puedes leerme la mente", "sabes lo que pienso", "que voy a hacer", "conoces mi futuro", "sabes quien soy"],
+    respuestas: ["tienes miedo", "pecado", "mentira", "muerte", "luz", "oscuridad", "te veo", "lo sé", "pronto", "mañana", "nunca", "ayer", "tu alma", "tu corazón", "sucio"]
+  },
+
+  // --- ADVERTENCIAS Y FINAL (Triggers 86-100) ---
+  {
+    triggers: ["alguien viene", "quien viene por ti", "quien esta en la puerta", "por que corres", "que es ese ruido arriba"],
+    respuestas: ["él", "la muerte", "el dueño", "vete", "escóndete", "ya llegó", "demasiado tarde", "no mires", "shhh", "silencio", "vienen todos", "huye", "peligro", "sangre", "fuego"]
+  },
+  {
+    triggers: ["ya nos vamos", "te quedarás aquí", "volveremos pronto", "nos das permiso de irnos", "adios"],
+    respuestas: ["no te vayas", "quédate", "gracias", "al fin", "solo", "esperaré", "te sigo", "nos vemos", "adiós", "muere", "vete ya", "fuera", "miedo", "regresa", "promesa"]
+  },
 {
-triggers: ["donde estas", "en donde estas", "puedes decir donde estas"],
-respuestas: ["aqui", "detras", "arriba", "abajo", "cerca", "muy cerca"]
-},
+    triggers: ["que hora es", "es de noche", "es de dia", "cuanto tiempo paso", "que año es", "que dia es hoy"],
+    respuestas: ["tarde", "siempre es noche", "no hay reloj", "eterno", "1920", "hoy no existe", "madrugada", "las tres", "oscurece", "pronto", "ayer", "mañana", "siglos"]
+  },
+  {
+    triggers: ["va a amanecer", "falta mucho", "es tarde", "cuando termina", "cuanto falta"],
+    respuestas: ["nunca", "ya casi", "falta poco", "espera", "ahora", "el final", "el principio", "no termina", "paciencia", "mira el sol", "no hay luz"]
+  },
 
+  // --- SENSACIONES Y CUERPO (Triggers 21-40) ---
+  {
+    triggers: ["tienes cuerpo", "puedes sentir", "tienes hambre", "tienes sed", "tienes frio", "tienes calor"],
+    respuestas: ["hambre", "mucha sed", "hielo", "fuego", "polvo", "vacio", "no siento", "duele todo", "mis huesos", "mi piel", "quemado", "seco", "sangre"]
+  },
+  {
+    triggers: ["puedes oler", "a que huele", "hueles eso", "sientes mi perfume", "que aroma hay"],
+    respuestas: ["flores", "muerte", "humo", "tierra", "podrido", "incienso", "tu miedo", "azufre", "nada", "viejo", "humedad", "gas", "limpio"]
+  },
+  {
+    triggers: ["tienes ojos", "puedes oir", "me escuchas bien", "puedes tocarme la cara", "tienes manos"],
+    respuestas: ["te veo", "te escucho", "mis oídos", "frías", "hueso", "transparentes", "negras", "no tengo", "muchas manos", "te toco", "siente", "atrás"]
+  },
+
+  // --- COLORES Y VISIONES (Triggers 41-60) ---
+  {
+    triggers: ["de que color es", "que color te gusta", "ves colores", "que color es mi ropa", "de que color eres"],
+    respuestas: ["negro", "blanco", "rojo sangre", "gris", "azul frio", "sin color", "oscuridad", "brillante", "como el fuego", "amarillo", "transparente", "sombra"]
+  },
+  {
+    triggers: ["que ves en el espejo", "te gusta mirarte", "quien esta en el reflejo", "mira el espejo"],
+    respuestas: ["un monstruo", "nada", "un viejo", "ella", "tú", "roto", "oscuridad", "mi cara", "no soy yo", "miedo", "vete del espejo", "mírame"]
+  },
+
+  // --- FAMILIA Y RELACIONES (Triggers 61-80) ---
+  {
+    triggers: ["quien era tu esposa", "quien era tu esposo", "tienes hermanos", "donde estan tus hijos", "conoces a mi familia"],
+    respuestas: ["muertos", "me odian", "lejos", "bajo tierra", "conmigo", "no tengo", "los perdi", "en el fuego", "lloran", "me buscan", "tu abuelo", "tu madre"]
+  },
+  {
+    triggers: ["estas casado", "estabas solo", "quien te cuidaba", "quien te amaba", "alguien te extraña"],
+    respuestas: ["nadie", "ella", "mi perro", "solo yo", "olvidado", "hace mucho", "odio", "traición", "mi madre", "por siempre", "pobre de mi"]
+  },
+
+  // --- LUGARES ESPECÍFICOS DEL SITIO (Triggers 81-100) ---
+  {
+    triggers: ["que hay en la cocina", "que hay en el baño", "quien esta en las escaleras", "quien sube", "quien baja"],
+    respuestas: ["cuchillos", "agua", "alguien sube", "yo bajo", "el sotano", "no mires arriba", "pasos", "caída", "sangre en el piso", "está cerrado", "la llave"]
+  },
+  {
+    triggers: ["puedes abrir la puerta", "puedes cerrar la ventana", "mueve la cortina", "golpea el cristal", "haz un ruido en el techo"],
+    respuestas: ["pesada", "no puedo", "mira la ventana", "cristal roto", "estoy arriba", "estoy abajo", "escucha el golpe", "ahora", "intento", "ayuda", "fuerza"]
+  },
+  {
+    triggers: ["que hay detras de la pared", "puedes atravesar muros", "donde esta el tunel", "donde esta el pasadizo"],
+    respuestas: ["huesos", "vacio", "oscuro", "atrapado", "no hay salida", "aqui", "dentro", "cuerpo", "tierra", "secreto", "no digas", "silencio", "shhh"]
+  },
 {
-triggers: ["vivias aqui", "esta era tu casa", "este lugar era tuyo"],
-respuestas: ["mi casa", "si", "antes", "hace tiempo", "siempre"]
-}
+    triggers: ["te gusta esta luz", "puedes hablar por la radio", "usa este dispositivo", "mira la pantalla", "puedes encender esto", "dame una señal en el equipo"],
+    respuestas: ["brilla mucho", "ruido", "duele", "ondas", "electricidad", "está vivo", "puedo intentarlo", "más energía", "no entiendo", "míralo", "rojo", "verde", "está fallando", "yo lo hice"]
+  },
+  {
+    triggers: ["puedes hablar por el microfono", "grabadora", "me escuchas en la grabadora", "puedes repetir lo que dije", "puedes decir hola"],
+    respuestas: ["hola", "me oyes?", "estoy aquí", "otra vez", "escucha el eco", "mi voz", "no tengo aliento", "es difícil", "ayúdame", "hola de nuevo", "adiós"]
+  },
 
+  // --- JUSTICIA, VENGANZA Y PECADO (Triggers 21-40) ---
+  {
+    triggers: ["quieres venganza", "quien fue el culpable", "mereces justicia", "estas aqui por odio", "alguien te hizo daño"],
+    respuestas: ["sangre", "ojo por ojo", "él lo pagará", "ya es tarde", "todos mueren", "justicia", "odio", "me traicionaron", "él me empujó", "fuego eterno", "lo estoy esperando", "ven", "mira mi cara"]
+  },
+  {
+    triggers: ["has pecado", "eres un asesino", "mataste a alguien", "porque lo hiciste", "te arrepientes"],
+    respuestas: ["no tuve opción", "tenía hambre", "él empezó", "sangre en mis manos", "no me arrepiento", "perdón", "fue un accidente", "shhh", "no digas nada", "tú también", "pecador", "oscuro"]
+  },
+
+  // --- OBJETOS DE LA CASA Y RITUALES (Triggers 41-60) ---
+  {
+    triggers: ["que hay en el baul", "que hay en la caja", "que escondes", "abre el cajon", "que hay debajo de la tabla"],
+    respuestas: ["ropa vieja", "huesos", "una carta", "mi infancia", "está vacío", "polvo", "un secreto", "no abras", "es mío", "oro", "cenizas", "tierra", "muerte"]
+  },
+  {
+    triggers: ["quien prendio la vela", "te gusta el incienso", "vienes por la sal", "que significa este circulo", "tienes miedo a la cruz"],
+    respuestas: ["quema", "luz débil", "fuera", "protección", "no sirve", "déjame", "miedo", "paz", "humo", "me asfixia", "no entres", "sal de ahí"]
+  },
+
+  // --- ESTADOS FÍSICOS Y ELEMENTOS (Triggers 61-80) ---
+  {
+    triggers: ["puedes atravesar la puerta", "eres humo", "eres aire", "puedes volar", "te sientes pesado"],
+    respuestas: ["soy nada", "niebla", "viento frío", "vuelo", "estoy atrapado", "pesado", "como el plomo", "transparente", "puedo pasar", "no hay muros", "pared fría", "mírame pasar"]
+  },
+  {
+    triggers: ["hay agua", "tienes sed", "te ahogaste", "sientes el viento", "esta lloviendo adentro"],
+    respuestas: ["mucha agua", "no puedo respirar", "frío", "mojado", "pulmones llenos", "río", "el pozo", "caída", "ayúdame", "me hundo", "burbujas", "silencio bajo el agua"]
+  },
+
+  // --- INTERACCIÓN FINAL Y DESPEDIDA (Triggers 81-100) ---
+  {
+    triggers: ["quieres que apague la luz", "quieres que me acerque", "puedo tocarte", "donde te toco", "estas en mi hombro"],
+    respuestas: ["sí", "no", "estoy cerca", "en tu espalda", "frío en tu cuello", "no me toques", "te siento", "carne caliente", "quiero tu calor", "estoy aquí", "atrás de ti", "mírame ahora"]
+  },
+  {
+    triggers: ["quien es el jefe", "quien manda aqui", "quien es el espiritu mas fuerte", "tienes miedo de alguien", "quien te persigue"],
+    respuestas: ["él", "el hombre de negro", "el dueño", "el antiguo", "el diablo", "nadie", "yo mando", "vete antes de que venga", "está despertando", "shhh", "ya viene", "corre"]
+  },
+  {
+    triggers: ["puedes decir adios", "despídete", "hasta luego", "nos volveremos a ver", "ultima palabra"],
+    respuestas: ["adiós", "te espero", "nunca", "siempre", "mañana", "vete", "muerte", "final", "paz", "no te vayas", "quédate conmigo", "ayuda", "oscuro"]
+  },
+{
+    triggers: ["quien era el presidente", "quien gobernaba", "habia guerra", "viste la guerra", "de que epoca vienes", "hace un siglo"],
+    respuestas: ["cañones", "soldados", "mucho miedo", "sangre en el campo", "hace tanto", "no recuerdo el año", "caballos", "humo", "revolución", "pobreza", "hambre", "antes de los autos", "todo era campo"]
+  },
+  {
+    triggers: ["llevas uniforme", "como es tu ropa", "que traes puesto", "tienes zapatos", "llevas un vestido"],
+    respuestas: ["trapos", "negro", "sucio", "mi mejor traje", "blanco de novia", "está rota", "uniforme", "botas", "tengo frío", "seda", "está quemada", "sangre en la ropa"]
+  },
+
+  // --- SENSACIONES AUDITIVAS Y SONIDOS (Triggers 21-40) ---
+  {
+    triggers: ["escuchas mi voz", "que ruido fue ese", "escuchas la musica", "quien esta gritando", "por que hay susurros"],
+    respuestas: ["gritos", "voces en la pared", "música triste", "llanto", "ruido de cadenas", "pasos arriba", "alguien rasguña", "tu corazón", "shhh", "escucha el viento", "soy yo", "golpes"]
+  },
+  {
+    triggers: ["puedes silbar", "puedes aplaudir", "puedes soplar", "haz un estruendo", "mueve una silla"],
+    respuestas: ["no hay aire", "intento", "escucha ahora", "mira", "muy pesado", "sin fuerza", "dame energía", "estoy cansado", "ahí va", "clac", "bum"]
+  },
+
+  // --- INTERACCIÓN CON EL ESPACIO FÍSICO (Triggers 41-60) ---
+  {
+    triggers: ["donde estas sentado", "estas de pie", "estas flotando", "estas escondido", "te gusta este lugar"],
+    respuestas: ["en el rincón", "detrás tuyo", "en el techo", "bajo la mesa", "floto", "no toco el suelo", "estoy atrapado", "mi cárcel", "mi hogar", "está sucio", "demasiada luz", "aquí me quedo"]
+  },
+  {
+    triggers: ["que hay en el jardin", "quien esta en el arbol", "hay algo enterrado", "que hay bajo la tierra", "donde esta el cuerpo"],
+    respuestas: ["raíces", "huesos", "un pozo", "mi perro", "tierra húmeda", "mucha oscuridad", "no caves", "déjalo ahí", "está profundo", "frío", "olvidado", "justo aquí"]
+  },
+
+  // --- ESTADOS DE ÁNIMO Y DESEOS (Triggers 61-80) ---
+  {
+    triggers: ["quieres que rece", "necesitas luz", "buscas el perdon", "tienes envidia", "estas celoso"],
+    respuestas: ["no sirve", "reza por mí", "luz no", "brilla mucho", "demasiado tarde", "perdón", "pecado", "si", "quiero tu vida", "vete", "déjame", "piedad"]
+  },
+  {
+    triggers: ["quieres jugar", "jugamos a las escondidas", "traigo un juego", "quieres un amigo", "te sientes solo"],
+    respuestas: ["te encontré", "tú sigues", "solo", "por siempre solo", "juega conmigo", "no te vayas", "quédate", "escondido", "te veo", "aquí estás", "atrás"]
+  },
+
+  // --- ADVERTENCIAS Y AMENAZAS DIRECTAS (Triggers 81-100) ---
+  {
+    triggers: ["eres peligroso", "puedes poseerme", "puedes entrar en mi", "vas a hacerme daño", "que me vas a hacer"],
+    respuestas: ["tengo hambre", "quiero tu calor", "tu cuerpo", "no me dejas", "vete ahora", "corre", "te sigo", "mañana", "sangre", "miedo", "tu alma", "ya estoy dentro"]
+  },
+  {
+    triggers: ["quien es el mas malo", "quien es la sombra negra", "quien esta en el pasillo", "que es esa figura"],
+    respuestas: ["él", "el segador", "el dueño de las sombras", "no lo mires", "cierra los ojos", "muerte", "el demonio", "está detrás de ti", "shhh", "silencio", "ya te vio", "huye"]
+  },
+  {
+    triggers: ["esta es la ultima pregunta", "quieres decir algo mas", "puedes despedirte", "se acabo el tiempo"],
+    respuestas: ["no te vayas", "espera", "muere", "adiós", "te veo pronto", "en tus sueños", "estoy contigo", "siempre", "nunca", "final", "luz", "oscuro"]
+  },
+{
+    triggers: ["que hay en el bosque", "quien camina afuera", "estas en el jardin", "miras por la ventana", "viste el arbol"],
+    respuestas: ["sombras", "lobos", "no hay salida", "entre las hojas", "me colgué", "estoy mirando", "tierra fría", "viento", "ramas", "se mueve", "está ahí fuera", "no salgas"]
+  },
+  {
+    triggers: ["puedes mover las hojas", "haz que sople el viento", "te gusta la luna", "vienes del rio", "estas en el pozo"],
+    respuestas: ["está oscuro", "me ahogué", "el agua está fría", "brilla", "noche eterna", "puedo intentarlo", "húmedo", "barro", "profundo", "sin fondo", "caída", "ayuda"]
+  },
+
+  // --- ESTADOS FÍSICOS Y DESCOMPOSICIÓN (Triggers 21-40) ---
+  {
+    triggers: ["como es tu cara", "puedes sonreir", "tienes dientes", "tienes pelo", "como son tus ojos"],
+    respuestas: ["no tengo piel", "negros", "vacíos", "se cayeron", "hueso", "podrido", "ceniza", "no me mires", "horror", "sangre", "calavera", "polvo", "gusanos"]
+  },
+  {
+    triggers: ["puedes respirar", "por que jadeas", "estas cansado", "te falta el aire", "puedes oler mi miedo"],
+    respuestas: ["no hay pulmones", "asfixia", "humo", "polvo", "sí", "fuerte", "amargo", "muerte", "sangre", "estoy agotado", "mil años", "descanso", "nunca"]
+  },
+
+  // --- PARÁLISIS E INFLUENCIA (Triggers 41-60) ---
+  {
+    triggers: ["por que no puedo moverme", "me estas pesando", "estas sentado en mi pecho", "por que tengo escalofrios", "por que se eriza mi piel"],
+    respuestas: ["miedo", "soy yo", "presión", "no te muevas", "escucha", "estoy encima", "frío", "mi mano", "mi aliento", "te tengo", "no grites", "parálisis", "quédate quieto"]
+  },
+  {
+    triggers: ["puedes entrar en mis sueños", "me viste dormir", "estuviste en mi cuarto anoche", "que hacias mientras dormia"],
+    respuestas: ["te observaba", "cerca de tu cara", "en el rincón", "pesadillas", "yo las mando", "siempre", "cada noche", "en la esquina", "bajo la cama", "shhh", "no despiertes"]
+  },
+
+  // --- OBJETOS Y TECNOLOGÍA MODERNA (Triggers 61-80) ---
+  {
+    triggers: ["sabes que es un celular", "conoces esta linterna", "que es este ruido digital", "te asusta el flash", "puedes escribir algo"],
+    respuestas: ["magia", "luz que quema", "ruido blanco", "estático", "ondas", "extraño", "no entiendo", "apágalo", "me duele", "brilla", "digital", "voces dentro"]
+  },
+  {
+    triggers: ["puedes mover el medidor", "enciende la luz roja", "haz que suene el sensor", "puedes usar la bateria", "necesitas pilas"],
+    respuestas: ["energía", "la tomo", "está seca", "rojo", "peligro", "ahora", "mira el número", "sube", "baja", "calor", "fuerza", "dame más"]
+  },
+
+  // --- ADVERTENCIAS FINALES Y SENTENCIAS (Triggers 81-100) ---
+  {
+    triggers: ["alguien va a morir hoy", "que va a pasar mañana", "cual es el secreto", "dime la verdad", "quien es el siguiente"],
+    respuestas: ["tú", "pronto", "el final", "sangre", "sepulcro", "oscuridad", "no hay mañana", "ya empezó", "está escrito", "el segador", "cenizas", "nadie se salva"]
+  },
+  {
+    triggers: ["puedes cerrar la sesión", "quieres que cortemos", "nos dejas ir", "es un adiós", "estas enojado porque nos vamos"],
+    respuestas: ["no", "te sigo a casa", "detrás de ti", "en el auto", "nos vemos", "nunca termina", "adiós", "muerte", "espera", "un minuto más", "shhh", "vete", "corre"]
+  },
+{
+    triggers: ["que hay en el vacio", "que sientes al no tener cuerpo", "como es no existir", "estas en el limbo", "puedes sentir el tiempo"],
+    respuestas: ["nada", "gris", "caída libre", "silencio eterno", "frío seco", "no soy nada", "viento", "espera infinita", "borrado", "eco de vida", "sin forma", "vació absoluto", "no hay tiempo"]
+  },
+  {
+    triggers: ["puedes recordar tu cara", "extrañas ser humano", "que es lo que mas extrañas", "te acuerdas de comer", "sientes el sol"],
+    respuestas: ["mi madre", "el calor", "respirar", "la luz", "el sabor", "dolor", "ser carne", "el sol quema", "olvido", "mi reflejo", "la música", "mi voz", "abrazar"]
+  },
+
+  // --- INTERACCIONES AGRESIVAS Y DOMINIO (Triggers 21-40) ---
+  {
+    triggers: ["vete de aqui", "te ordeno que salgas", "no tienes poder", "fuera de este lugar", "deja de molestarnos"],
+    respuestas: ["mi casa", "tú te vas", "oblígame", "no", "aquí me quedo", "estoy dentro", "demasiado tarde", "tengo hambre", "mío", "te observo", "ríe", "llora", "fuera tú"]
+  },
+  {
+    triggers: ["eres un demonio", "eres el diablo", "vienes del infierno", "eres maldad pura", "quien es tu amo"],
+    respuestas: ["peor", "el oscuro", "soy legión", "caos", "dolor", "él viene", "debajo de ti", "fuego", "azufre", "no nombres", "pecador", "muerte", "shhh"]
+  },
+
+  // --- SENSACIONES TÉRMICAS Y CLIMA (Triggers 41-60) ---
+  {
+    triggers: ["por que bajo la temperatura", "puedes congelar el agua", "sientes el calor de la vela", "por que hay una corriente de aire", "esta nevando"],
+    respuestas: ["mi presencia", "estoy helado", "tócame", "hielo", "muerte fría", "el fuego es vida", "tengo frío", "nieve", "invierno eterno", "viento de tumba", "se apaga", "oscuridad"]
+  },
+  {
+    triggers: ["puedes apagar la vela", "sopla sobre nosotros", "haz que se mueva el humo", "puedes quemar algo", "sientes el fuego"],
+    respuestas: ["sin aire", "quemado", "ceniza", "puedo", "mira el humo", "se mueve", "ahora", "calor", "duele", "fuego", "rojo", "asfixia"]
+  },
+
+  // --- SALUD MENTAL Y ESTADO PSICOLÓGICO (Triggers 61-80) ---
+  {
+    triggers: ["te volviste loco", "por que estas tan confundido", "sabes que estas muerto", "entiendes lo que pasa", "estas perdido en tu mente"],
+    respuestas: ["voces", "muchas voces", "gritos", "no estoy muerto", "mientes", "confusión", "laberinto", "ayúdame", "oscuro", "dónde estoy", "quién soy", "ruido", "blanco"]
+  },
+  {
+    triggers: ["estas atrapado en un recuerdo", "que dia estas viviendo", "vives el mismo dia", "estas en un bucle", "por que repites eso"],
+    respuestas: ["siempre es hoy", "él viene", "la puerta", "el golpe", "sangre", "otra vez", "no para", "ayuda", "bucle", "miedo", "eterno", "mismo dolor", "mañana no viene"]
+  },
+
+  // --- ADVERTENCIAS Y POSESIÓN (Triggers 81-100) ---
+  {
+    triggers: ["puedes entrar en mi", "vas a poseerme", "quieres mi cuerpo", "puedes hablar por mi boca", "estas en mis pensamientos"],
+    respuestas: ["abierto", "tu mente", "pronto", "déjame entrar", "carne fresca", "calor", "tu voz", "mío", "ya casi", "estoy dentro", "escucha", "tuyo", "sangre"]
+  },
+  {
+    triggers: ["que pasara si me quedo", "que hay detras de la puerta", "debo correr", "estas detras de mi ahora", "puedes tocar mi cuello"],
+    respuestas: ["muerte", "frío", "no mires", "corre", "te tengo", "cerca", "mi mano", "tu piel", "huye", "demasiado tarde", "ya te vi", "shhh", "adiós"]
+  },
+{
+    triggers: ["estabas enfermo", "te dolia el cuerpo", "que medicina tomabas", "estabas en un hospital", "quien era tu doctor", "te operaron"],
+    respuestas: ["pastillas", "veneno", "sangre", "agujas", "hospital", "me cortaron", "frío médico", "olor a alcohol", "no podía respirar", "enfermera", "me dejaron solo", "dolor agudo", "blanco", "muriendo"]
+  },
+  {
+    triggers: ["podias caminar", "estabas en silla de ruedas", "estabas ciego", "no podias hablar", "tenias cancer", "fue tu corazon"],
+    respuestas: ["parálisis", "oscuridad", "silencio", "latido", "se detuvo", "pum pum", "falló", "débil", "tos", "sangre", "no sentía mis piernas", "atrapado en mi cuerpo"]
+  },
+
+  // --- ANIMALES Y NATURALEZA (Triggers 21-40) ---
+  {
+    triggers: ["tienes un perro", "hay animales aqui", "los animales te ven", "puedes asustar al gato", "viste al pajaro", "hay insectos"],
+    respuestas: ["ladridos", "me huelen", "me tienen miedo", "el gato sabe", "ratas", "gusanos", "vuelan", "bestia", "mi mascota", "lejos", "shhh", "arañas", "en la pared"]
+  },
+  {
+    triggers: ["eres una bestia", "eres un animal", "te transformas", "tienes garras", "tienes cuernos"],
+    respuestas: ["monstruo", "animal", "salvaje", "hambre", "carne", "sangre", "no soy humano", "la sombra", "el lobo", "bajo tu piel", "mírame", "garras"]
+  },
+
+  // --- LUZ, SOMBRA Y COLORES PROFUNDOS (Triggers 41-60) ---
+  {
+    triggers: ["por que todo es oscuro", "puedes ver la luz blanca", "que color es el tunel", "viste el cielo", "hay estrellas"],
+    respuestas: ["negro", "gris", "no hay salida", "quemado", "el túnel es eterno", "luz que ciega", "frío", "bruma", "niebla roja", "vacio", "sin color", "todo es sombra"]
+  },
+  {
+    triggers: ["te gusta el sol", "te quema la luz", "puedes ver el arcoiris", "que color es tu alma", "eres una sombra blanca"],
+    respuestas: ["quema", "lejos", "hermoso", "roto", "oscuridad", "manchada", "blanco", "reflejo", "como el fuego", "morado", "invisible", "te veo"]
+  },
+
+  // --- JUSTICIA Y PECADOS ESPECÍFICOS (Triggers 61-80) ---
+  {
+    triggers: ["robaste algo", "mataste por dinero", "fuiste un ladron", "mentiste a tu familia", "tienes algun secreto sucio"],
+    respuestas: ["oro", "codicia", "sangre", "mentiras", "me atraparon", "nadie supo", "bajo el suelo", "mi culpa", "traición", "pecado", "shhh", "no digas", "mío"]
+  },
+  {
+    triggers: ["te arrepientes de lo que hiciste", "buscas el cielo", "mereces estar aqui", "alguien reza por ti", "quieres perdonar"],
+    respuestas: ["nunca", "demasiado tarde", "es mi lugar", "silencio", "odio", "venganza", "paz", "no hay perdón", "reza", "luz", "infierno", "duele"]
+  },
+
+  // --- INTERACCIONES DIRECTAS CON EL ESPACIO (Triggers 81-100) ---
+  {
+    triggers: ["puedes soplar en mi oreja", "puedes mover mi cabello", "puedes tirar mi ropa", "puedes rasguñar", "puedes empujar"],
+    respuestas: ["frío", "shhh", "te toco", "mira", "ahora", "intento", "cerca", "atrás", "tu cuello", "siente", "me voy", "ya estoy"]
+  },
+  {
+    triggers: ["quien esta en el techo", "quien golpea la puerta", "quien esta llorando", "quien se ríe", "que es ese susurro"],
+    respuestas: ["ella", "el loco", "yo", "nosotros", "voces", "llanto", "sufrimiento", "risa amarga", "el niño", "el dueño", "vete", "corre", "final"]
+  },
+{
+    triggers: ["donde esta tu diario", "que dice tu carta", "perdiste tu reloj", "donde dejaste tus llaves", "buscas tu dinero", "tienes una foto"],
+    respuestas: ["está oculto", "quemada", "se detuvo", "la puerta", "oro", "está rota", "recuerdos", "en la caja", "mi cara", "ya no importa", "olvido", "mira el cuadro", "cenizas"]
+  },
+  {
+    triggers: ["este espejo es tuyo", "quien rompio el vidrio", "donde esta tu ropa", "que hay en el maletin", "buscas tu anillo", "donde esta tu medalla"],
+    respuestas: ["me veo", "siete años", "trapos", "huesos", "boda", "mi cuello", "brilla", "está enterrado", "sucio", "sangre", "mío", "no lo toques"]
+  },
+
+  // --- CLIMA ESPIRITUAL Y ELEMENTOS (Triggers 21-40) ---
+  {
+    triggers: ["por que hay niebla", "esta lloviendo sangre", "sientes el rayo", "el viento te habla", "por que el aire es pesado"],
+    respuestas: ["oscuridad", "dolor", "trueno", "gritos", "asfixia", "no puedo respirar", "bruma", "gris", "muerte", "niebla", "te tapa", "miedo"]
+  },
+  {
+    triggers: ["puedes calentar el cuarto", "puedes enfriar mi mano", "puedes crear una sombra", "puedes mover el humo", "haz que huela a flores"],
+    respuestas: ["estoy helado", "fuego", "quemado", "mira la pared", "ahora", "incienso", "podrido", "muerte", "intento", "fuerza", "energía", "frío extremo"]
+  },
+
+  // --- CONCEPTOS DEL ALMA Y EL MÁS ALLÁ (Triggers 41-60) ---
+  {
+    triggers: ["donde esta tu alma", "tu alma es negra", "buscas la redencion", "estas en el purgatorio", "conoces el paraiso", "viste a los angeles"],
+    respuestas: ["rota", "manchada", "no hay salida", "espera", "está lejos", "no los veo", "oscuro", "vacío", "perdida", "shhh", "ayúdame", "sin luz", "caída"]
+  },
+  {
+    triggers: ["que es la muerte", "duele morir", "cuanto tiempo tardaste en morir", "que viste al final", "habia una luz"],
+    respuestas: ["silencio", "paz", "dolor", "eterno", "oscuridad", "frío", "nada", "mucha gente", "gritos", "un túnel", "gris", "el final"]
+  },
+
+  // --- PORTALES Y ENTIDADES (Triggers 61-80) ---
+  {
+    triggers: ["hay un portal aqui", "por donde entraste", "como sales de aqui", "que hay en el espejo", "abriste una puerta"],
+    respuestas: ["el espejo", "la esquina", "está abierto", "no hay salida", "la grieta", "oscuridad", "vienen", "entran", "ya están aquí", "no cierres", "ayuda", "vete ya"]
+  },
+  {
+    triggers: ["quien es el guardian", "quien es el hombre del sombrero", "viste a la mujer de blanco", "quien es la sombra alta"],
+    respuestas: ["él mira", "peligro", "está en la puerta", "ella llora", "el dueño", "nos vigila", "shhh", "no lo nombres", "corran", "muerte", "atrás de ti"]
+  },
+
+  // --- CONFRONTACIÓN Y CIERRE (Triggers 81-100) ---
+  {
+    triggers: ["eres un cobarde", "muestrate si eres valiente", "por que te escondes", "tienes miedo de nosotros", "eres debil"],
+    respuestas: ["estoy aquí", "mírame", "te veo", "no soy débil", "miedo tú", "espera", "ya voy", "cerca", "te mataré", "fuera", "muere", "ahora"]
+  },
+  {
+    triggers: ["puedes decir una ultima palabra", "terminamos por hoy", "adios para siempre", "descansa en paz", "nos volveremos a ver"],
+    respuestas: ["no", "espera", "te sigo", "mañana", "sangre", "muerte", "paz", "adiós", "nunca", "siempre", "tu casa", "en tus sueños", "shhh"]
+  }
 ];
-    
-   const evpPalabrasSueltas = [
-"aquí","ayuda","frío","oscuro","silencio","mira","detrás","ven","muerte","luz","duele","sombras","nosotros","cerca","sangre","fuego","miedo","dolor","solo","niño","madre","padre","agua",
-"alma","eco","voz","presencia","pasos","respira","mira","arriba","abajo","sombra","rostro","ojos","figura","sigue","escucha","habla","espera","entra","sal","ruido","golpe","susurro","antiguo","viejo",
-"olvido","recuerdo","tumba","puerta","ventana","piso","techo","pared","pasillo","sotano","casa","camino","oscuridad","niebla","aire","viento","energia","temor","grito","eco","señal","cuerpo","espiritu",
-"fantasma","presente","pasado","aqui","siempre","nunca","perdido","atrapado","camina","mira","escucha","observa","respira","siente","viene","vuelve","regresa","sigue","espera","quieto"
+
+const evpPalabrasSueltas = [
+  "aquí", "ayuda", "frío", "oscuro", "silencio", "mira", "detrás", "ven", "muerte", "luz", "duele", "sombras", "nosotros", "cerca", "sangre", "fuego", "miedo", "dolor", "solo", "niño", "madre", "padre", "agua",
+  "alma", "eco", "voz", "presencia", "pasos", "respira", "mira", "arriba", "abajo", "sombra", "rostro", "ojos", "figura", "sigue", "escucha", "habla", "espera", "entra", "sal", "ruido", "golpe", "susurro", "antiguo", "viejo",
+  "olvido", "recuerdo", "tumba", "puerta", "ventana", "piso", "techo", "pared", "pasillo", "sotano", "casa", "camino", "oscuridad", "niebla", "aire", "viento", "energia", "temor", "grito", "eco", "señal", "cuerpo", "espiritu",
+  "fantasma", "presente", "pasado", "aqui", "siempre", "nunca", "perdido", "atrapado", "camina", "mira", "escucha", "observa", "respira", "siente", "viene", "vuelve", "regresa", "sigue", "espera", "quieto",
+  "hambre", "sed", "quemado", "ahogado", "colgado", "llave", "escondite", "ceniza", "polvo", "tiempo", "reloj", "final"
 ];
 
 const evpFrasesCortas = [
-"te veo","te escucho","te siento","te sigo","te miro","te observo","te encontramos","te esperamos","te hablamos","te llamo","estoy aquí","aquí estoy","aquí seguimos","a tu lado","detrás tuyo","muy cerca","muy lejos",
-"sigue aquí","ven aquí","entra aquí","mira atrás","mira arriba","mira abajo","mira aquí","mira cerca","mira oscuro","escucha bien","escucha ahora","escucha esto","oye bien",
-"no estás solo","no estamos solos","somos muchos","somos sombras","somos energía","somos voz","somos antiguos","somos aquí","somos silencio","seguimos aquí",
-"algo viene","algo mira","algo camina","algo respira","algo escucha","algo se mueve","algo te sigue","algo te mira","algo está aquí","algo despierta",
-"pasos cerca","pasos atrás","ruido cerca","ruido atrás","susurros aquí","susurros cerca","voz aquí","voz atrás","voz cerca","eco aquí",
-"puerta abierta","puerta cerrada","ventana rota","ventana abierta","pared fría","piso frío","techo oscuro","pasillo largo","sótano oscuro","lugar antiguo",
-"sombras aquí","sombras cerca","sombras atrás","figura aquí","figura oscura","rostro oscuro","ojos miran","ojos aquí","ojos cerca","ojos atrás",
-"energía aquí","energía fría","energía oscura","presencia aquí","presencia cerca","presencia atrás",
-"alma aquí","alma perdida","espíritu aquí","espíritu cerca",
-"niebla aquí","niebla fría","niebla oscura",
-"oscuridad aquí","oscuridad cerca",
-"luz pequeña","luz débil","luz aquí","luz atrás","luz cerca",
-"frío aquí","frío cerca","frío atrás","frío fuerte","mucho frío",
-"siente frío","siente miedo","siente energía","siente presencia","siente sombra",
-"te encontramos","te seguimos","te miramos","te rodeamos","te sentimos","te observamos","te buscamos","te escuchamos","te llamamos","te recordamos",
-"ven despacio","ven ahora","entra despacio","entra ahora","mira despacio","escucha despacio","espera aquí","espera ahora","sigue caminando","sigue mirando",
-"estoy contigo","estoy aquí","te estoy viendo","te estoy mirando","te estoy siguiendo","te estoy escuchando",
-"mira la puerta","mira el pasillo","mira la sombra","escucha el ruido","escucha los pasos","escucha la voz",
-"no te vayas","no mires atrás","no entres aquí","no sigas","no avances","no te acerques",
-"algo respira","algo observa","algo se acerca","algo despierta","algo se mueve"
+  "te veo", "te escucho", "te siento", "te sigo", "te miro", "te observo", "te encontramos", "te esperamos", "te hablamos", "te llamo", "estoy aquí", "aquí estoy", "aquí seguimos", "a tu lado", "detrás tuyo", "muy cerca", "muy lejos",
+  "sigue aquí", "ven aquí", "entra aquí", "mira atrás", "mira arriba", "mira abajo", "mira aquí", "mira cerca", "mira oscuro", "escucha bien", "escucha ahora", "escucha esto", "oye bien",
+  "no estás solo", "no estamos solos", "somos muchos", "somos sombras", "somos energía", "somos voz", "somos antiguos", "somos aquí", "somos silencio", "seguimos aquí",
+  "algo viene", "algo mira", "algo camina", "algo respira", "algo se mueve", "algo te sigue", "algo te mira", "algo está aquí", "algo despierta",
+  "pasos cerca", "pasos atrás", "ruido cerca", "ruido atrás", "susurros aquí", "susurros cerca", "voz aquí", "voz atrás", "voz cerca", "eco aquí",
+  "puerta abierta", "puerta cerrada", "ventana rota", "ventana abierta", "pared fría", "piso frío", "techo oscuro", "pasillo largo", "sótano oscuro", "lugar antiguo",
+  "sombras aquí", "sombras cerca", "sombras atrás", "figura aquí", "figura oscura", "rostro oscuro", "ojos miran", "ojos aquí", "ojos cerca", "ojos atrás",
+  "energía aquí", "energía fría", "energía oscura", "presencia aquí", "presencia cerca", "presencia atrás",
+  "alma aquí", "alma perdida", "espíritu aquí", "espíritu cerca",
+  "niebla aquí", "niebla fría", "niebla oscura",
+  "oscuridad aquí", "oscuridad cerca",
+  "luz pequeña", "luz débil", "luz aquí", "luz atrás", "luz cerca",
+  "frío aquí", "frío cerca", "frío atrás", "frío fuerte", "mucho frío",
+  "siente frío", "siente miedo", "siente energía", "siente presencia", "siente sombra",
+  "te encontramos", "te seguimos", "te miramos", "te rodeamos", "te sentimos", "te observamos", "te buscamos", "te escuchamos", "te llamamos", "te recordamos",
+  "ven despacio", "ven ahora", "entra despacio", "entra ahora", "mira despacio", "escucha despacio", "espera aquí", "espera ahora", "sigue caminando", "sigue mirando",
+  "estoy contigo", "estoy aquí", "te estoy viendo", "te estoy mirando", "te estoy siguiendo", "te estoy escuchando",
+  "mira la puerta", "mira el pasillo", "mira la sombra", "escucha el ruido", "escucha los pasos", "escucha la voz",
+  "no te vayas", "no mires atrás", "no entres aquí", "no sigas", "no avances", "no te acerques",
+  "algo respira", "algo observa", "algo se acerca", "algo despierta", "algo se mueve",
+  "dame tu mano", "tengo hambre", "hace frío aquí", "ayúdame a salir", "quieren entrar", "ya vienen", "duerme ahora", "no respires"
 ];
 
 const evpAdvertencias = [
-"cuidado","vete","peligro","huye","corre","no entres","sal de aquí","detente","no mires atrás","es peligroso","cuidado atrás","cállate","escóndete","aléjate","te hará daño","vete ahora","corre de aquí",
-"no avances","no sigas","no entres ahí","no abras","no mires","no regreses","huye ahora","corre ahora","aléjate ahora","vete lejos","no te acerques","no toques","no hables","no escuches"
+  "cuidado", "vete", "peligro", "huye", "corre", "no entres", "sal de aquí", "detente", "no mires atrás", "es peligroso", "cuidado atrás", "cállate", "escóndete", "aléjate", "te hará daño", "vete ahora", "corre de aquí",
+  "no avances", "no sigas", "no entres ahí", "no abras", "no mires", "no regreses", "huye ahora", "corre ahora", "aléjate ahora", "vete lejos", "no te acerques", "no toques", "no hables", "no escuches",
+  "te está mirando", "está detrás", "no respires", "escóndete rápido", "cierra los ojos", "mátalo", "sangre", "muerte"
 ];
 
 const paranormalQuestions = [
-"hay alguien aqui","puede alguien escucharnos","puedes hablarnos","quien esta aqui","como te llamas","estas aqui","estas cerca","necesitas ayuda","que te paso","vivias aqui","estas solo",
-"puedes dar una senal","puedes decir si","puedes decir no","si estas aqui di algo","quieres que nos vayamos",
-"cuantos estan aqui","cuantos son","hay mas contigo","hay alguien con nosotros",
-"puedes tocarnos","puedes mover algo","puedes hacer ruido","puedes golpe ar algo",
-"nos puedes ver","nos puedes escuchar","puedes repetir eso","puedes decir mi nombre",
-"hay un niño aqui","hay un espiritu aqui","hay algo aqui",
-"estas detras de nosotros","estas en este cuarto","estas en este lugar",
-"quieres hablar","quieres comunicarse","quieres que te ayudemos"
+  "hay alguien aqui", "puede alguien escucharnos", "puedes hablarnos", "quien esta aqui", "como te llamas", "estas aqui", "estas cerca", "necesitas ayuda", "que te paso", "vivias aqui", "estas solo",
+  "puedes dar una senal", "puedes decir si", "puedes decir no", "si estas aqui di algo", "quieres que nos vayamos",
+  "cuantos estan aqui", "cuantos son", "hay mas contigo", "hay alguien con nosotros",
+  "puedes tocarnos", "puedes mover algo", "puedes hacer ruido", "puedes golpear algo",
+  "nos puedes ver", "nos puedes escuchar", "puedes repetir eso", "puedes decir mi nombre",
+  "hay un niño aqui", "hay un espiritu aqui", "hay algo aqui",
+  "estas detras de nosotros", "estas en este cuarto", "estas en este lugar",
+  "quieres hablar", "quieres comunicarse", "quieres que te ayudemos",
+  "como moriste", "quien te hizo esto", "eres bueno o malo", "puedes decirnos la fecha",
+  "quieres que rezamos por ti", "conoces a alguien de aqui", "que es ese ruido",
+  "puedes encender la luz", "puedes apagar la luz", "puedes tocar mi hombro",
+  "eres un demonio", "vienes en son de paz", "estas atrapado en este objeto"
 ];
     let evpHistorial = [];
 
