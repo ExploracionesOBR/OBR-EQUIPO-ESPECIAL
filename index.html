@@ -52,6 +52,9 @@
         
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
+        
+        /* FIX: Permitir uso en vertical durante el modo MIC SENDER */
+        body.mic-sender-mode #orientation-lock { display: none !important; }
 
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
         body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
@@ -131,7 +134,7 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff0000; }
         
         /* Modal Inputs Selectables */
-        .modal-bg input { -webkit-user-select: auto !important; user-select: auto !important; }
+        .modal-bg input, #loading input { -webkit-user-select: auto !important; user-select: auto !important; }
 
         /* Mic Sender Utils */
         .pulsing { animation: pulse 1.5s infinite; }
@@ -469,7 +472,7 @@ self.addEventListener('fetch', e => {
 
         if (!('webkitSpeechRecognition' in window)) return;
         
-        if (speechRec) return; // Evita reinicios innecesarios
+        if (speechRec) return; 
         
         speechRec = new webkitSpeechRecognition();
         speechRec.continuous = true;
@@ -564,7 +567,25 @@ self.addEventListener('fetch', e => {
         
         if (remoteMicPeer) remoteMicPeer.destroy();
         
-        remoteMicPeer = new Peer(myId, PEER_CONFIG);
+        const TURN_DOMAIN = "exploracionesobr.duckdns.org";
+        const TURN_USERNAME = 'user';
+        const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
+        
+        const PEER_CONFIG_TURN = {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    {
+                        urls: `turn:${TURN_DOMAIN}:3478`,
+                        username: TURN_USERNAME,
+                        credential: TURN_PASSWORD
+                    }
+                ]
+            }
+        };
+        
+        remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
         remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo en canal:', id));
         
         remoteMicPeer.on('connection', (conn) => {
@@ -629,6 +650,8 @@ self.addEventListener('fetch', e => {
         
         document.getElementById('main-startup-ui').style.display = 'none';
         document.getElementById('mic-sender-ui').style.display = 'flex';
+        
+        document.body.classList.add('mic-sender-mode');
         
         document.getElementById('sender-studio-id').value = localStorage.getItem('obr_studio_id') || 'local';
         document.getElementById('sender-cam-name').value = localStorage.getItem('obr_camera_name') || 'cam1';
@@ -732,7 +755,26 @@ self.addEventListener('fetch', e => {
             }
 
             if (senderPeer) senderPeer.destroy();
-            senderPeer = new Peer(null, PEER_CONFIG);
+            
+            const TURN_DOMAIN = "exploracionesobr.duckdns.org";
+            const TURN_USERNAME = 'user';
+            const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
+            
+            const PEER_CONFIG_TURN = {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        {
+                            urls: `turn:${TURN_DOMAIN}:3478`,
+                            username: TURN_USERNAME,
+                            credential: TURN_PASSWORD
+                        }
+                    ]
+                }
+            };
+            
+            senderPeer = new Peer(null, PEER_CONFIG_TURN);
             
             senderPeer.on('open', () => {
                 isConnectingSender = false;
@@ -787,6 +829,7 @@ self.addEventListener('fetch', e => {
         if (senderPeer) { senderPeer.destroy(); senderPeer = null; }
         if (senderLocalStream) { senderLocalStream.getTracks().forEach(t => t.stop()); senderLocalStream = null; }
         updateSenderUI('offline');
+        document.body.classList.remove('mic-sender-mode');
     }
 
     const evpFrasesAmbiguaMemoria = [
@@ -903,42 +946,7 @@ self.addEventListener('fetch', e => {
         filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 
     };
     
-    // --- CONFIGURACIÓN DE SERVIDOR TURN ---
-    localStorage.removeItem("TURN_DOMAIN");
-    const TURN_DOMAIN = "exploracionesobr.duckdns.org";
-    const TURN_USERNAME = 'user';
-    const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
-
-    const FORCE_TURN = false;
-    const DISABLE_ICE = false;
-
-    console.log("🚀 Modo TURN forzado:", FORCE_TURN);
-    console.log("🚀 ICE deshabilitado:", DISABLE_ICE);
-    console.log("TURN DOMAIN ACTIVO:", TURN_DOMAIN);
-
-    const PEER_CONFIG = {
-        config: DISABLE_ICE ? {
-            iceServers: []
-        } : (FORCE_TURN ? {
-            iceTransportPolicy: 'relay',
-            iceServers: [
-                {
-                    urls: `turn:${TURN_DOMAIN}:3478`,
-                    username: TURN_USERNAME,
-                    credential: TURN_PASSWORD
-                }
-            ]
-        } : {
-            iceServers: [
-                { urls: 'stun:stun1.l.google.com:19302' },
-                {
-                    urls: `turn:${TURN_DOMAIN}:3478`,
-                    username: TURN_USERNAME,
-                    credential: TURN_PASSWORD
-                }
-            ]
-        })
-    };
+    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] } };
     
     let AI_API_KEY = state.apiKey;
     let CURRENT_AI_MODEL = state.aiModel;
@@ -958,7 +966,7 @@ self.addEventListener('fetch', e => {
     let aiScannerState = 0; 
     let aiScannerTimer = 0;
 
-    const DIRECTORIO_EVP = [
+const DIRECTORIO_EVP = [
   {
     triggers: ["que quieres", "que estas buscando", "por que estas aqui", "que buscas", "cual es tu proposito", "por que", "que deseas", "que necesitas"],
     respuestas: ["luz", "tu alma", "a ustedes", "cuidarlos", "descansar", "tu miedo", "tu energía", "nada", "solo observo", "la verdad", "liberación", "compañía", "que me escuchen", "justicia", "paz"]
@@ -1717,8 +1725,20 @@ const paranormalQuestions = [
 
     function startSweepAudio() { if (sweepFileAvailable) { sweepAudio.volume = 0.12; sweepAudio.currentTime = 0; sweepAudio.play().catch(() => {}); } }
     function stopSweepAudio() {
-        _fadeVolume(sweepAudio, 0, 400); setTimeout(() => { sweepAudio.pause(); sweepAudio.currentTime = 0; }, 450);
-        responseAudio.pause(); responseAudio.currentTime = 0;
+        if (_xfadeTimers.has(sweepAudio)) {
+            clearInterval(_xfadeTimers.get(sweepAudio));
+            _xfadeTimers.delete(sweepAudio);
+        }
+        sweepAudio.pause();
+        sweepAudio.volume = 0;
+        sweepAudio.currentTime = 0;
+        
+        if (_xfadeTimers.has(responseAudio)) {
+            clearInterval(_xfadeTimers.get(responseAudio));
+            _xfadeTimers.delete(responseAudio);
+        }
+        responseAudio.pause();
+        responseAudio.currentTime = 0;
     }
 
     function unlockAudioContext() {
@@ -2077,7 +2097,7 @@ const paranormalQuestions = [
             mixDestination = audioCtx.createMediaStreamDestination();
 
             micGainNode = audioCtx.createGain();
-            micGainNode.gain.value = 2.5; 
+            micGainNode.gain.value = 4.5; 
 
             audioAnalyser = audioCtx.createAnalyser();
             audioAnalyser.fftSize = 2048;
@@ -2320,7 +2340,7 @@ const paranormalQuestions = [
         _ttsBassFilter = ctx1.createBiquadFilter(); _ttsBassFilter.type = 'lowshelf';
         _ttsHighFilter = ctx1.createBiquadFilter(); _ttsHighFilter.type = 'highshelf';
         
-        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 3.0; ttsGainNode = ttsMainGain;
+        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 4.0; ttsGainNode = ttsMainGain;
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
         ttsMainGain.connect(ctx1.destination);
@@ -2350,7 +2370,7 @@ const paranormalQuestions = [
     }
 
     function applyGoogleTTSFilters(isGoogle, useDom) {
-        if (!ttsMainGain) return; ttsMainGain.gain.value = 3.0; 
+        if (!ttsMainGain) return; ttsMainGain.gain.value = 4.0; 
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
@@ -2423,7 +2443,7 @@ const paranormalQuestions = [
             window._isAnnouncement = true; 
             speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
                 sweepAudio.volume = 0; sweepAudio.currentTime = 0; sweepAudio.play().catch(() => {});
-                _fadeVolume(sweepAudio, 0.12, 1200); 
+                _fadeVolume(sweepAudio, 0.3, 1200); 
                 
                 setTimeout(() => {
                     lastReconnectTime = 0;
@@ -2711,7 +2731,7 @@ const paranormalQuestions = [
                 }
             }
 
-            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 3.5, evpAudioCtx?.currentTime || 0, 0.05); }
+            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 4.5, evpAudioCtx?.currentTime || 0, 0.05); }
 
             let evpText; 
             const textRoll = Math.random();
