@@ -457,7 +457,7 @@ self.addEventListener('fetch', e => {
     window._isAnnouncement = false;
     let evpContextMemory = []; 
     
-    // MICRÓFONOS ENRUTADOS Y RECONOCIMIENTO LOCAL
+    // MICRÓFONOS ENRUTADOS
     window.remoteMicStream = null;
     let remoteMicPeer = null;
     let remoteDataConn = null;
@@ -470,19 +470,13 @@ self.addEventListener('fetch', e => {
             micSource = null;
         }
 
-        let activeStream = null;
-        
         if (window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0) {
-            activeStream = window.remoteMicStream;
-            console.log("[Audio Routing] Usando MICRÓFONO REMOTO EXCLUSIVO");
-            const statusEl = document.getElementById('mic-remote-status');
-            if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
-        }
-
-        if (activeStream) {
             try {
-                micSource = audioCtx.createMediaStreamSource(activeStream);
+                micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
                 micSource.connect(micGainNode);
+                console.log("[Audio Routing] Usando MICRÓFONO REMOTO EXCLUSIVO");
+                const statusEl = document.getElementById('mic-remote-status');
+                if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
             } catch(e) {
                 console.error("Error routing audio:", e);
             }
@@ -523,11 +517,11 @@ self.addEventListener('fetch', e => {
         
         remoteMicPeer.on('connection', (conn) => {
             remoteDataConn = conn;
-            conn.on('open', () => {
-                try { conn.send({ type: 'scan-state', audio: { scanVoice: state.isAudioScan } }); } catch(e) {}
-            });
             conn.on('data', (data) => {
-                if (data.type === 'remote-speech' && state.isAudioScan && !window._isAnnouncement && !isTtsPlaying && !isSpookySpeaking) {
+                if (data.type === 'remote-speech') {
+                    if (!state.isAudioScan || isTtsPlaying || isSpookySpeaking || window._isAnnouncement || Date.now() < (window._ignoreSpeechUntil || 0)) {
+                        return;
+                    }
                     const txt = normalizarTexto(data.text);
                     if (txt) {
                         window._liveUserText = txt.toUpperCase();
@@ -626,10 +620,9 @@ self.addEventListener('fetch', e => {
             console.warn("Speech recognition no soportado en este navegador.");
             return;
         }
-        if (senderSpeechRec) {
-            try { senderSpeechRec.stop(); } catch(e){}
-        }
-        console.log("Audio Scan activado desde cámara. Iniciando reconocimiento de voz...");
+        if (senderSpeechRec) return; 
+        
+        console.log("Iniciando reconocimiento de voz continuo en SENDER...");
         senderSpeechRec = new webkitSpeechRecognition();
         senderSpeechRec.continuous = true;
         senderSpeechRec.interimResults = true;
@@ -648,11 +641,16 @@ self.addEventListener('fetch', e => {
             }
         };
 
+        senderSpeechRec.onerror = (e) => {
+            console.warn("Sender Speech Error:", e.error);
+        };
+
         senderSpeechRec.onend = () => {
-            if (senderLocalStream && isSenderActive && senderSpeechRec) {
+            senderSpeechRec = null;
+            if (senderLocalStream && isSenderActive) {
                 setTimeout(() => {
-                    try { if (senderSpeechRec) senderSpeechRec.start(); } catch(e){}
-                }, 500);
+                    startSenderSpeech();
+                }, 250);
             }
         };
 
@@ -664,7 +662,7 @@ self.addEventListener('fetch', e => {
             senderSpeechRec.onend = null;
             try { senderSpeechRec.stop(); } catch(e){}
             senderSpeechRec = null;
-            console.log("Audio Scan desactivado desde cámara. Reconocimiento de voz pausado.");
+            console.log("Reconocimiento de voz pausado en SENDER.");
         }
     }
 
@@ -721,17 +719,7 @@ self.addEventListener('fetch', e => {
                 senderDataConn = senderPeer.connect(targetId);
                 
                 senderDataConn.on('open', () => {
-                    console.log("Canal de datos (para voz) abierto. Esperando comando de la cámara...");
-                });
-                
-                senderDataConn.on('data', (data) => {
-                    if (data.type === 'scan-state' && data.audio) {
-                        if (data.audio.scanVoice) {
-                            if (!senderSpeechRec) startSenderSpeech();
-                        } else {
-                            stopSenderSpeech();
-                        }
-                    }
+                    console.log("Canal de datos abierto. Transmisión de voz continua activa.");
                 });
                 
                 senderCurrentCall.on('error', (err) => {
@@ -1230,7 +1218,7 @@ const paranormalQuestions = [
             window._isAnnouncement = true; isTtsPlaying = true;
             cloudTTSPlayer.src = blobUrl; cloudTTSPlayer.playbackRate = 1.0; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
             cloudTTSPlayer.play().catch(() => {});
-            cloudTTSPlayer.addEventListener('ended', () => { isTtsPlaying = false; window._isAnnouncement = false; try { URL.revokeObjectURL(blobUrl); } catch(e) {} resolve(); }, { once: true });
+            cloudTTSPlayer.addEventListener('ended', () => { isTtsPlaying = false; window._isAnnouncement = false; window._ignoreSpeechUntil = Date.now() + 1000; try { URL.revokeObjectURL(blobUrl); } catch(e) {} resolve(); }, { once: true });
         });
     }
 
@@ -1260,14 +1248,14 @@ const paranormalQuestions = [
                 await _ensureContextRunning();
                 const src3 = await playBlobWithFilters(rawBuf3, 0.94 + Math.random() * 0.03, 'iavision', 'none');
                 src3.start(0);
-                src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); try { URL.revokeObjectURL(audioUrl); } catch(e){} };
+                src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); window._ignoreSpeechUntil = Date.now() + 1000; try { URL.revokeObjectURL(audioUrl); } catch(e){} };
                 return;
             } catch(e) {}
         }
 
         cloudTTSPlayer.src = audioUrl; cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
         try { await cloudTTSPlayer.play(); } catch(err) { isTtsPlaying = false; return; }
-        cloudTTSPlayer.addEventListener('ended', () => { clearTimeout(_ttsWatchdog); isTtsPlaying = false; lastEvpTime = Date.now(); }, { once: true });
+        cloudTTSPlayer.addEventListener('ended', () => { clearTimeout(_ttsWatchdog); isTtsPlaying = false; lastEvpTime = Date.now(); window._ignoreSpeechUntil = Date.now() + 1000; }, { once: true });
     }
 
     let _activeBufSrc = null; 
@@ -1275,6 +1263,7 @@ const paranormalQuestions = [
     function _resetTtsFlags() {
         isTtsPlaying = false; isSpookySpeaking = false; lastSpokenText = ""; clearTimeout(speechTimer); clearTimeout(_ttsWatchdog); _ttsWatchdog = null; lastEvpTime = Date.now() - 5000;
         if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+        window._ignoreSpeechUntil = Date.now() + 1000;
     }
 
     async function speakSpooky(text) {
@@ -1318,10 +1307,11 @@ const paranormalQuestions = [
                 isSpookySpeaking = false; 
                 lastEvpTime = Date.now(); 
                 playResponseEnd(); 
+                window._ignoreSpeechUntil = Date.now() + 1000;
                 try { URL.revokeObjectURL(blobUrl); } catch(e){} 
             };
         } catch(err) {
-            lastSpokenText = ""; isTtsPlaying = false; isSpookySpeaking = false; lastEvpTime = Date.now(); 
+            lastSpokenText = ""; isTtsPlaying = false; isSpookySpeaking = false; lastEvpTime = Date.now(); window._ignoreSpeechUntil = Date.now() + 1000;
         }
     }
 
@@ -1866,10 +1856,6 @@ const paranormalQuestions = [
             window._evpNextGap = 999999;
             window._waitingFirstInteraction = true;
             lastValidAudioTime = Date.now(); 
-            
-            if (remoteDataConn && remoteDataConn.open) {
-                try { remoteDataConn.send({ type: 'scan-state', audio: { scanVoice: true } }); } catch(e) {}
-            }
 
             window._isAnnouncement = true; 
             speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
@@ -1894,10 +1880,6 @@ const paranormalQuestions = [
         } else {
             if (btn) btn.classList.remove('active'); if (btnMenu) btnMenu.classList.remove('active-state');
             stopSweepAudio();
-            
-            if (remoteDataConn && remoteDataConn.open) {
-                try { remoteDataConn.send({ type: 'scan-state', audio: { scanVoice: false } }); } catch(e) {}
-            }
 
             clearTimeout(_ttsWatchdog);
             if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
