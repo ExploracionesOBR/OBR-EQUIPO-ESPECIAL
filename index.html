@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.9.8 (DYNAMIC MIC UI)</title> 
+    <title>CAMARA OBR PRO v6.9.9 (IA VISION FIX & MIC SENDER ROBUST)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -226,7 +226,7 @@
         <div id="main-startup-ui" class="flex flex-col items-center justify-center w-full h-full">
             <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
             <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.8 (Dynamic Mic UI)</p>
+            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.9 (IA Vision & Mic Fix)</p>
             <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden" id="progress-container"><div id="progress-bar"></div></div>
             <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
             
@@ -530,6 +530,7 @@ self.addEventListener('fetch', e => {
         
         try {
             remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
+            console.log("📡 [CÁMARA] Generando ruta de escucha para MIC SENDER:", myId);
             
             remoteMicPeer.on('disconnected', () => {
                 console.warn("Señalización de recepción pausada. Audio se mantiene.");
@@ -550,7 +551,7 @@ self.addEventListener('fetch', e => {
                 remoteDataConn = conn;
                 conn.on('data', (data) => {
                     if (data.type === 'remote-speech') {
-                        if (!state.isAudioScan) return; 
+                        if (!state.isAudioScan) return; // PLAY/PAUSA lógico en cámara
                         
                         const txt = normalizarTexto(data.text);
                         if (txt) {
@@ -742,7 +743,8 @@ self.addEventListener('fetch', e => {
                             credential: TURN_PASSWORD
                         }
                     ]
-                }
+                },
+                debug: 1
             };
             
             try {
@@ -934,6 +936,7 @@ self.addEventListener('fetch', e => {
     let currentAiText = "";
     let currentAiImage = null;   
     let currentAiImgEl = null;   
+    let pendingAiImgEl = null; // <- SE AÑADE PARA EVITAR QUE LA IMAGEN SE MUESTRE ANTES DE TIEMPO
     let aiTextTimer = null;
     let radarAngle = 0; 
     let canvasScanBoxes = []; 
@@ -1284,14 +1287,14 @@ const paranormalQuestions = [
             try {
                 const resp3 = await fetch(audioUrl); const rawBuf3 = await audioCtx.decodeAudioData(await resp3.arrayBuffer());
                 await _ensureContextRunning();
-                const src3 = await playBlobWithFilters(rawBuf3, 0.94 + Math.random() * 0.03, 'iavision', 'none');
+                const src3 = await playBlobWithFilters(rawBuf3, 1.0, 'iavision', 'none');
                 src3.start(0);
                 src3.onended = () => { clearTimeout(_ttsWatchdog); _activeBufSrc = null; isTtsPlaying = false; lastEvpTime = Date.now(); window._ignoreSpeechUntil = Date.now() + 1000; try { URL.revokeObjectURL(audioUrl); } catch(e){} };
                 return;
             } catch(e) {}
         }
 
-        cloudTTSPlayer.src = audioUrl; cloudTTSPlayer.playbackRate = 0.94 + Math.random() * 0.03; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
+        cloudTTSPlayer.src = audioUrl; cloudTTSPlayer.playbackRate = 1.0; cloudTTSPlayer.volume = 1.0; cloudTTSPlayer.load();
         try { await cloudTTSPlayer.play(); } catch(err) { isTtsPlaying = false; return; }
         cloudTTSPlayer.addEventListener('ended', () => { clearTimeout(_ttsWatchdog); isTtsPlaying = false; lastEvpTime = Date.now(); window._ignoreSpeechUntil = Date.now() + 1000; }, { once: true });
     }
@@ -1543,18 +1546,23 @@ const paranormalQuestions = [
 
         if (audioCtx.state === 'suspended' && !document.hidden) await audioCtx.resume().catch(()=>{});
 
-        if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
-            console.error("[Audio] Ningún micrófono remoto detectado.");
-            showToast("NO HAY MIC SENDER O ESTUDIO CONECTADO", true);
-            if (state.isAudioScan) toggleAudioScanner();
-            return;
+        if (state.isAudioScan) {
+            const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+            const hasLocal = window.localMicStream && window.localMicStream.getAudioTracks().length > 0;
+            
+            if (!hasRemote && !hasLocal) {
+                console.error("[Audio] Ningún micrófono detectado para AUDIO SCAN.");
+                showToast("NO HAY MIC SENDER O ESTUDIO CONECTADO", true);
+                toggleAudioScanner(); 
+                return;
+            }
         }
 
         try {
             mixDestination = audioCtx.createMediaStreamDestination();
 
             micGainNode = audioCtx.createGain();
-            micGainNode.gain.value = 6.5; 
+            micGainNode.gain.value = 4.0; 
 
             audioAnalyser = audioCtx.createAnalyser();
             audioAnalyser.fftSize = 2048;
@@ -1795,7 +1803,7 @@ const paranormalQuestions = [
         _ttsBassFilter = ctx1.createBiquadFilter(); _ttsBassFilter.type = 'lowshelf';
         _ttsHighFilter = ctx1.createBiquadFilter(); _ttsHighFilter.type = 'highshelf';
         
-        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 6.0; ttsGainNode = ttsMainGain;
+        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 3.5; ttsGainNode = ttsMainGain;
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
         ttsMainGain.connect(ctx1.destination);
@@ -1825,7 +1833,7 @@ const paranormalQuestions = [
     }
 
     function applyGoogleTTSFilters(isGoogle, useDom) {
-        if (!ttsMainGain) return; ttsMainGain.gain.value = 6.0; 
+        if (!ttsMainGain) return; ttsMainGain.gain.value = 3.5; 
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
@@ -1876,7 +1884,29 @@ const paranormalQuestions = [
         }
     }
 
+    // --- NUEVO: OCULTAMIENTO DINÁMICO DE AUDIO SCAN ---
+    window.updateAudioScanVisibility = function() {
+        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+        const hasStudio = conn && conn.open;
+        const isVisible = hasRemote || hasStudio;
+        
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) micBtn.style.display = isVisible ? 'flex' : 'none';
+        
+        const wrapper = document.getElementById('wrapper-audio-scan');
+        if (wrapper) wrapper.style.display = isVisible ? 'block' : 'none';
+        
+        if (!isVisible && state.isAudioScan) {
+            toggleAudioScanner(); 
+        }
+    };
+
     async function toggleAudioScanner() {
+        if (!state.isAudioScan && (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0)) {
+            showToast("CONECTE MODO MIC SENDER PRIMERO", true);
+            return;
+        }
+
         state.isAudioScan = !state.isAudioScan;
         const btn    = document.getElementById('mic-btn');
         const btnMenu = document.getElementById('btn-audio-menu');
@@ -2182,7 +2212,7 @@ const paranormalQuestions = [
                 }
             }
 
-            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 6.5, evpAudioCtx?.currentTime || 0, 0.05); }
+            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 4.0, evpAudioCtx?.currentTime || 0, 0.05); }
 
             let evpText; 
             const textRoll = Math.random();
@@ -2311,7 +2341,7 @@ const paranormalQuestions = [
         const smoothScale = 1 - Math.pow(1 - scale, 3);
         c.globalAlpha = Math.max(0, Math.min(1, scale * 1.5)); 
 
-        const bx = 14, by = 14, panelW = 320;
+        const bx = 14, by = 14, panelW = 352;
         let displayTxt = currentAiText, isScanning = !(currentAiImgEl && currentAiImgEl.complete && currentAiImgEl.naturalWidth > 0); 
         
         if (isScanning && !displayTxt) { 
@@ -2325,7 +2355,7 @@ const paranormalQuestions = [
         let borderColor = isScanning ? "#ff0000" : "#ff3333";
         let bgColor = isScanning ? "rgba(0,0,0,0)" : "rgba(10, 0, 0, 0.90)";
         
-        let imgH = isScanning ? 150 : 240; 
+        let imgH = isScanning ? 165 : 352; 
         
         const centerX = bx + panelW/2, centerY = by + imgH/2 + 20; 
         c.translate(centerX, centerY); 
@@ -2343,7 +2373,7 @@ const paranormalQuestions = [
         
         if(imgH > 0) {
             if (isScanning) {
-                c.save(); const radarRadiusBase = 50, radarCx = bx + radarRadiusBase + 10, radarCy = by + radarRadiusBase + 10; c.translate(radarCx, radarCy);
+                c.save(); const radarRadiusBase = 55, radarCx = bx + radarRadiusBase + 10, radarCy = by + radarRadiusBase + 10; c.translate(radarCx, radarCy);
                 c.strokeStyle = "rgba(0, 255, 100, 0.15)"; c.lineWidth = 1; for(let r=10; r<=radarRadiusBase; r+=10) { c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke(); }
                 c.beginPath(); c.moveTo(-radarRadiusBase, 0); c.lineTo(radarRadiusBase, 0); c.stroke(); c.beginPath(); c.moveTo(0, -radarRadiusBase); c.lineTo(0, radarRadiusBase); c.stroke();
                 const pulse = (Math.sin(performance.now() * 0.003) + 1) / 2, currentRadius = radarRadiusBase * (0.6 + (pulse * 0.4)); radarAngle += 0.04; c.rotate(radarAngle);
@@ -2352,36 +2382,18 @@ const paranormalQuestions = [
                 const txtX = radarCx + radarRadiusBase + 15, txtY = radarCy; if (displayTxt.includes('\n')) { const lines = displayTxt.split('\n'); let lineY = txtY - 15; lines.forEach((l, idx) => { drawGlitchText(c, l.toLowerCase(), txtX, lineY + (idx*14), 11); }); } else { drawGlitchText(c, displayTxt.toLowerCase(), txtX, txtY + 5, 12); }
             } else {
                 c.save(); 
-                try { 
-                    if (!window._aiImageCache || window._lastAiImageSrc !== currentAiImgEl.src) {
-                        const tmpC = document.createElement('canvas'); 
-                        tmpC.width = panelW; tmpC.height = imgH; 
-                        const tmpCtx = tmpC.getContext('2d'); 
-                        
-                        let sW = currentAiImgEl.naturalWidth, sH = currentAiImgEl.naturalHeight;
-                        let ratio = Math.max(panelW / sW, imgH / sH);
-                        let cW = panelW / ratio, cH = imgH / ratio;
-                        let cx = (sW - cW) / 2, cy = (sH - cH) / 2;
+                c.filter = "invert(100%) drop-shadow(0px 0px 15px #FFFF00) contrast(120%)";
+                
+                let sW = currentAiImgEl.naturalWidth, sH = currentAiImgEl.naturalHeight;
+                let ratio = Math.max(panelW / sW, imgH / sH);
+                let cW = panelW / ratio, cH = imgH / ratio;
+                let cx = bx + (panelW - cW) / 2, cy = by + (imgH - cH) / 2;
 
-                        tmpCtx.drawImage(currentAiImgEl, cx, cy, cW, cH, 0, 0, panelW, imgH); 
-                        
-                        const iData = tmpCtx.getImageData(0, 0, panelW, imgH); 
-                        const d = iData.data; 
-                        for (let pi = 0; pi < d.length; pi += 4) { 
-                            const gray = d[pi]*0.299 + d[pi+1]*0.587 + d[pi+2]*0.114;
-                            const inv = 255 - gray;
-                            const con = Math.min(255, Math.max(0, (inv - 128) * 1.5 + 128)); 
-                            d[pi] = d[pi+1] = d[pi+2] = con; 
-                        } 
-                        tmpCtx.putImageData(iData, 0, 0); 
-                        
-                        window._aiImageCache = tmpC;
-                        window._lastAiImageSrc = currentAiImgEl.src;
-                    }
-                    c.drawImage(window._aiImageCache, bx, by, panelW, imgH); 
-                } catch(e) { 
-                    c.drawImage(currentAiImgEl, bx, by, panelW, imgH); 
-                } 
+                c.beginPath();
+                c.rect(bx, by, panelW, imgH);
+                c.clip();
+
+                c.drawImage(currentAiImgEl, 0, 0, sW, sH, cx, cy, cW, cH);
                 c.restore(); 
                 
                 c.strokeStyle = borderColor; c.lineWidth = 1; c.strokeRect(bx, by, panelW, imgH); 
@@ -2650,7 +2662,6 @@ const paranormalQuestions = [
 
         let signal = 0; if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++; if(conn && conn.open) signal++; if(peerVideoSender && !peerVideoSender.disconnected) signal++;
         
-        // --- ACTUALIZACIÓN EN TIEMPO REAL DEL ESTADO MIC SENDER ---
         const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
         const hasStudio = conn && conn.open;
         const micStatusEl = document.getElementById('mic-remote-status');
@@ -2701,7 +2712,7 @@ const paranormalQuestions = [
         if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG);
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); updateAudioRouting(); });
+            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); updateAudioRouting(); restartCamera(); });
             connection.on('data', handleCommand);
             connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } updateAudioRouting(); });
             connection.on('error', (e) => { console.error("Data error", e); });
@@ -2781,10 +2792,10 @@ const paranormalQuestions = [
     async function triggerPareidolia() {
         const video = el.video; if(!AI_API_KEY) return; if(isAIProcessing || isTtsPlaying) return;
         const now = Date.now(); if (now - lastPareidoliaCall < 12000) return; lastPareidoliaCall = now;
-        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; currentAiImgEl = null; startScanningEffect();
+        isAIProcessing = true; currentAiText = "búsqueda de señal..."; currentAiImage = null; currentAiImgEl = null; pendingAiImgEl = null; startScanningEffect();
         
         aiSnapCtx.drawImage(video, 0, 0, 320, 320);
-        aiSnapCanvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); currentAiImage = url; const img = new Image(); img.onload = () => { currentAiImgEl = img; }; img.src = url; } }, 'image/jpeg', 0.8);
+        aiSnapCanvas.toBlob((blob) => { if (blob) { const url = URL.createObjectURL(blob); currentAiImage = url; const img = new Image(); img.onload = () => { pendingAiImgEl = img; }; img.src = url; } }, 'image/jpeg', 0.8);
         const base64 = aiSnapCanvas.toDataURL('image/jpeg', 0.6).split(',')[1], prompt = "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...', 'Está...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.";
         
         try {
@@ -2805,8 +2816,8 @@ const paranormalQuestions = [
                     }
                 } catch(err) { attempts++; await new Promise(r => setTimeout(r, 1000)); }
             }
-            clearTimeout(_aiTimeout); let text = textResult.replace(/[*_]/g, '').trim(); stopScanningEffect(); currentAiText = text; clearTimeout(aiTextTimer);
-            aiTextTimer = setTimeout(() => { if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiText = ""; currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
+            clearTimeout(_aiTimeout); let text = textResult.replace(/[*_]/g, '').trim(); stopScanningEffect(); currentAiText = text; currentAiImgEl = pendingAiImgEl; clearTimeout(aiTextTimer);
+            aiTextTimer = setTimeout(() => { if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiText = ""; currentAiImage = null; currentAiImgEl = null; pendingAiImgEl = null; window._aiImageCache = null; if (state.isPareidolia) startScanningEffect(); }, 9000);
             if (conn && conn.open) conn.send({ type: 'ai-speech', text: text, forcePlay: true, source: 'vision' }); 
             speakText(text);
         } catch(e) { isAIProcessing = false; currentAiText = "error de señal"; setTimeout(() => { if(currentAiText === "error de señal") { currentAiText = ""; if (state.isPareidolia) startScanningEffect(); } }, 3000); }
@@ -2818,17 +2829,16 @@ const paranormalQuestions = [
     function togglePareidolia(btnElement) {
         if(!AI_API_KEY) { showToast("SIN API KEY — CONFIGURA EN ⚙ AJUSTES", true); return; }
         const _nextActive = !isPareidoliaActive;
-        if (_nextActive) { const elOk = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY; const vrOk = voicerssRemaining > 0; if (!elOk && !vrOk) { ttsNoDisponible('sin créditos para activar IA VISION'); return; } }
         const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = _nextActive; state.isPareidolia = isPareidoliaActive;
         
         if(isPareidoliaActive) {
             if(btn) btn.classList.add('active-state'); animState.hudTarget = 0.0; animState.aiTarget = 1.0;
-            currentAiText = ""; currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; isAIProcessing = false; aiScannerTimer = 0; aiScannerState = 0; startScanningEffect(); clearTimeout(pareidoliaInterval);
+            currentAiText = ""; currentAiImage = null; currentAiImgEl = null; pendingAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; isAIProcessing = false; aiScannerTimer = 0; aiScannerState = 0; startScanningEffect(); clearTimeout(pareidoliaInterval);
             speakAnnouncement('VISION ACTIVADA').then(() => { if (!isPareidoliaActive) return; pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); }).catch(() => { pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); });
         } else {
             if(btn) btn.classList.remove('active-state'); animState.hudTarget = 1.0; animState.aiTarget = 0.0; clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
             if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } if (window.speechSynthesis) window.speechSynthesis.cancel();
-            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA', true).catch(() => {});
+            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; pendingAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISION DESACTIVADA', true).catch(() => {});
         }
         showMenus(); sendScanDataToStudio();
     }
