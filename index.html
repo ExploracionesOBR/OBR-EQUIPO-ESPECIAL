@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CAMARA OBR PRO v6.9.7 (OPTIMIZED SENDER & CPU)</title> 
+    <title>CAMARA OBR PRO v6.9.8 (DYNAMIC MIC UI)</title> 
     
     <link rel="icon" type="image/png" href="obr-logo.png">
     <link rel="apple-touch-icon" href="obr-logo.png">
@@ -52,14 +52,13 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
         
-        /* FIX: Permitir uso en vertical durante el modo MIC SENDER */
         body.mic-sender-mode #orientation-lock { display: none !important; }
 
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
         body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
         
         body.filter-thermal #shared-video-element { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
-        body.filter-urbex #shared-video-element { filter: invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%); }
+        body.filter-urbex #shared-video-element { filter: invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85); }
 
         .hud-burn-hidden { display: none; }
 
@@ -214,7 +213,7 @@
         </div>
         <div id="menu-right" class="menu-container right-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="togglePareidolia(this)" id="btn-ia"><i class="fas fa-eye"></i></div><div class="menu-label">VISION</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="toggleAudioScanner()" id="btn-audio-menu"><i class="fas fa-microphone"></i></div><div class="menu-label">AUDIO</div></div>
+            <div onclick="event.stopPropagation()" id="wrapper-audio-scan" style="display:none;"><div class="menu-btn" onclick="toggleAudioScanner()" id="btn-audio-menu"><i class="fas fa-microphone"></i></div><div class="menu-label">AUDIO</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="resetZoom(this)"><i class="fas fa-compress"></i></div><div class="menu-label">RESET</div></div>
         </div>
     </div>
@@ -227,7 +226,7 @@
         <div id="main-startup-ui" class="flex flex-col items-center justify-center w-full h-full">
             <img src="obr-logo.png" class="w-24 h-24 object-contain mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
             <h1 class="text-3xl text-red-600 font-bold mb-1 tracking-widest font-orbitron">OBR CAM</h1>
-            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.7 (Optimized Sender & CPU)</p>
+            <p class="text-xs font-mono text-gray-500 mb-8">v6.9.8 (Dynamic Mic UI)</p>
             <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden" id="progress-container"><div id="progress-bar"></div></div>
             <div id="progress-text" class="mt-2 text-xs font-mono text-red-500">CARGANDO...</div>
             
@@ -457,10 +456,27 @@ self.addEventListener('fetch', e => {
     window._isAnnouncement = false;
     let evpContextMemory = []; 
     
-    // MICRÓFONOS ENRUTADOS
+    // MICRÓFONOS ENRUTADOS Y RECONOCIMIENTO LOCAL
     window.remoteMicStream = null;
     let remoteMicPeer = null;
     let remoteDataConn = null;
+    let speechRec = null;
+
+    window.updateAudioScanVisibility = function() {
+        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+        const hasStudio = conn && conn.open;
+        const isVisible = hasRemote || hasStudio;
+        
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) micBtn.style.display = isVisible ? 'flex' : 'none';
+        
+        const wrapper = document.getElementById('wrapper-audio-scan');
+        if (wrapper) wrapper.style.display = isVisible ? 'block' : 'none';
+        
+        if (!isVisible && state.isAudioScan) {
+            toggleAudioScanner(); 
+        }
+    };
 
     function updateAudioRouting() {
         if (!audioCtx || !micGainNode) return;
@@ -470,20 +486,20 @@ self.addEventListener('fetch', e => {
             micSource = null;
         }
 
-        if (window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0) {
+        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+        let activeStream = null;
+        
+        if (hasRemote) {
+            activeStream = window.remoteMicStream;
+        }
+
+        if (activeStream) {
             try {
-                micSource = audioCtx.createMediaStreamSource(window.remoteMicStream);
+                micSource = audioCtx.createMediaStreamSource(activeStream);
                 micSource.connect(micGainNode);
-                console.log("[Audio Routing] Usando MICRÓFONO REMOTO EXCLUSIVO");
-                const statusEl = document.getElementById('mic-remote-status');
-                if(statusEl) { statusEl.innerText = "MIC REM: ONLINE"; statusEl.className = "text-green-500 font-bold"; }
             } catch(e) {
                 console.error("Error routing audio:", e);
             }
-        } else {
-            console.warn("[Audio Routing] No hay micrófonos remotos conectados");
-            const statusEl = document.getElementById('mic-remote-status');
-            if(statusEl) { statusEl.innerText = "MIC REM: OFFLINE"; statusEl.className = "text-red-500 font-bold"; }
         }
     }
 
@@ -512,55 +528,74 @@ self.addEventListener('fetch', e => {
             }
         };
         
-        remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
-        remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo en canal:', id));
-        
-        remoteMicPeer.on('connection', (conn) => {
-            remoteDataConn = conn;
-            conn.on('data', (data) => {
-                if (data.type === 'remote-speech') {
-                    if (!state.isAudioScan || isTtsPlaying || isSpookySpeaking || window._isAnnouncement || Date.now() < (window._ignoreSpeechUntil || 0)) {
-                        return;
-                    }
-                    const txt = normalizarTexto(data.text);
-                    if (txt) {
-                        window._liveUserText = txt.toUpperCase();
-                        window._liveUserLastUpdate = Date.now();
-                    }
-                    if (data.isFinal && txt.trim()) {
-                        procesarComandoEVP(txt);
-                    }
+        try {
+            remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
+            
+            remoteMicPeer.on('disconnected', () => {
+                console.warn("Señalización de recepción pausada. Audio se mantiene.");
+                remoteMicPeer.reconnect();
+            });
+
+            remoteMicPeer.on('error', (err) => { 
+                console.warn("Error Receptor Mic:", err); 
+                if (err.type === 'network' || err.type === 'server-error') return; 
+                if(err && err.message && err.message.includes("Canvas")) {
+                    showToast("MODO PREVIEW BLOQUEA WEBRTC. DESCARGA EL HTML.", true);
                 }
             });
-        });
 
-        remoteMicPeer.on('call', (call) => {
-            call.answer(); 
-            call.on('stream', (remoteStream) => {
-                window.remoteMicStream = remoteStream;
-                
-                let hiddenAudio = document.getElementById('hidden-webrtc-audio');
-                if (!hiddenAudio) {
-                    hiddenAudio = document.createElement('audio');
-                    hiddenAudio.id = 'hidden-webrtc-audio';
-                    hiddenAudio.autoplay = true;
-                    hiddenAudio.playsInline = true;
-                    hiddenAudio.muted = true;
-                    document.body.appendChild(hiddenAudio);
-                }
-                hiddenAudio.srcObject = remoteStream;
+            remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo en canal:', id));
+            
+            remoteMicPeer.on('connection', (conn) => {
+                remoteDataConn = conn;
+                conn.on('data', (data) => {
+                    if (data.type === 'remote-speech') {
+                        if (!state.isAudioScan) return; 
+                        
+                        const txt = normalizarTexto(data.text);
+                        if (txt) {
+                            window._liveUserText = txt.toUpperCase();
+                            window._liveUserLastUpdate = Date.now();
+                        }
+                        
+                        const isMutedForTriggers = isTtsPlaying || isSpookySpeaking || window._isAnnouncement || Date.now() < (window._ignoreSpeechUntil || 0);
 
-                showToast("MICRÓFONO REMOTO ENLAZADO", false);
-                updateAudioRouting();
+                        if (data.isFinal && txt.trim() && !isMutedForTriggers) {
+                            procesarComandoEVP(txt);
+                        }
+                    }
+                });
             });
-            call.on('close', () => {
-                window.remoteMicStream = null;
-                showToast("MICRÓFONO REMOTO DESCONECTADO", true);
-                updateAudioRouting();
+
+            remoteMicPeer.on('call', (call) => {
+                call.answer(); 
+                call.on('stream', (remoteStream) => {
+                    window.remoteMicStream = remoteStream;
+                    
+                    let hiddenAudio = document.getElementById('hidden-webrtc-audio');
+                    if (!hiddenAudio) {
+                        hiddenAudio = document.createElement('audio');
+                        hiddenAudio.id = 'hidden-webrtc-audio';
+                        hiddenAudio.autoplay = true;
+                        hiddenAudio.playsInline = true;
+                        hiddenAudio.muted = true;
+                        document.body.appendChild(hiddenAudio);
+                    }
+                    hiddenAudio.srcObject = remoteStream;
+
+                    showToast("MICRÓFONO REMOTO ENLAZADO", false);
+                    updateAudioRouting();
+                });
+                call.on('close', () => {
+                    window.remoteMicStream = null;
+                    showToast("MICRÓFONO REMOTO DESCONECTADO", true);
+                    updateAudioRouting();
+                });
             });
-        });
-        
-        remoteMicPeer.on('error', (err) => { console.warn("Error Receptor Mic:", err); });
+            
+        } catch (e) {
+            console.warn("Excepción al iniciar Receptor Mic:", e);
+        }
     }
 
     // ── LÓGICA DEL TRANSMISOR (MIC SENDER) ──
@@ -707,45 +742,48 @@ self.addEventListener('fetch', e => {
                             credential: TURN_PASSWORD
                         }
                     ]
-                },
-                debug: 1
+                }
             };
             
-            senderPeer = new Peer(null, PEER_CONFIG_TURN);
-            
-            senderPeer.on('open', () => {
-                isConnectingSender = false;
-                senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
-                senderDataConn = senderPeer.connect(targetId);
+            try {
+                senderPeer = new Peer(null, PEER_CONFIG_TURN);
                 
-                senderDataConn.on('open', () => {
-                    console.log("Canal de datos abierto. Transmisión de voz continua activa.");
+                senderPeer.on('disconnected', () => {
+                    console.warn("Sin internet en el SENDER. Manteniendo conexión de audio local viva.");
+                    if (isSenderActive && !senderPeer.destroyed) senderPeer.reconnect();
                 });
-                
-                senderCurrentCall.on('error', (err) => {
-                    console.error("Call error:", err);
+
+                senderPeer.on('open', () => {
+                    isConnectingSender = false;
+                    senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
+                    senderDataConn = senderPeer.connect(targetId);
+                    
+                    senderDataConn.on('open', () => {
+                        console.log("Canal de datos abierto. Transmisión de voz continua activa.");
+                        startSenderSpeech();
+                    });
+                    
+                    senderCurrentCall.on('close', () => {
+                        updateSenderUI('error');
+                        if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
+                    });
+
+                    updateSenderUI('online');
+                });
+
+                senderPeer.on('error', (err) => {
+                    console.error("Peer error:", err);
+                    if (err.type === 'network' || err.type === 'server-error') return; 
+                    
+                    isConnectingSender = false;
                     updateSenderUI('error');
                     if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
                 });
-
-                senderCurrentCall.on('close', () => {
-                    updateSenderUI('error');
-                    if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
-                });
-
-                updateSenderUI('online');
-            });
-
-            senderPeer.on('error', (err) => {
-                console.error("Peer error:", err);
+            } catch (e) {
                 isConnectingSender = false;
+                console.error("Excepción PeerJS:", e);
                 updateSenderUI('error');
-                if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
-            });
-
-            senderPeer.on('disconnected', () => {
-                if (isSenderActive) senderPeer.reconnect();
-            });
+            }
 
         } catch (err) {
             isConnectingSender = false;
@@ -1507,7 +1545,7 @@ const paranormalQuestions = [
 
         if (!window.remoteMicStream || window.remoteMicStream.getAudioTracks().length === 0) {
             console.error("[Audio] Ningún micrófono remoto detectado.");
-            showToast("NO HAY MIC SENDER CONECTADO", true);
+            showToast("NO HAY MIC SENDER O ESTUDIO CONECTADO", true);
             if (state.isAudioScan) toggleAudioScanner();
             return;
         }
@@ -1516,7 +1554,7 @@ const paranormalQuestions = [
             mixDestination = audioCtx.createMediaStreamDestination();
 
             micGainNode = audioCtx.createGain();
-            micGainNode.gain.value = 4.5; 
+            micGainNode.gain.value = 6.5; 
 
             audioAnalyser = audioCtx.createAnalyser();
             audioAnalyser.fftSize = 2048;
@@ -1757,7 +1795,7 @@ const paranormalQuestions = [
         _ttsBassFilter = ctx1.createBiquadFilter(); _ttsBassFilter.type = 'lowshelf';
         _ttsHighFilter = ctx1.createBiquadFilter(); _ttsHighFilter.type = 'highshelf';
         
-        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 4.0; ttsGainNode = ttsMainGain;
+        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 6.0; ttsGainNode = ttsMainGain;
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
         ttsMainGain.connect(ctx1.destination);
@@ -1787,7 +1825,7 @@ const paranormalQuestions = [
     }
 
     function applyGoogleTTSFilters(isGoogle, useDom) {
-        if (!ttsMainGain) return; ttsMainGain.gain.value = 4.0; 
+        if (!ttsMainGain) return; ttsMainGain.gain.value = 6.0; 
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
@@ -1832,7 +1870,7 @@ const paranormalQuestions = [
                     respText = evpFrasesAmbiguaMemoria[Math.floor(Math.random() * evpFrasesAmbiguaMemoria.length)];
                 }
                 
-                if (conn && conn.open) conn.send({type: 'ai-speech', text: respText});
+                if (conn && conn.open) conn.send({ type: 'ai-speech', text: respText});
                 speakSpooky(respText);
             }, 1500 + Math.random() * 1000); 
         }
@@ -2144,7 +2182,7 @@ const paranormalQuestions = [
                 }
             }
 
-            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 4.5, evpAudioCtx?.currentTime || 0, 0.05); }
+            if (ttsMainGain) { const volVar = 0.75 + Math.random() * 0.5; ttsMainGain.gain.setTargetAtTime(volVar * 6.5, evpAudioCtx?.currentTime || 0, 0.05); }
 
             let evpText; 
             const textRoll = Math.random();
@@ -2519,7 +2557,7 @@ const paranormalQuestions = [
                 ctx.save();
                 if(state.filter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
                 else if(state.filter === 'thermal') ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
-                else if(state.filter === 'urbex') ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(400%) contrast(150%)';
+                else if(state.filter === 'urbex') ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85)';
                 else ctx.filter = 'none';
                 
                 if (window._softwareZoomActive && state.zoom > 1) {
@@ -2611,6 +2649,22 @@ const paranormalQuestions = [
         if (currentFps < 15) performanceLagging = true; else if (currentFps >= 25) performanceLagging = false;
 
         let signal = 0; if(peerCommand && !peerCommand.disconnected && !peerCommand.destroyed) signal++; if(conn && conn.open) signal++; if(peerVideoSender && !peerVideoSender.disconnected) signal++;
+        
+        // --- ACTUALIZACIÓN EN TIEMPO REAL DEL ESTADO MIC SENDER ---
+        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+        const hasStudio = conn && conn.open;
+        const micStatusEl = document.getElementById('mic-remote-status');
+        
+        if (hasRemote) {
+            if(micStatusEl) { micStatusEl.innerText = "MIC REM: ONLINE"; micStatusEl.className = "text-green-500 font-bold"; }
+        } else if (hasStudio) {
+            if(micStatusEl) { micStatusEl.innerText = "MIC LOCAL (ESTUDIO)"; micStatusEl.className = "text-yellow-500 font-bold"; }
+        } else {
+            if(micStatusEl) { micStatusEl.innerText = "MIC: OFFLINE"; micStatusEl.className = "text-gray-500 font-bold"; }
+        }
+        
+        if(window.updateAudioScanVisibility) updateAudioScanVisibility();
+
         const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
         document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
         document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
@@ -2647,9 +2701,9 @@ const paranormalQuestions = [
         if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG);
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
-            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); });
+            connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); updateAudioRouting(); });
             connection.on('data', handleCommand);
-            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } });
+            connection.on('close', () => { showToast("Estudio desconectado", true); conn = null; if(peerCommand) { peerCommand.destroy(); peerCommand = null; } if(peerVideoSender) { peerVideoSender.destroy(); peerVideoSender = null; } updateAudioRouting(); });
             connection.on('error', (e) => { console.error("Data error", e); });
         });
         peerCommand.on('error', (err) => { showToast("Err CMD: " + err.type, true); try { peerCommand.destroy(); } catch(e){} });
