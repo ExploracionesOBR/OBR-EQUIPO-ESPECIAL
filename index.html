@@ -52,12 +52,14 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
         
+        /* FIX: Permitir uso en vertical durante el modo MIC SENDER */
         body.mic-sender-mode #orientation-lock { display: none !important; }
 
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
         body.filter-night-vision #main-view-area::after { content: " "; position: absolute; inset: 0; pointer-events: none; z-index: 10; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2) 0px, rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px); background-size: 100% 3px; }
         
-        body.filter-thermal #shared-video-element { filter: grayscale(75%) invert(75%) contrast(1.7) brightness(0.8); }
+        /* NUEVO FILTRO ESPECTRAL (Reemplazo de NEG) */
+        body.filter-thermal #shared-video-element { filter: invert(100%) sepia(80%) hue-rotate(260deg) saturate(300%) contrast(150%) brightness(1.2); }
         body.filter-urbex #shared-video-element { filter: invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85); }
 
         .hud-burn-hidden { display: none; }
@@ -206,7 +208,7 @@
 
         <div id="menu-left" class="menu-container left-side">
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('night', this)" id="btn-night"><i class="fas fa-moon"></i></div><div class="menu-label">NOCT</div></div>
-            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-fire"></i></div><div class="menu-label">NEG</div></div>
+            <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('thermal', this)" id="btn-thermal"><i class="fas fa-bolt"></i></div><div class="menu-label">ESPEC</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('urbex', this)" id="btn-urbex"><i class="fas fa-city"></i></div><div class="menu-label">URBEX</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('lidar', this)" id="btn-heatmap"><i class="fas fa-fingerprint"></i></div><div class="menu-label">LIDAR</div></div>
             <div onclick="event.stopPropagation()"><div class="menu-btn" onclick="setFilter('sls', this)" id="btn-sls"><i class="fas fa-ghost"></i></div><div class="menu-label">SLS</div></div>
@@ -397,6 +399,37 @@
     </div>
 
 <script>
+    let wakeLockObj = null;
+
+    function toggleFullScreen() {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(e => {});
+            } else if (document.documentElement.webkitRequestFullscreen) {
+                document.documentElement.webkitRequestFullscreen();
+            }
+        }
+    }
+
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                if (wakeLockObj) return;
+                wakeLockObj = await navigator.wakeLock.request('screen');
+                wakeLockObj.addEventListener('release', () => {
+                    wakeLockObj = null;
+                    if (document.visibilityState === 'visible') requestWakeLock();
+                });
+            } catch (err) {}
+        }
+    }
+
+    document.addEventListener('visibilitychange', async () => {
+        if (wakeLockObj !== null && document.visibilityState === 'visible') {
+            requestWakeLock();
+        }
+    });
+
     if ('serviceWorker' in navigator) {
         const swCode = `
 const CACHE = 'obr-models-v1';
@@ -456,27 +489,10 @@ self.addEventListener('fetch', e => {
     window._isAnnouncement = false;
     let evpContextMemory = []; 
     
-    // MICRÓFONOS ENRUTADOS Y RECONOCIMIENTO LOCAL
+    // MICRÓFONOS ENRUTADOS
     window.remoteMicStream = null;
     let remoteMicPeer = null;
     let remoteDataConn = null;
-    let speechRec = null;
-
-    window.updateAudioScanVisibility = function() {
-        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
-        const hasStudio = conn && conn.open;
-        const isVisible = hasRemote || hasStudio;
-        
-        const micBtn = document.getElementById('mic-btn');
-        if (micBtn) micBtn.style.display = isVisible ? 'flex' : 'none';
-        
-        const wrapper = document.getElementById('wrapper-audio-scan');
-        if (wrapper) wrapper.style.display = isVisible ? 'block' : 'none';
-        
-        if (!isVisible && state.isAudioScan) {
-            toggleAudioScanner(); 
-        }
-    };
 
     function updateAudioRouting() {
         if (!audioCtx || !micGainNode) return;
@@ -516,6 +532,7 @@ self.addEventListener('fetch', e => {
         
         const PEER_CONFIG_TURN = {
             config: {
+                iceTransportPolicy: 'all',
                 iceServers: [
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
@@ -529,12 +546,12 @@ self.addEventListener('fetch', e => {
         };
         
         try {
+            console.log("📡 [CÁMARA] Inicializando ruta de escucha:", myId);
             remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
-            console.log("📡 [CÁMARA] Generando ruta de escucha para MIC SENDER:", myId);
             
             remoteMicPeer.on('disconnected', () => {
-                console.warn("Señalización de recepción pausada. Audio se mantiene.");
-                remoteMicPeer.reconnect();
+                console.warn("Señalización pausada. Reintentando...");
+                setTimeout(() => { if(remoteMicPeer && !remoteMicPeer.destroyed) remoteMicPeer.reconnect(); }, 2000);
             });
 
             remoteMicPeer.on('error', (err) => { 
@@ -545,7 +562,9 @@ self.addEventListener('fetch', e => {
                 }
             });
 
-            remoteMicPeer.on('open', (id) => console.log('Receptor Micrófono Listo en canal:', id));
+            remoteMicPeer.on('open', (id) => {
+                console.log('Receptor Micrófono Listo y Enlazado en canal:', id);
+            });
             
             remoteMicPeer.on('connection', (conn) => {
                 remoteDataConn = conn;
@@ -610,6 +629,9 @@ self.addEventListener('fetch', e => {
     let isConnectingSender = false;
 
     function initMicSenderMode() {
+        toggleFullScreen();
+        requestWakeLock();
+        
         document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
         document.getElementById('progress-container').style.display = 'none';
         document.getElementById('progress-text').style.display = 'none';
@@ -704,6 +726,10 @@ self.addEventListener('fetch', e => {
 
     async function startRemoteMic() {
         if (isConnectingSender) return;
+        
+        toggleFullScreen();
+        requestWakeLock();
+        
         isConnectingSender = true;
         isSenderActive = true;
         
@@ -721,7 +747,7 @@ self.addEventListener('fetch', e => {
         try {
             if (!senderLocalStream) {
                 senderLocalStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+                    audio: { echoCancellation: false },
                     video: false
                 });
             }
@@ -734,6 +760,7 @@ self.addEventListener('fetch', e => {
             
             const PEER_CONFIG_TURN = {
                 config: {
+                    iceTransportPolicy: 'all',
                     iceServers: [
                         { urls: 'stun:stun1.l.google.com:19302' },
                         { urls: 'stun:stun2.l.google.com:19302' },
@@ -743,11 +770,11 @@ self.addEventListener('fetch', e => {
                             credential: TURN_PASSWORD
                         }
                     ]
-                },
-                debug: 1
+                }
             };
             
             try {
+                console.log("📡 [SENDER] Buscando ruta destino:", targetId);
                 senderPeer = new Peer(null, PEER_CONFIG_TURN);
                 
                 senderPeer.on('disconnected', () => {
@@ -936,7 +963,7 @@ self.addEventListener('fetch', e => {
     let currentAiText = "";
     let currentAiImage = null;   
     let currentAiImgEl = null;   
-    let pendingAiImgEl = null; // <- SE AÑADE PARA EVITAR QUE LA IMAGEN SE MUESTRE ANTES DE TIEMPO
+    let pendingAiImgEl = null;
     let aiTextTimer = null;
     let radarAngle = 0; 
     let canvasScanBoxes = []; 
@@ -1357,7 +1384,7 @@ const paranormalQuestions = [
     }
 
     let lastFrameTime = performance.now();
-    const targetRenderFPS = 60; const fpsInterval = 1000 / targetRenderFPS; 
+    const targetRenderFPS = 30; const fpsInterval = 1000 / targetRenderFPS; 
     let performanceLagging = false;
     
     const analysisCanvas = document.createElement('canvas'); const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
@@ -1468,7 +1495,7 @@ const paranormalQuestions = [
         try {
             if (videoStream) videoStream.getVideoTracks().forEach(t => t.stop()); 
             
-            const safeVideoConfig = { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] };
+            const safeVideoConfig = { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 }, advanced: [{ focusMode: "continuous" }] };
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: false, 
                 video: safeVideoConfig 
@@ -1548,11 +1575,10 @@ const paranormalQuestions = [
 
         if (state.isAudioScan) {
             const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
-            const hasLocal = window.localMicStream && window.localMicStream.getAudioTracks().length > 0;
             
-            if (!hasRemote && !hasLocal) {
-                console.error("[Audio] Ningún micrófono detectado para AUDIO SCAN.");
-                showToast("NO HAY MIC SENDER O ESTUDIO CONECTADO", true);
+            if (!hasRemote) {
+                console.error("[Audio] Ningún micrófono remoto detectado para AUDIO SCAN.");
+                showToast("NO HAY MIC SENDER CONECTADO", true);
                 toggleAudioScanner(); 
                 return;
             }
@@ -1607,7 +1633,7 @@ const paranormalQuestions = [
         updateProgress(10, "INICIANDO SENSOR...");
 
         const constraintSets = [
-            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 120 }, advanced: [{ focusMode: "continuous" }] } },
+            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 }, advanced: [{ focusMode: "continuous" }] } },
             { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } },
             { audio: false, video: { facingMode: { ideal: 'environment' } } }
         ];
@@ -1671,7 +1697,7 @@ const paranormalQuestions = [
             if (state.isLidar && segmenter) {
                 if (!lidarBusy) { lidarBusy = true; ensureImageDrawn(); try { await segmenter.send({image: analysisCanvas}); } catch(e){ lidarBusy = false; } }
             } else {
-                if (aiDetector && state.isSLS && now - lastPoseTime > 80) {
+                if (aiDetector && state.isSLS && now - lastPoseTime > 25) {
                     lastPoseTime = now; ensureImageDrawn();
                     try {
                         let newPoses = await aiDetector.estimatePoses(analysisCanvas, { maxPoses: 5, flipHorizontal: false, scoreThreshold: AI_SENSITIVITY });
@@ -1803,7 +1829,7 @@ const paranormalQuestions = [
         _ttsBassFilter = ctx1.createBiquadFilter(); _ttsBassFilter.type = 'lowshelf';
         _ttsHighFilter = ctx1.createBiquadFilter(); _ttsHighFilter.type = 'highshelf';
         
-        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 3.5; ttsGainNode = ttsMainGain;
+        ttsMainGain = ctx1.createGain(); ttsMainGain.gain.value = 4.0; ttsGainNode = ttsMainGain;
         ttsSource.connect(_ttsBassFilter); _ttsBassFilter.connect(_ttsHighFilter); _ttsHighFilter.connect(ttsMainGain); 
         
         ttsMainGain.connect(ctx1.destination);
@@ -1833,7 +1859,7 @@ const paranormalQuestions = [
     }
 
     function applyGoogleTTSFilters(isGoogle, useDom) {
-        if (!ttsMainGain) return; ttsMainGain.gain.value = 3.5; 
+        if (!ttsMainGain) return; ttsMainGain.gain.value = 4.0; 
         if (_ttsBassFilter) _ttsBassFilter.gain.value = 0; if (_ttsHighFilter) _ttsHighFilter.gain.value = 0;
     }
 
@@ -1884,7 +1910,6 @@ const paranormalQuestions = [
         }
     }
 
-    // --- NUEVO: OCULTAMIENTO DINÁMICO DE AUDIO SCAN ---
     window.updateAudioScanVisibility = function() {
         const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
         const hasStudio = conn && conn.open;
@@ -2430,10 +2455,10 @@ const paranormalQuestions = [
     }
 
     function updateSmoothing() {
-        const FF = 0.45;
+        const FF = 0.90;
         if (smoothedFaces.length !== faces.length) smoothedFaces = faces.map(f => f.map(p => ({...p})));
         else for (let i = 0; i < faces.length; i++) { if (!smoothedFaces[i]) { smoothedFaces[i] = faces[i].map(p => ({...p})); continue; } for (let j = 0; j < faces[i].length; j++) { const tF = faces[i][j], sF = smoothedFaces[i][j]; if (tF && sF) { sF.x = lerp(sF.x, tF.x, FF); sF.y = lerp(sF.y, tF.y, FF); } } }
-        const PF = 0.50;
+        const PF = 0.96;
         if (!targetPoses || targetPoses.length === 0) smoothedPoses = [];
         else {
             if (smoothedPoses.length !== targetPoses.length) smoothedPoses = targetPoses.map(p => ({ keypoints: p.keypoints.map(kp => ({...kp})) }));
@@ -2507,7 +2532,7 @@ const paranormalQuestions = [
             if (!_smoothBBox[key]) {
                 _smoothBBox[key] = { ...targetBBox };
             } else {
-                const EMA = 0.7; 
+                const EMA = 0.96; 
                 _smoothBBox[key].x = lerp(_smoothBBox[key].x, targetBBox.x, EMA);
                 _smoothBBox[key].y = lerp(_smoothBBox[key].y, targetBBox.y, EMA);
                 _smoothBBox[key].w = lerp(_smoothBBox[key].w, targetBBox.w, EMA);
@@ -2565,12 +2590,18 @@ const paranormalQuestions = [
             if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
             window.drawCoords = { dW, dH, dX, dY, vW, vH };
             
-            if (isTransmitting) {
-                ctx.save();
-                if(state.filter === 'night') ctx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
-                else if(state.filter === 'thermal') ctx.filter = 'grayscale(75%) invert(75%) contrast(1.7) brightness(0.8)';
-                else if(state.filter === 'urbex') ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85)';
-                else ctx.filter = 'none';
+            if (isTransmitting && window._streamCanvas && window._streamCtx) {
+                const sCtx = window._streamCtx;
+                const scW = window._streamCanvas.width;
+                const scH = window._streamCanvas.height;
+                
+                sCtx.clearRect(0, 0, scW, scH);
+                sCtx.save();
+                
+                if(state.filter === 'night') sCtx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
+                else if(state.filter === 'thermal') sCtx.filter = 'invert(100%) sepia(80%) hue-rotate(260deg) saturate(300%) contrast(150%) brightness(1.2)';
+                else if(state.filter === 'urbex') sCtx.filter = 'invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85)';
+                else sCtx.filter = 'none';
                 
                 if (window._softwareZoomActive && state.zoom > 1) {
                     const zX = vW * (window._zoomXPct || 0.5);
@@ -2579,13 +2610,18 @@ const paranormalQuestions = [
                     const viewH = vH / state.zoom;
                     const srcX = Math.max(0, Math.min(vW - viewW, zX - viewW / 2));
                     const srcY = Math.max(0, Math.min(vH - viewH, zY - viewH / 2));
-                    ctx.drawImage(el.video, srcX, srcY, viewW, viewH, dX, dY, dW, dH);
+                    sCtx.drawImage(el.video, srcX, srcY, viewW, viewH, 0, 0, scW, scH);
                 } else {
-                    ctx.drawImage(el.video, 0, 0, vW, vH, dX, dY, dW, dH); 
+                    sCtx.drawImage(el.video, 0, 0, vW, vH, 0, 0, scW, scH);
                 }
                 
-                ctx.restore(); 
-                if(state.filter === 'night') { if(!scanlineCanvas) initScanlines(cW, cH); ctx.drawImage(scanlineCanvas, 0, 0); }
+                sCtx.filter = 'none';
+                if(state.filter === 'night') { if(!scanlineCanvas) initScanlines(cW, cH); sCtx.drawImage(scanlineCanvas, 0, 0, cW, cH, 0, 0, scW, scH); }
+                
+                sCtx.drawImage(el.canvas, 0, 0, cW, cH, 0, 0, scW, scH);
+                sCtx.drawImage(el.audioCanvas, 0, 0, cW, cH, 0, 0, scW, scH);
+                
+                sCtx.restore();
             }
             
             if (state.isLidar) { 
@@ -2615,29 +2651,6 @@ const paranormalQuestions = [
         if (animState.aiTarget > 0.01 || animState.aiScale > 0.01) { drawAIBurnIn(audioLayerCtx, cW, cH, animState.aiScale); } 
         
         if (state.isAudioScan) { drawAudioVisualizer(audioLayerCtx, cW, cH); } 
-
-        if (isTransmitting && window._streamCanvas && window._streamCtx) {
-            const sCtx = window._streamCtx;
-            if (window._streamCanvas.width !== cW) window._streamCanvas.width = cW;
-            if (window._streamCanvas.height !== cH) window._streamCanvas.height = cH;
-            
-            sCtx.clearRect(0, 0, cW, cH);
-            sCtx.save();
-            
-            if (window._softwareZoomActive && state.zoom > 1) {
-                const zX = cW * (window._zoomXPct || 0.5);
-                const zY = cH * (window._zoomYPct || 0.5);
-                sCtx.translate(zX, zY);
-                sCtx.scale(state.zoom, state.zoom);
-                sCtx.translate(-zX, -zY);
-            }
-            
-            sCtx.drawImage(el.canvas, 0, 0);
-            
-            sCtx.drawImage(el.audioCanvas, 0, 0);
-            
-            sCtx.restore();
-        }
 
         if ('requestVideoFrameCallback' in el.video) el.video.requestVideoFrameCallback(renderLoop); else requestAnimationFrame(renderLoop);
     }
@@ -2709,7 +2722,26 @@ const paranormalQuestions = [
         let baseId = fullId.trim().replace(/\s+/g, ''); if (baseId.endsWith("-8889")) baseId = baseId.slice(0, -5); baseId = baseId.replace(/\./g, '-'); 
         const commandTarget = baseId, videoTarget = baseId + "-8889";
         
-        if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG);
+        const TURN_DOMAIN = "exploracionesobr.duckdns.org";
+        const TURN_USERNAME = 'user';
+        const TURN_PASSWORD = 'MI_SECRETO_SUPER_SEGURO';
+        
+        const PEER_CONFIG_TURN = {
+            config: {
+                iceTransportPolicy: 'all',
+                iceServers: [
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    {
+                        urls: `turn:${TURN_DOMAIN}:3478`,
+                        username: TURN_USERNAME,
+                        credential: TURN_PASSWORD
+                    }
+                ]
+            }
+        };
+
+        if(peerCommand) peerCommand.destroy(); peerCommand = new Peer(null, PEER_CONFIG_TURN);
         peerCommand.on('open', () => {
             const connection = peerCommand.connect(commandTarget);
             connection.on('open', () => { conn = connection; conn.send({ type: 'register', name: name, hasAI: true }); showToast("Enlace Comandos OK", false); updateAudioRouting(); restartCamera(); });
@@ -2719,7 +2751,7 @@ const paranormalQuestions = [
         });
         peerCommand.on('error', (err) => { showToast("Err CMD: " + err.type, true); try { peerCommand.destroy(); } catch(e){} });
 
-        if(peerVideoSender) peerVideoSender.destroy(); peerVideoSender = new Peer(null, PEER_CONFIG);
+        if(peerVideoSender) peerVideoSender.destroy(); peerVideoSender = new Peer(null, PEER_CONFIG_TURN);
         peerVideoSender.on('open', async () => {
             let streamCanvas = document.getElementById('stream-canvas');
             if (!streamCanvas) {
@@ -2729,12 +2761,10 @@ const paranormalQuestions = [
                 document.body.appendChild(streamCanvas);
             }
             window._streamCanvas = streamCanvas;
-            window._streamCtx = streamCanvas.getContext('2d');
+            window._streamCtx = streamCanvas.getContext('2d', { alpha: false, desynchronized: true });
             
-            if (el.canvas) {
-                streamCanvas.width = el.canvas.width;
-                streamCanvas.height = el.canvas.height;
-            }
+            streamCanvas.width = 1920;
+            streamCanvas.height = 1080;
             
             const stream = streamCanvas.captureStream(30); 
             if (mixDestination && mixDestination.stream) mixDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track)); else if (audioStream) { const audioTracks = audioStream.getAudioTracks(); if(audioTracks.length > 0) stream.addTrack(audioTracks[0]); }
