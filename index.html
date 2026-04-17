@@ -939,7 +939,7 @@ self.addEventListener('fetch', e => {
         return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[¿?¡!.,;:]/g, "").trim();
     }
 
-    const AI_SENSITIVITY = 0.2; 
+    const AI_SENSITIVITY = 0.1; 
     const state = { 
         apiKey: localStorage.getItem("obr_ai_key") || localStorage.getItem("obr_gemini_key") || "", 
         aiProvider: localStorage.getItem("obr_ai_provider") || "gemini",
