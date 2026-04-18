@@ -52,7 +52,6 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
         
-        /* FIX: Permitir uso en vertical durante el modo MIC SENDER */
         body.mic-sender-mode #orientation-lock { display: none !important; }
 
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
@@ -494,6 +493,22 @@ self.addEventListener('fetch', e => {
     let remoteMicPeer = null;
     let remoteDataConn = null;
 
+    window.updateAudioScanVisibility = function() {
+        const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
+        const hasStudio = conn && conn.open;
+        const isVisible = hasRemote || hasStudio;
+        
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) micBtn.style.display = isVisible ? 'flex' : 'none';
+        
+        const wrapper = document.getElementById('wrapper-audio-scan');
+        if (wrapper) wrapper.style.display = isVisible ? 'block' : 'none';
+        
+        if (!isVisible && state.isAudioScan) {
+            toggleAudioScanner(); 
+        }
+    };
+
     function updateAudioRouting() {
         if (!audioCtx || !micGainNode) return;
         
@@ -524,7 +539,14 @@ self.addEventListener('fetch', e => {
         const camName = (state.cameraName || 'cam1').replace(/[^a-zA-Z0-9-]/g, '-');
         const myId = `obr-mic-recv-${studioId}-${camName}`;
         
-        if (remoteMicPeer) remoteMicPeer.destroy();
+        if (remoteMicPeer && !remoteMicPeer.destroyed && remoteMicPeer.id === myId) {
+            return; 
+        }
+
+        if (remoteMicPeer) {
+            try { remoteMicPeer.destroy(); } catch(e){}
+            remoteMicPeer = null;
+        }
         
         const TURN_DOMAIN = "exploracionesobr.duckdns.org";
         const TURN_USERNAME = 'user';
@@ -532,7 +554,6 @@ self.addEventListener('fetch', e => {
         
         const PEER_CONFIG_TURN = {
             config: {
-                iceTransportPolicy: 'all',
                 iceServers: [
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
@@ -546,12 +567,16 @@ self.addEventListener('fetch', e => {
         };
         
         try {
-            console.log("📡 [CÁMARA] Inicializando ruta de escucha:", myId);
+            console.log("📡 [CÁMARA] Inicializando ruta de escucha (HOST) en:", myId);
             remoteMicPeer = new Peer(myId, PEER_CONFIG_TURN);
             
             remoteMicPeer.on('disconnected', () => {
-                console.warn("Señalización pausada. Reintentando...");
-                setTimeout(() => { if(remoteMicPeer && !remoteMicPeer.destroyed) remoteMicPeer.reconnect(); }, 2000);
+                console.warn("Señalización pausada. Reintentando reconexión silenciosa...");
+                setTimeout(() => { 
+                    try { 
+                        if(remoteMicPeer && !remoteMicPeer.destroyed) remoteMicPeer.reconnect(); 
+                    } catch(e) {} 
+                }, 3000);
             });
 
             remoteMicPeer.on('error', (err) => { 
@@ -752,7 +777,7 @@ self.addEventListener('fetch', e => {
                 });
             }
 
-            if (senderPeer) { senderPeer.destroy(); senderPeer = null; }
+            if (senderPeer) { try { senderPeer.destroy(); } catch(e){} senderPeer = null; }
             
             const TURN_DOMAIN = "exploracionesobr.duckdns.org";
             const TURN_USERNAME = 'user';
@@ -760,7 +785,6 @@ self.addEventListener('fetch', e => {
             
             const PEER_CONFIG_TURN = {
                 config: {
-                    iceTransportPolicy: 'all',
                     iceServers: [
                         { urls: 'stun:stun1.l.google.com:19302' },
                         { urls: 'stun:stun2.l.google.com:19302' },
@@ -774,35 +798,63 @@ self.addEventListener('fetch', e => {
             };
             
             try {
-                console.log("📡 [SENDER] Buscando ruta destino:", targetId);
+                console.log("📡 [SENDER] Iniciando Cliente. Buscando ruta destino:", targetId);
                 senderPeer = new Peer(null, PEER_CONFIG_TURN);
                 
                 senderPeer.on('disconnected', () => {
-                    console.warn("Sin internet en el SENDER. Manteniendo conexión de audio local viva.");
-                    if (isSenderActive && !senderPeer.destroyed) senderPeer.reconnect();
+                    console.warn("Sin internet en el SENDER. El audio local Wi-Fi podría mantenerse activo.");
+                    if (isSenderActive && !senderPeer.destroyed) {
+                        setTimeout(() => {
+                            try {
+                                if (senderPeer && !senderPeer.destroyed) senderPeer.reconnect();
+                            } catch(e) {}
+                        }, 3000);
+                    }
                 });
 
-                senderPeer.on('open', () => {
+                senderPeer.on('open', (id) => {
                     isConnectingSender = false;
-                    senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
+                    console.log(`📡 [SENDER] Cliente listo (ID aleatorio: ${id}). Conectando datos a:`, targetId);
+                    
                     senderDataConn = senderPeer.connect(targetId);
                     
                     senderDataConn.on('open', () => {
-                        console.log("Canal de datos abierto. Transmisión de voz continua activa.");
+                        console.log("📡 [SENDER] Canal de datos abierto. Transmisión de voz continua activa. Iniciando llamada...");
                         startSenderSpeech();
+                        
+                        senderCurrentCall = senderPeer.call(targetId, senderLocalStream);
+                        
+                        senderCurrentCall.on('close', () => {
+                            updateSenderUI('error');
+                            if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
+                        });
+                        
+                        senderCurrentCall.on('error', (err) => {
+                            console.error("Call error:", err);
+                            updateSenderUI('error');
+                            if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
+                        });
+
+                        updateSenderUI('online');
                     });
                     
-                    senderCurrentCall.on('close', () => {
+                    senderDataConn.on('error', (err) => {
+                        console.error("DataConn error:", err);
                         updateSenderUI('error');
                         if (isSenderActive) { clearTimeout(senderReconnectTimer); senderReconnectTimer = setTimeout(startRemoteMic, 3000); }
                     });
-
-                    updateSenderUI('online');
                 });
 
                 senderPeer.on('error', (err) => {
                     console.error("Peer error:", err);
                     if (err.type === 'network' || err.type === 'server-error') return; 
+                    
+                    if (err && err.message && err.message.includes('Canvas')) {
+                        showToast("VISTA PREVIA BLOQUEA WEBRTC. DESCARGA EL HTML.", true);
+                        isConnectingSender = false;
+                        updateSenderUI('error');
+                        return;
+                    }
                     
                     isConnectingSender = false;
                     updateSenderUI('error');
@@ -939,7 +991,7 @@ self.addEventListener('fetch', e => {
         return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[¿?¡!.,;:]/g, "").trim();
     }
 
-    const AI_SENSITIVITY = 0.1; 
+    const AI_SENSITIVITY = 0.2; 
     const state = { 
         apiKey: localStorage.getItem("obr_ai_key") || localStorage.getItem("obr_gemini_key") || "", 
         aiProvider: localStorage.getItem("obr_ai_provider") || "gemini",
@@ -948,8 +1000,6 @@ self.addEventListener('fetch', e => {
         cameraName: localStorage.getItem("obr_camera_name") || "cam1",
         filter: 'normal', isSLS: false, isLidar: false, isPareidolia: false, isAudioScan: false, zoom: 1 
     };
-    
-    const PEER_CONFIG = { config: { iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] } };
     
     let AI_API_KEY = state.apiKey;
     let CURRENT_AI_MODEL = state.aiModel;
@@ -1471,22 +1521,6 @@ const paranormalQuestions = [
         if (videoStream) videoStream.getTracks().forEach(track => track.stop()); 
     });
 
-    document.addEventListener("visibilitychange", async () => {
-        if (document.visibilityState === 'visible') {
-            requestWakeLock();
-            if (audioCtx && audioCtx.state === 'suspended' && state.isAudioScan) {
-                audioCtx.resume().catch(()=>{});
-            }
-            if (videoStream) { const track = videoStream.getVideoTracks()[0]; if (!track || track.readyState === 'ended' || el.video.paused) restartCamera(); else el.video.play().catch(e => restartCamera()); }
-        } else {
-            if (audioCtx && audioCtx.state === 'running') {
-                audioCtx.suspend().catch(()=>{});
-            }
-        }
-    });
-
-    async function requestWakeLock() { if ('wakeLock' in navigator) try { await navigator.wakeLock.request('screen'); } catch (err) {} }
-
     let isRestartingCamera = false;
 
     async function restartCamera() {
@@ -1520,6 +1554,8 @@ const paranormalQuestions = [
         const btn = document.getElementById('main-cam-btn');
         const hasPerm = localStorage.getItem("camPermission") === "granted" || sessionStorage.getItem("camPermission") === "granted";
         if (btn && hasPerm) { btn.innerText = "▶ REANUDAR CÁMARA"; btn.style.borderColor = "#00ff41"; btn.style.color = "#00ff41"; }
+        
+        initRemoteMicReceiver();
     };
 
     function showCamError(title, msg, steps) {
@@ -1627,9 +1663,10 @@ const paranormalQuestions = [
 
     async function initApp() {
         unlockAudioContext(); 
+        toggleFullScreen();
+        requestWakeLock();
         document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
         document.getElementById('cam-error-panel').style.display = 'none'; 
-        requestWakeLock(); 
         updateProgress(10, "INICIANDO SENSOR...");
 
         const constraintSets = [
@@ -1678,7 +1715,6 @@ const paranormalQuestions = [
             if ('requestVideoFrameCallback' in el.video) el.video.requestVideoFrameCallback(renderLoop); else requestAnimationFrame(renderLoop);
             setInterval(telemetryLoop, 1000); requestAnimationFrame(detectionLoop);
 
-            initRemoteMicReceiver();
         }, 800);
     }
 
