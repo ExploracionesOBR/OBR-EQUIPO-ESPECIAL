@@ -9,7 +9,9 @@
     <link rel="apple-touch-icon" href="obr-logo.png">
     <meta name="theme-color" content="#000000">
     
-    <link rel="manifest" href='data:application/manifest+json,{"name":"OBR CAM PRO","short_name":"OBR CAM","start_url":".","display":"fullscreen","orientation":"landscape","categories":["games","entertainment"],"background_color":"#000000","theme_color":"#000000","icons":[{"src":"obr-logo.png","sizes":"192x192","type":"image/png"},{"src":"obr-logo.png","sizes":"512x512","type":"image/png"}]}'>
+    <!-- Enlace estándar al manifest físico para PWABuilder -->
+    <link rel="manifest" href="manifest.json">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
@@ -52,6 +54,7 @@
         #orientation-lock { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; }
         @media (orientation: portrait) { #orientation-lock { display: flex; } #ui-layer { display: none; } }
         
+        /* FIX: Permitir uso en vertical durante el modo MIC SENDER */
         body.mic-sender-mode #orientation-lock { display: none !important; }
 
         body.filter-night-vision #shared-video-element { filter: grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0); }
@@ -430,33 +433,13 @@
     });
 
     if ('serviceWorker' in navigator) {
-        const swCode = `
-const CACHE = 'obr-models-v1';
-const URLS = [
-  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh_solution_simd_wasm_bin.wasm',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.binarypb',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.binarypb',
-  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.wasm',
-  'https://tfhub.dev/google/tfjs-model/movenet/multipose/lightning/1/model.json'
-];
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(URLS).catch(()=>{})));
-  self.skipWaiting();
-});
-self.addEventListener('fetch', e => {
-  if (URLS.some(u => e.request.url.includes(u.split('/').pop()))) {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE).then(cache => cache.put(e.request, clone));
-      return res;
-    })));
-  }
-});`;
-        try {
-            const blob = new Blob([swCode], {type:'application/javascript'});
-            const url  = URL.createObjectURL(blob);
-            navigator.serviceWorker.register(url, {scope:'/'}).catch(()=>{});
-        } catch(e) {}
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                console.log('Service Worker registrado con éxito:', reg.scope);
+            }).catch(err => {
+                console.warn('Error al registrar el Service Worker:', err);
+            });
+        });
     }
 
     let sharedMicMode = true; 
