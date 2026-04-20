@@ -1851,7 +1851,7 @@ const paranormalQuestions = [
                 sweepAudio.pause();
                 sweepAudio.currentTime = 0;
                 
-                responseAudio.volume = 0.35; 
+                responseAudio.volume = 0.25; 
                 responseAudio.currentTime = 0; 
                 responseAudio.play().catch(() => {});
                 
@@ -1867,7 +1867,7 @@ const paranormalQuestions = [
             responseAudio.pause();
             responseAudio.currentTime = 0;
             if (state.isAudioScan && !isTtsPlaying) {
-                sweepAudio.volume = 0.12;
+                sweepAudio.volume = 0.42;
                 sweepAudio.play().catch(() => {});
             }
         }, 150); 
