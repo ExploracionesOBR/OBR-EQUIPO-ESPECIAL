@@ -127,10 +127,10 @@
         #zoom-target-indicator { position: absolute; width: 60px; height: 60px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 80; transition: transform 0.3s, opacity 0.3s; }
         #zoom-target-indicator.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 
-        /* 🗺️ Contenedor del Mapa Inyectado (Elevado a 120px y Cuadrado) */
+        /* 🗺️ Contenedor del Mapa Inyectado (Elevado a 45px y Cuadrado 150x150) */
         #map-container-slot { 
-            position: absolute; left: 30px; bottom: 120px; z-index: 85; 
-            width: 250px; height: 250px; /* MAPA MÁS GRANDE Y CUADRADO */
+            position: absolute; left: 30px; bottom: 45px; z-index: 85; 
+            width: 150px; height: 150px; /* MAPA MÁS GRANDE Y CUADRADO */
             border: none; /* SIN BORDES */
             background: transparent;
             transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease-out; 
@@ -146,9 +146,9 @@
 
         /* 🛰️ ESTILOS DEL MAPA INTERNO Y DESENFOQUES */
         #mini-map { height: 100%; width: 100%; filter: brightness(85%) contrast(110%) saturate(95%); transform: scale(1.15); transform-origin: center; background: transparent; }
-        .map-pulse { width: 16px; height: 16px; background: red; border-radius: 50%; position: relative; }
+        .map-pulse { width: 10px; height: 10px; background: red; border-radius: 50%; position: relative; }
         .map-pulse::after { content: ""; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: red; animation: mapPulseAnim 1.5s infinite; opacity: 0.6; }
-        @keyframes mapPulseAnim { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(3); opacity: 0; } }
+        @keyframes mapPulseAnim { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(3.5); opacity: 0; } }
 
         /* Desenfoque interno en bordes para complementar */
         #mini-map-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); mask-image: radial-gradient(circle at center, transparent 40%, black 80%); -webkit-mask-image: radial-gradient(circle at center, transparent 40%, black 80%); }
@@ -462,8 +462,8 @@
     // 🎚️ CONFIGURACIÓN MAESTRA DE SENSOR Y VOLÚMENES
     // ==========================================================
     const AI_SENSITIVITY = 0.2;       // Sensibilidad global del SLS (Por defecto 0.2)
-    const VOLUMEN_BARRIDO = 0.35;     // Ruido blanco (Spirit Box)
-    const VOLUMEN_RESPUESTA = 0.22;   // Efecto de radio al responder
+    const VOLUMEN_BARRIDO = 0.12;     // Ruido blanco (Spirit Box)
+    const VOLUMEN_RESPUESTA = 0.35;   // Efecto de radio al responder
     const VOLUMEN_EVP = 1.0;          // Voz siniestra/espíritus (Afecta la ganancia principal)
     const VOLUMEN_IA_VISION = 1.0;    // Voz normal de IA Visión
     // ==========================================================
@@ -1666,25 +1666,65 @@ const paranormalQuestions = [
         const telemetry = document.getElementById('telemetry-container');
         const linkStatus = document.getElementById('link-status');
         
+        // 1. Limpiamos cualquier temporizador previo para evitar choques en la memoria
+        if (window._uiRestoreTimeout) clearTimeout(window._uiRestoreTimeout);
+
+        // 2. Ocultamos los elementos de la interfaz instantáneamente
         if (mapSlot) mapSlot.classList.replace('map-visible', 'map-hidden');
+        if (telemetry) { telemetry.style.transition = 'opacity 0.5s'; telemetry.style.opacity = '0'; }
+        if (linkStatus) { linkStatus.style.transition = 'opacity 0.5s'; linkStatus.style.opacity = '0'; }
+        
+        // 3. Calculamos la duración EXACTA del video en caché
+        video.onloadedmetadata = () => {
+            // Si por alguna razón el navegador no lee la duración, usamos un fallback de 10s
+            const duration = (isNaN(video.duration) || video.duration === Infinity) ? 10 : video.duration;
+            const playTimeMs = duration * 1000;
+            
+            // Programamos el regreso exacto (Duración del video + 2 segundos)
+            window._uiRestoreTimeout = setTimeout(() => {
+                const ms = document.getElementById('map-container-slot');
+                const tel = document.getElementById('telemetry-container');
+                const ls = document.getElementById('link-status');
+                if (ms) ms.classList.replace('map-hidden', 'map-visible');
+                if (tel) tel.style.opacity = '1';
+                if (ls) ls.style.opacity = '1';
+            }, playTimeMs + 2000);
+        };
+
         video.src = src;
         
         if (type === 'banner') { 
-            video.className = 'banner-mode soft-mask'; video.style.width = ''; video.style.height = ''; video.style.objectFit = ''; overlay.style.background = 'transparent'; overlay.style.backdropFilter = 'none'; overlay.style.webkitBackdropFilter = 'none'; 
-            if(telemetry) { telemetry.style.transition = 'opacity 0.5s'; telemetry.style.opacity = '0'; }
-            if(linkStatus) { linkStatus.style.transition = 'opacity 0.5s'; linkStatus.style.opacity = '0'; }
+            video.className = 'banner-mode soft-mask'; video.style.width = ''; video.style.height = ''; video.style.objectFit = ''; overlay.style.background = 'transparent'; overlay.style.backdropFilter = 'none'; overlay.style.webkitBackdropFilter = 'none'; overlay.style.pointerEvents = 'none';
         } 
         else { 
-            video.className = ''; video.style.width = '100%'; video.style.height = '100%'; video.style.objectFit = 'cover'; overlay.style.background = 'rgba(0,0,0,0.85)'; overlay.style.backdropFilter = 'blur(10px)'; overlay.style.webkitBackdropFilter = 'blur(10px)'; 
+            video.className = ''; video.style.width = '100%'; video.style.height = '100%'; video.style.objectFit = 'cover'; overlay.style.background = 'rgba(0,0,0,0.85)'; overlay.style.backdropFilter = 'blur(10px)'; overlay.style.webkitBackdropFilter = 'blur(10px)'; overlay.style.pointerEvents = 'auto';
         }
-        overlay.classList.add('active'); video.play().catch(e => console.error("Autoplay bloqueado:", e)); video.onended = () => stopLocalMedia();
+        
+        overlay.classList.add('active'); 
+        video.play().catch(e => console.error("Autoplay bloqueado:", e)); 
+        
+        // 4. Al terminar de reproducirse, limpiamos el buffer de RAM (Stop & Play total)
+        video.onended = () => {
+            overlay.classList.remove('active'); 
+            overlay.style.pointerEvents = 'none';
+            video.pause(); 
+            video.removeAttribute('src'); 
+            video.load(); 
+        };
     }
 
     function stopLocalMedia() { 
         const overlay = document.getElementById('local-media-overlay'), video = document.getElementById('local-video-player'); 
         overlay.classList.remove('active'); 
-        setTimeout(() => { video.pause(); video.src = ""; }, 500); 
-        setTimeout(() => {
+        overlay.style.pointerEvents = 'none';
+        
+        video.pause(); 
+        video.removeAttribute('src'); 
+        video.load(); 
+        
+        // Si el usuario lo cortó manualmente, calculamos 2 segundos desde AHORA
+        if (window._uiRestoreTimeout) clearTimeout(window._uiRestoreTimeout);
+        window._uiRestoreTimeout = setTimeout(() => {
             const mapSlot = document.getElementById('map-container-slot');
             const telemetry = document.getElementById('telemetry-container');
             const linkStatus = document.getElementById('link-status');
@@ -1692,7 +1732,7 @@ const paranormalQuestions = [
             if (mapSlot) mapSlot.classList.replace('map-hidden', 'map-visible');
             if(telemetry) telemetry.style.opacity = '1';
             if(linkStatus) linkStatus.style.opacity = '1';
-        }, 3000);
+        }, 2000);
     }
 
     window.addEventListener('beforeunload', () => { 
@@ -1726,7 +1766,7 @@ const paranormalQuestions = [
         try {
             if (videoStream) videoStream.getVideoTracks().forEach(t => t.stop()); 
             
-            // OPTIMIZACIÓN FPS: Limitamos el framerate máximo de la cámara a 60 para evitar ahogar el CPU.
+            // OPTIMIZACIÓN FPS: Limitamos el framerate máximo de la cámara local a 60 y establecemos 30 como ideal.
             const safeVideoConfig = { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30, max: 60 }, advanced: [{ focusMode: "continuous" }] };
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: false, 
@@ -1877,7 +1917,7 @@ const paranormalQuestions = [
 
         let pulseIcon = L.divIcon({
             html: '<div class="map-pulse"></div>',
-            iconSize: [20, 20],
+            iconSize: [10, 10], // Tamaño de icono ajustado
             className: ''
         });
 
@@ -1911,7 +1951,7 @@ const paranormalQuestions = [
                     doubleClickZoom: false,
                     touchZoom: false,
                     attributionControl: false 
-                }).setView(point, 18);
+                }).setView(point, 11); // Zoom ajustado a 11 para ver más área
 
                 L.tileLayer(
                     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -1921,15 +1961,15 @@ const paranormalQuestions = [
                 mapMarker = L.marker(point, { icon: pulseIcon }).addTo(miniMapInstance);
 
                 mapPolyline = L.polyline([], {
-                    color: '#ff0000',
+                    color: '#00ffff', // Cyan brillante para máximo contraste con el punto rojo
                     weight: 4,
-                    opacity: 0.5
+                    opacity: 0.3      // Opacidad reducida para hacerla más sutil
                 }).addTo(miniMapInstance);
                 
                 setTimeout(() => { miniMapInstance.invalidateSize(); }, 500);
             }
 
-            miniMapInstance.setView(point, 18);
+            miniMapInstance.setView(point, 11); // Zoom ajustado a 11
             mapMarker.setLatLng(point);
 
             mapPath.push(point);
@@ -1958,6 +1998,7 @@ const paranormalQuestions = [
         }, 2500);
     }
 
+
     async function initApp() {
         unlockAudioContext(); 
         document.querySelectorAll('.load-btn').forEach(b => b.style.display = 'none');
@@ -1967,7 +2008,6 @@ const paranormalQuestions = [
         
         initMiniMap();
 
-        // OPTIMIZACIÓN FPS: Limitamos el framerate máximo de la cámara local a 60 y establecemos 30 como ideal.
         const constraintSets = [
             { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30, max: 60 }, advanced: [{ focusMode: "continuous" }] } },
             { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 60 } } },
@@ -2870,19 +2910,38 @@ const paranormalQuestions = [
         if (pose && pose.keypoints && pose.keypoints.length > 0) {
             drewPose = true;
             let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
-            let validPoints = 0;
-            pose.keypoints.forEach(kp => {
-                if (!kp || kp.score < AI_SENSITIVITY * 0.2) return;
+            let validHeadPoints = 0;
+            
+            // Analizar SOLO los puntos de la cabeza: 0(nariz), 1,2(ojos), 3,4(orejas)
+            for (let i = 0; i <= 4; i++) {
+                const kp = pose.keypoints[i];
+                if (!kp || kp.score < AI_SENSITIVITY * 0.2) continue;
                 const ax = mapX(kp.x), ay = mapY(kp.y);
                 if (ax < pMinX) pMinX = ax; if (ay < pMinY) pMinY = ay;
                 if (ax > pMaxX) pMaxX = ax; if (ay > pMaxY) pMaxY = ay;
-                validPoints++;
-            });
-            if (validPoints >= 3) {
-                const w = pMaxX - pMinX;
-                const h = pMaxY - pMinY;
-                if (w <= dW * 0.98 && h <= dH * 0.98) {
-                    poseBBox = { x: pMinX - 12, y: pMinY - 12, w: w + 24, h: h + 24 };
+                validHeadPoints++;
+            }
+
+            // Si detectó al menos una parte de la cabeza
+            if (validHeadPoints >= 1) {
+                let w = pMaxX - pMinX;
+                let h = pMaxY - pMinY;
+                
+                // Si solo encontró 1 punto aislado, le damos un tamaño inicial
+                if (w === 0 && h === 0) { w = 20; h = 20; pMinX -= 10; pMinY -= 10; }
+                
+                const maxSize = Math.max(w, h, 25); // Tamaño mínimo 25px para evitar cajas microscópicas
+                const cx = pMinX + w/2;
+                const cy = pMinY + h/2;
+                
+                if (maxSize <= dW * 0.6) { // Ignorar falsos positivos del tamaño de la pantalla
+                    // Crear un recuadro proporcionado, centrado en el rostro/cabeza
+                    poseBBox = { 
+                        x: cx - (maxSize * 0.8), 
+                        y: cy - (maxSize * 1.0), // Elevado hacia arriba para incluir la "frente" imaginaria
+                        w: maxSize * 1.6, 
+                        h: maxSize * 2.0 
+                    };
                 }
             }
         }
@@ -3228,13 +3287,18 @@ const paranormalQuestions = [
         
         // --- PROMPTS DE IA ROTATIVOS ---
         const AI_PROMPTS = [
-            "Actúa como un médium digital. Describe en primera persona lo que ves. Usa frases como 'Veo...', 'Hay algo en...'. Busca caras en las sombras. Sé siniestro. Max 12 palabras.",
-            "Eres un investigador paranormal. Analiza la imagen buscando anomalías, sombras o figuras ocultas. Describe tu hallazgo con terror. Max 12 palabras.",
-            "Actúa como una entidad atrapada en esta foto. ¿Qué ves a tu alrededor o a quién observas? Sé críptico y oscuro. Max 12 palabras.",
-            "Describe la atmósfera de esta imagen como si un evento trágico estuviera a punto de ocurrir. Enfócate en las sombras. Max 12 palabras.",
-            "Busca presencias invisibles o energía residual en esta captura. Repórtalo como un hallazgo paranormal escalofriante. Max 12 palabras.",
-            "Eres un demonólogo analizando la escena. Señala algo inquietante que el ojo humano normal pasaría por alto. Sé directo y aterrador. Max 12 palabras."
-        ];
+  "Actúa como médium digital. Primera persona. Percibo presencias únicas. Veo, hay algo, está. Rostros en sombras. Describe distinto, aumenta tensión, final inquietante. Máx 20 palabras.",
+
+  "Actúa como médium digital. Primera persona. Observo detalles ocultos. Veo, hay algo, está. Detecto rostros en sombras. Evita repetir, tono siniestro, final inquietante. Máx 20 palabras.",
+
+  "Actúa como médium digital. Primera persona. Siento presencias. Veo, hay algo, está. Rostros en sombras. Describe sensaciones, tensión creciente, final inquietante. Máx 20 palabras.",
+
+  "Actúa como médium digital. Primera persona. Algo no encaja. Veo, hay algo, está. Rostros en sombras. Genera incomodidad, evita repetir, final inquietante. Máx 20 palabras.",
+
+  "Actúa como médium digital en serie. Primera persona. La presencia avanza. Veo, hay algo, está. Rostros en sombras. Conecta antes, aumenta peligro, final inquietante. Máx 20 palabras.",
+
+  "Actúa como médium digital. Primera persona. La presencia está cerca. Veo, hay algo, está. Rostros en sombras. Amenaza directa, máxima tensión, final inquietante. Máx 20 palabras."
+];
         const prompt = AI_PROMPTS[Math.floor(Math.random() * AI_PROMPTS.length)];
         
         try {
