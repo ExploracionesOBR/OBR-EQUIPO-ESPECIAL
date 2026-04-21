@@ -462,8 +462,8 @@
     // 🎚️ CONFIGURACIÓN MAESTRA DE SENSOR Y VOLÚMENES
     // ==========================================================
     const AI_SENSITIVITY = 0.2;       // Sensibilidad global del SLS (Por defecto 0.2)
-    const VOLUMEN_BARRIDO = 0.12;     // Ruido blanco (Spirit Box)
-    const VOLUMEN_RESPUESTA = 0.35;   // Efecto de radio al responder
+    const VOLUMEN_BARRIDO = 0.55;     // Ruido blanco (Spirit Box)
+    const VOLUMEN_RESPUESTA = 0.25;   // Efecto de radio al responder
     const VOLUMEN_EVP = 1.0;          // Voz siniestra/espíritus (Afecta la ganancia principal)
     const VOLUMEN_IA_VISION = 1.0;    // Voz normal de IA Visión
     // ==========================================================
@@ -1951,7 +1951,7 @@ const paranormalQuestions = [
                     doubleClickZoom: false,
                     touchZoom: false,
                     attributionControl: false 
-                }).setView(point, 11); // Zoom ajustado a 11 para ver más área
+                }).setView(point, 17); // Zoom ajustado a 11 para ver más área
 
                 L.tileLayer(
                     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -3287,17 +3287,17 @@ const paranormalQuestions = [
         
         // --- PROMPTS DE IA ROTATIVOS ---
         const AI_PROMPTS = [
-  "Actúa como médium digital. Primera persona. Percibo presencias únicas. Veo, hay algo, está. Rostros en sombras. Describe distinto, aumenta tensión, final inquietante. Máx 20 palabras.",
+  "Actúa como médium acompañándome. Primera persona plural. Estamos aquí. Veo, hay algo, está. Detecta anomalías y rostros en sombras. Sin referencias a sonido. Lenguaje humano, final inquietante. Máx 20 palabras.",
 
-  "Actúa como médium digital. Primera persona. Observo detalles ocultos. Veo, hay algo, está. Detecto rostros en sombras. Evita repetir, tono siniestro, final inquietante. Máx 20 palabras.",
+  "Actúa como médium conmigo. Primera persona plural. Exploramos juntos. Veo, hay algo, está. Busca anomalías paranormales y rostros. Usa ¿lo viste?. Sin sonido. Tono siniestro, final inquietante. Máx 20 palabras.",
 
-  "Actúa como médium digital. Primera persona. Siento presencias. Veo, hay algo, está. Rostros en sombras. Describe sensaciones, tensión creciente, final inquietante. Máx 20 palabras.",
+  "Actúa como médium a mi lado. Primera persona plural. Sentimos presencias aquí. Veo, hay algo, está. Detecta anomalías, rostros en sombras. Sin audio. Tensión creciente, final inquietante. Máx 20 palabras.",
 
-  "Actúa como médium digital. Primera persona. Algo no encaja. Veo, hay algo, está. Rostros en sombras. Genera incomodidad, evita repetir, final inquietante. Máx 20 palabras.",
+  "Actúa como médium acompañante. Primera persona plural. Algo no encaja aquí. Veo, hay algo, está. Busca anomalías ocultas y rostros. Sin referencias auditivas. Incomodidad, final inquietante. Máx 20 palabras.",
 
-  "Actúa como médium digital en serie. Primera persona. La presencia avanza. Veo, hay algo, está. Rostros en sombras. Conecta antes, aumenta peligro, final inquietante. Máx 20 palabras.",
+  "Actúa como médium en exploración conmigo. Primera persona plural. Esto empeora aquí. Veo, hay algo, está. Detecta anomalías y presencias. Di vámonos o cuidado. Sin sonido. Final inquietante. Máx 20 palabras.",
 
-  "Actúa como médium digital. Primera persona. La presencia está cerca. Veo, hay algo, está. Rostros en sombras. Amenaza directa, máxima tensión, final inquietante. Máx 20 palabras."
+  "Actúa como médium a mi lado. Primera persona plural. Estamos en peligro aquí. Veo, hay algo, está. Detecta anomalías y rostros. Reacción humana, miedo real. Sin audio, final inquietante. Máx 20 palabras."
 ];
         const prompt = AI_PROMPTS[Math.floor(Math.random() * AI_PROMPTS.length)];
         
