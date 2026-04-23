@@ -210,6 +210,7 @@
         
         <div id="status-indicators" class="absolute bottom-12 left-5 flex items-center gap-2 text-sm pointer-events-none z-50" style="filter: drop-shadow(0px 0px 4px rgba(0,0,0,0.8));">
             <div id="recovery-indicator" class="transition-opacity duration-500" style="opacity: 0; display: none;">🚀</div>
+            <div id="ai-context-indicator" class="transition-opacity duration-500" style="opacity: 0; display: none;">📄</div>
             <div id="tts-warning" class="transition-opacity duration-500 text-yellow-500 font-mono text-xs bg-black/60 px-1.5 py-0.5 rounded border border-yellow-700 items-center gap-1" style="opacity: 0; display: none;">⚠️ <span class="text-[9px]">RED/TTS</span></div>
         </div>
         
@@ -462,8 +463,8 @@
     // 🎚️ CONFIGURACIÓN MAESTRA DE SENSOR Y VOLÚMENES
     // ==========================================================
     const AI_SENSITIVITY = 0.2;       // Sensibilidad global del SLS (Por defecto 0.2)
-    const VOLUMEN_BARRIDO = 0.55;     // Ruido blanco (Spirit Box)
-    const VOLUMEN_RESPUESTA = 0.25;   // Efecto de radio al responder
+    const VOLUMEN_BARRIDO = 0.80;     // Ruido blanco (Spirit Box)
+    const VOLUMEN_RESPUESTA = 0.70;   // Efecto de radio al responder
     const VOLUMEN_EVP = 1.0;          // Voz siniestra/espíritus (Afecta la ganancia principal)
     const VOLUMEN_IA_VISION = 1.0;    // Voz normal de IA Visión
     // ==========================================================
@@ -533,9 +534,12 @@ self.addEventListener('fetch', e => {
     
     let lastValidAudioTime = Date.now();
     let lastReconnectTime = 0; 
-    let simulatedPikes = new Array(128).fill(0); 
     let ambientNoiseLevel = 0.01; 
     let cumulativeEVPEnergy = 0; 
+    
+    // CACHÉ DE MEMORIA PARA ARREGLOS DE AUDIO
+    window._sp2Buffer = new Float32Array(128);
+    let simulatedPikes = new Float32Array(128);
 
     // BLOQUEO DE ANUNCIOS Y MEMORIA
     window._isAnnouncement = false;
@@ -546,6 +550,26 @@ self.addEventListener('fetch', e => {
     let remoteMicPeer = null;
     let remoteDataConn = null;
     let localSpeechRec = null; 
+
+    // --- CACHÉ DE DOM PARA OPTIMIZAR TELEMETRÍA ---
+    let DOM_CACHE = null;
+    function initDOMCache() {
+        if (!DOM_CACHE) {
+            DOM_CACHE = {
+                res: document.getElementById('meta-res'),
+                fps: document.getElementById('meta-fps'),
+                sig: document.getElementById('signal-ui'),
+                statTxt: document.getElementById('status-text'),
+                statDot: document.getElementById('status-dot'),
+                tally: document.getElementById('tally-border'),
+                micStat: document.getElementById('mic-remote-status'),
+                clock: document.getElementById('hud-time'),
+                ctxInd: document.getElementById('ai-context-indicator'),
+                recInd: document.getElementById('recovery-indicator'),
+                warning: document.getElementById('tts-warning')
+            };
+        }
+    }
 
     // --- VARIABLES PARA EL CONTEXTO INTELIGENTE DE IA ---
     let backgroundAITimer = null;
@@ -584,7 +608,6 @@ self.addEventListener('fetch', e => {
             }
         };
 
-        // CORRECCIÓN: Ignorar error "no-speech" para mantener ciclo limpio
         localSpeechRec.onerror = (e) => { 
             if (e.error !== 'no-speech') {
                 console.warn("Local Speech Error:", e.error); 
@@ -641,23 +664,39 @@ self.addEventListener('fetch', e => {
             if (resultText) {
                 let cleanJson = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
                 const parsed = JSON.parse(cleanJson);
-                if (parsed.nombre && parsed.nombre !== "null") window._aiContext.nombre = parsed.nombre;
-                if (parsed.fecha_muerte && parsed.fecha_muerte !== "null") window._aiContext.fecha_muerte = parsed.fecha_muerte;
-                if (parsed.entorno && parsed.entorno !== "null") window._aiContext.entorno = parsed.entorno;
-                if (parsed.objetos && parsed.objetos !== "null") window._aiContext.objetos = parsed.objetos;
+                let hasData = false;
+                
+                if (parsed.nombre && parsed.nombre !== "null") { window._aiContext.nombre = parsed.nombre; hasData = true; }
+                if (parsed.fecha_muerte && parsed.fecha_muerte !== "null") { window._aiContext.fecha_muerte = parsed.fecha_muerte; hasData = true; }
+                if (parsed.entorno && parsed.entorno !== "null") { window._aiContext.entorno = parsed.entorno; hasData = true; }
+                if (parsed.objetos && parsed.objetos !== "null") { window._aiContext.objetos = parsed.objetos; hasData = true; }
+                
+                if (hasData) {
+                    if (!DOM_CACHE) initDOMCache();
+                    if (DOM_CACHE && DOM_CACHE.ctxInd) {
+                        DOM_CACHE.ctxInd.style.display = 'flex'; void DOM_CACHE.ctxInd.offsetWidth; DOM_CACHE.ctxInd.style.opacity = '1';
+                        setTimeout(() => { DOM_CACHE.ctxInd.style.opacity = '0'; setTimeout(() => { if (DOM_CACHE.ctxInd.style.opacity === '0') DOM_CACHE.ctxInd.style.display = 'none'; }, 500); }, 3500);
+                    }
+                }
             }
         } catch(e) { }
     }
     
-    function scheduleBackgroundAIContext() {
+    function scheduleBackgroundAIContext(isImmediate = false) {
         clearTimeout(backgroundAITimer);
         if (state.isAudioScan && AI_API_KEY) {
-            const delay = 180000 + Math.random() * 120000; // Entre 3 y 5 minutos
-            backgroundAITimer = setTimeout(() => {
+            if (isImmediate) {
                 fetchBackgroundAIContext().then(() => {
-                    scheduleBackgroundAIContext();
+                    scheduleBackgroundAIContext(false);
                 });
-            }, delay);
+            } else {
+                const delay = 90000 + Math.random() * 90000; 
+                backgroundAITimer = setTimeout(() => {
+                    fetchBackgroundAIContext().then(() => {
+                        scheduleBackgroundAIContext(false);
+                    });
+                }, delay);
+            }
         }
     }
 
@@ -1083,6 +1122,7 @@ self.addEventListener('fetch', e => {
     checkMonthlyTTSReset();
 
     function updateTTSStatusUI() {
+        initDOMCache();
         const engineEl   = document.getElementById('tts-engine-status');
         const creditsEl  = document.getElementById('tts-credits-status');
         const usedEl     = document.getElementById('tts-used-status');
@@ -1356,8 +1396,7 @@ const paranormalQuestions = [
     function playResponseStart() {
         return new Promise(resolve => {
             if (responseFileAvailable) {
-                sweepAudio.pause();
-                sweepAudio.currentTime = 0;
+                if (state.isAudioScan) _fadeVolume(sweepAudio, 0.60, 200);
                 
                 responseAudio.volume = VOLUMEN_RESPUESTA; 
                 responseAudio.currentTime = 0; 
@@ -1375,8 +1414,7 @@ const paranormalQuestions = [
             responseAudio.pause();
             responseAudio.currentTime = 0;
             if (state.isAudioScan && !isTtsPlaying) {
-                sweepAudio.volume = VOLUMEN_BARRIDO;
-                sweepAudio.play().catch(() => {});
+                _fadeVolume(sweepAudio, VOLUMEN_BARRIDO, 500); 
             }
         }, 150); 
     }
@@ -1389,15 +1427,15 @@ const paranormalQuestions = [
             clearInterval(_xfadeTimers.get(sweepAudio));
             _xfadeTimers.delete(sweepAudio);
         }
-        sweepAudio.pause();
-        sweepAudio.volume = 0;
-        sweepAudio.currentTime = 0;
-        
         if (_xfadeTimers.has(responseAudio)) {
             clearInterval(_xfadeTimers.get(responseAudio));
             _xfadeTimers.delete(responseAudio);
         }
+        sweepAudio.pause();
+        sweepAudio.volume = 0;
+        
         responseAudio.pause();
+        responseAudio.volume = 0;
         responseAudio.currentTime = 0;
     }
 
@@ -1425,10 +1463,10 @@ const paranormalQuestions = [
     }
 
     function showTtsWarning() {
-        const warningEl = document.getElementById('tts-warning');
-        if (warningEl) {
-            warningEl.style.display = 'flex'; void warningEl.offsetWidth; warningEl.style.opacity = '1';
-            setTimeout(() => { warningEl.style.opacity = '0'; setTimeout(() => { if (warningEl.style.opacity === '0') warningEl.style.display = 'none'; }, 500); }, 5000);
+        initDOMCache();
+        if (DOM_CACHE.warning) {
+            DOM_CACHE.warning.style.display = 'flex'; void DOM_CACHE.warning.offsetWidth; DOM_CACHE.warning.style.opacity = '1';
+            setTimeout(() => { DOM_CACHE.warning.style.opacity = '0'; setTimeout(() => { if (DOM_CACHE.warning.style.opacity === '0') DOM_CACHE.warning.style.display = 'none'; }, 500); }, 5000);
         }
     }
 
@@ -1607,6 +1645,8 @@ const paranormalQuestions = [
     let lidarBusy = false; let lastLidarMask = null; let scanlineCanvas = null; let lidarGeneratedFrame = -1;
     let videoStream, peerCommand = null, peerVideoSender = null, conn = null;
     let frameCount = 0, lastTime = performance.now(), currentFps = 0;
+    
+    let lastVW = 0, lastVH = 0, lastCW = 0, lastCH = 0; 
 
     let logoImg = new Image(); logoImg.src = 'obr-logo.png';
 
@@ -1666,21 +1706,16 @@ const paranormalQuestions = [
         const telemetry = document.getElementById('telemetry-container');
         const linkStatus = document.getElementById('link-status');
         
-        // 1. Limpiamos cualquier temporizador previo para evitar choques en la memoria
         if (window._uiRestoreTimeout) clearTimeout(window._uiRestoreTimeout);
 
-        // 2. Ocultamos los elementos de la interfaz instantáneamente
         if (mapSlot) mapSlot.classList.replace('map-visible', 'map-hidden');
         if (telemetry) { telemetry.style.transition = 'opacity 0.5s'; telemetry.style.opacity = '0'; }
         if (linkStatus) { linkStatus.style.transition = 'opacity 0.5s'; linkStatus.style.opacity = '0'; }
         
-        // 3. Calculamos la duración EXACTA del video en caché
         video.onloadedmetadata = () => {
-            // Si por alguna razón el navegador no lee la duración, usamos un fallback de 10s
             const duration = (isNaN(video.duration) || video.duration === Infinity) ? 10 : video.duration;
             const playTimeMs = duration * 1000;
             
-            // Programamos el regreso exacto (Duración del video + 2 segundos)
             window._uiRestoreTimeout = setTimeout(() => {
                 const ms = document.getElementById('map-container-slot');
                 const tel = document.getElementById('telemetry-container');
@@ -1703,7 +1738,6 @@ const paranormalQuestions = [
         overlay.classList.add('active'); 
         video.play().catch(e => console.error("Autoplay bloqueado:", e)); 
         
-        // 4. Al terminar de reproducirse, limpiamos el buffer de RAM (Stop & Play total)
         video.onended = () => {
             overlay.classList.remove('active'); 
             overlay.style.pointerEvents = 'none';
@@ -1722,7 +1756,6 @@ const paranormalQuestions = [
         video.removeAttribute('src'); 
         video.load(); 
         
-        // Si el usuario lo cortó manualmente, calculamos 2 segundos desde AHORA
         if (window._uiRestoreTimeout) clearTimeout(window._uiRestoreTimeout);
         window._uiRestoreTimeout = setTimeout(() => {
             const mapSlot = document.getElementById('map-container-slot');
@@ -1766,8 +1799,7 @@ const paranormalQuestions = [
         try {
             if (videoStream) videoStream.getVideoTracks().forEach(t => t.stop()); 
             
-            // OPTIMIZACIÓN FPS: Limitamos el framerate máximo de la cámara local a 60 y establecemos 30 como ideal.
-            const safeVideoConfig = { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30, max: 60 }, advanced: [{ focusMode: "continuous" }] };
+            const safeVideoConfig = { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60, max: 60 }, advanced: [{ focusMode: "continuous" }] };
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: false, 
                 video: safeVideoConfig 
@@ -1778,8 +1810,8 @@ const paranormalQuestions = [
             
             el.video.srcObject = videoStream; 
             await el.video.play();
-            const recInd = document.getElementById('recovery-indicator');
-            if (recInd) { recInd.style.display = 'flex'; void recInd.offsetWidth; recInd.style.opacity = '1'; setTimeout(() => { recInd.style.opacity = '0'; setTimeout(() => { if(recInd.style.opacity === '0') recInd.style.display = 'none'; }, 500); }, 2500); }
+            initDOMCache();
+            if (DOM_CACHE && DOM_CACHE.recInd) { DOM_CACHE.recInd.style.display = 'flex'; void DOM_CACHE.recInd.offsetWidth; DOM_CACHE.recInd.style.opacity = '1'; setTimeout(() => { DOM_CACHE.recInd.style.opacity = '0'; setTimeout(() => { if(DOM_CACHE.recInd.style.opacity === '0') DOM_CACHE.recInd.style.display = 'none'; }, 500); }, 2500); }
             
             updateAudioRouting();
         } catch(e) {
@@ -1891,9 +1923,6 @@ const paranormalQuestions = [
         } catch(e) { console.warn("Error en initAudioEngine:", e); }
     }
 
-    // ==========================================
-    // 🛰️ INICIALIZACIÓN DEL MINI MAPA AISLADO
-    // ==========================================
     let miniMapInstance = null;
     let mapMarker = null;
     let mapPolyline = null;
@@ -1917,7 +1946,7 @@ const paranormalQuestions = [
 
         let pulseIcon = L.divIcon({
             html: '<div class="map-pulse"></div>',
-            iconSize: [10, 10], // Tamaño de icono ajustado
+            iconSize: [10, 10], 
             className: ''
         });
 
@@ -1951,7 +1980,7 @@ const paranormalQuestions = [
                     doubleClickZoom: false,
                     touchZoom: false,
                     attributionControl: false 
-                }).setView(point, 17); // Zoom ajustado a 11 para ver más área
+                }).setView(point, 11); 
 
                 L.tileLayer(
                     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -1961,15 +1990,15 @@ const paranormalQuestions = [
                 mapMarker = L.marker(point, { icon: pulseIcon }).addTo(miniMapInstance);
 
                 mapPolyline = L.polyline([], {
-                    color: '#00ffff', // Cyan brillante para máximo contraste con el punto rojo
+                    color: '#00ffff', 
                     weight: 4,
-                    opacity: 0.3      // Opacidad reducida para hacerla más sutil
+                    opacity: 0.3      
                 }).addTo(miniMapInstance);
                 
                 setTimeout(() => { miniMapInstance.invalidateSize(); }, 500);
             }
 
-            miniMapInstance.setView(point, 11); // Zoom ajustado a 11
+            miniMapInstance.setView(point, 11); 
             mapMarker.setLatLng(point);
 
             mapPath.push(point);
@@ -2009,9 +2038,9 @@ const paranormalQuestions = [
         initMiniMap();
 
         const constraintSets = [
-            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30, max: 60 }, advanced: [{ focusMode: "continuous" }] } },
-            { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 60 } } },
-            { audio: false, video: { facingMode: { ideal: 'environment' }, frameRate: { ideal: 30 } } }
+            { audio: false, video: { facingMode: 'environment', width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 60, max: 60 }, advanced: [{ focusMode: "continuous" }] } },
+            { audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, max: 60 } } },
+            { audio: false, video: { facingMode: { ideal: 'environment' }, frameRate: { ideal: 60 } } }
         ];
 
         let stream = null; let lastError = null;
@@ -2050,6 +2079,7 @@ const paranormalQuestions = [
             
             updateProgress(100, "SISTEMAS LISTOS"); document.getElementById('loading').style.display = 'none'; resize(); window.addEventListener('resize', resize);
             
+            initDOMCache();
             if ('requestVideoFrameCallback' in el.video) el.video.requestVideoFrameCallback(renderLoop); else requestAnimationFrame(renderLoop);
             setInterval(telemetryLoop, 1000); requestAnimationFrame(detectionLoop);
 
@@ -2315,10 +2345,27 @@ const paranormalQuestions = [
     }
 
     async function toggleAudioScanner() {
-        state.isAudioScan = !state.isAudioScan;
         const btnMenu = document.getElementById('btn-audio-menu');
         
         if (state.isAudioScan) {
+            if (window._waitingAudioDeactivation) return;
+            
+            // Si la IA está hablando, esperamos a que termine para desactivar (Silencioso, sin UI visual)
+            if (isTtsPlaying || isSpookySpeaking) {
+                window._waitingAudioDeactivation = true;
+                
+                const checkInterval = setInterval(() => {
+                    if (!isTtsPlaying && !isSpookySpeaking) {
+                        clearInterval(checkInterval);
+                        window._waitingAudioDeactivation = false;
+                        if(state.isAudioScan) executeAudioScanDeactivation(btnMenu);
+                    }
+                }, 500);
+            } else {
+                executeAudioScanDeactivation(btnMenu);
+            }
+        } else {
+            state.isAudioScan = true;
             const elOk  = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY;
             const vrOk  = voicerssRemaining > 0;
             if (!elOk && !vrOk) { state.isAudioScan = false; ttsNoDisponible('sin créditos para activar AUDIO SCAN'); return; }
@@ -2354,53 +2401,61 @@ const paranormalQuestions = [
 
             window._isAnnouncement = true; 
             speakAnnouncement('ESPIRIT BOX ACTIVADO').then(() => {
+                if (!state.isAudioScan) return;
                 sweepAudio.volume = 0; sweepAudio.currentTime = 0; sweepAudio.play().catch(() => {});
                 _fadeVolume(sweepAudio, VOLUMEN_BARRIDO, 1200); 
                 
                 setTimeout(() => {
+                    if (!state.isAudioScan) return;
                     lastReconnectTime = 0;
                     reconnectAudioNode();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
-                    scheduleBackgroundAIContext(); 
+                    scheduleBackgroundAIContext(true); 
                 }, 150);
             }).catch(() => {
+                if (!state.isAudioScan) return;
                 startSweepAudio();
                 setTimeout(() => {
+                    if (!state.isAudioScan) return;
                     lastReconnectTime = 0;
                     reconnectAudioNode();
                     window._isAnnouncement = false; 
                     lastEvpTime = Date.now(); 
-                    scheduleBackgroundAIContext(); 
+                    scheduleBackgroundAIContext(true); 
                 }, 150);
             });
-        } else {
-            if (btnMenu) btnMenu.classList.remove('active-state');
-            stopSweepAudio();
-
-            clearTimeout(_ttsWatchdog);
-            clearTimeout(backgroundAITimer);
-            window._aiContext = { nombre: null, fecha_muerte: null, entorno: null, objetos: null };
-            
-            if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
-            if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
-            if (window.speechSynthesis) window.speechSynthesis.cancel();
-            
-            stopLocalSpeech(); 
-            
-            isTtsPlaying = false; isSpookySpeaking = false;
-            lastSpokenText = ''; clearTimeout(speechTimer);
-            lastEvpTime = Date.now() + 99999; 
-            simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01;
-            evpContextMemory = []; 
-            
-            window._isAnnouncement = true; 
-            speakAnnouncement('ESPIRIT BOX DESACTIVADO', true).then(() => {
-                window._isAnnouncement = false;
-            }).catch(() => {
-                window._isAnnouncement = false;
-            });
+            sendScanDataToStudio();
         }
+    }
+
+    function executeAudioScanDeactivation(btnMenu) {
+        state.isAudioScan = false;
+        if (btnMenu) btnMenu.classList.remove('active-state');
+        stopSweepAudio();
+
+        clearTimeout(_ttsWatchdog);
+        clearTimeout(backgroundAITimer);
+        window._aiContext = { nombre: null, fecha_muerte: null, entorno: null, objetos: null };
+        
+        if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; }
+        if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; }
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        
+        stopLocalSpeech(); 
+        
+        isTtsPlaying = false; isSpookySpeaking = false;
+        lastSpokenText = ''; clearTimeout(speechTimer);
+        lastEvpTime = Date.now() + 99999; 
+        simulatedPikes.fill(0); cumulativeEVPEnergy = 0; ambientNoiseLevel = 0.01;
+        evpContextMemory = []; 
+        
+        window._isAnnouncement = true; 
+        speakAnnouncement('ESPIRIT BOX DESACTIVADO', true).then(() => {
+            window._isAnnouncement = false;
+        }).catch(() => {
+            window._isAnnouncement = false;
+        });
         sendScanDataToStudio();
     }
 
@@ -2474,12 +2529,14 @@ const paranormalQuestions = [
             }
         } else { for (let i = 0; i < visualBins; i++) simulatedPikes[i] *= 0.9; }
         
-        const sp2 = new Array(visualBins).fill(0);
+        const sp2 = window._sp2Buffer;
         for (let i = 0; i < visualBins; i++) {
             const l2 = i > 1 ? simulatedPikes[i-2] : 0, l1 = i > 0 ? simulatedPikes[i-1] : 0, r1 = i < visualBins-1 ? simulatedPikes[i+1] : 0, r2 = i < visualBins-2 ? simulatedPikes[i+2] : 0;
             sp2[i] = l2*0.1 + l1*0.25 + simulatedPikes[i]*0.3 + r1*0.25 + r2*0.1;
         }
-        simulatedPikes = sp2; c.save();
+        for (let i = 0; i < visualBins; i++) simulatedPikes[i] = sp2[i];
+        
+        c.save();
 
         const screenScale  = Math.max(1.2, Math.min(4, 1920 / (window.innerWidth || 1920)));
         const bottomY      = h * 0.84, waveHeight = 71 * screenScale, sensitivity = Math.min(3.5, 3.5 / screenScale * 1.5);
@@ -2524,15 +2581,40 @@ const paranormalQuestions = [
         if ((isUserTalkingNow || _userAlpha < 1) && window._liveUserText && _userAlpha > 0) {
             c.save();
             c.globalAlpha = _userAlpha * 0.85; 
-            const userLabel = window._liveUserText.toUpperCase(); c.font = `bold ${textFS}px 'Share Tech Mono'`; c.textAlign = "center"; const uY = bottomY - 55 * screenScale;
+            const userLabel = window._liveUserText.toUpperCase(); 
             
-            c.fillStyle = "rgba(255, 255, 255, 0.85)"; 
-            c.shadowColor = "#00d4ff";
+            if (!window._userTextCanvas) {
+                window._userTextCanvas = document.createElement('canvas');
+                window._userTextCtx = window._userTextCanvas.getContext('2d', {willReadFrequently: true});
+                window._lastRenderedUserText = "";
+            }
+            const uCanv = window._userTextCanvas;
+            const uCtx = window._userTextCtx;
             
-            c.shadowBlur = 40 * screenScale; c.fillText(userLabel, w / 2, uY);
-            c.shadowBlur = 20 * screenScale; c.fillText(userLabel, w / 2, uY);
-            c.shadowBlur = 10 * screenScale; c.fillText(userLabel, w / 2, uY);
-            c.shadowBlur = 5 * screenScale;  c.fillText(userLabel, w / 2, uY);
+            c.font = `bold ${textFS}px 'Share Tech Mono'`; 
+            const txtW = c.measureText(userLabel).width;
+            
+            if (txtW > 0 && textFS > 0) {
+                const reqW = Math.ceil(txtW + textFS * 4);
+                const reqH = Math.ceil(textFS * 4);
+                
+                if (userLabel !== window._lastRenderedUserText || uCanv.width !== reqW || uCanv.height !== reqH) {
+                    uCanv.width = reqW; uCanv.height = reqH;
+                    uCtx.clearRect(0,0,reqW,reqH);
+                    uCtx.font = `bold ${textFS}px 'Share Tech Mono'`;
+                    uCtx.textAlign = "center";
+                    uCtx.textBaseline = "middle";
+                    uCtx.fillStyle = "rgba(255, 255, 255, 0.85)";
+                    uCtx.shadowColor = "#00d4ff";
+                    uCtx.shadowBlur = 40 * screenScale; uCtx.fillText(userLabel, reqW/2, reqH/2);
+                    uCtx.shadowBlur = 20 * screenScale; uCtx.fillText(userLabel, reqW/2, reqH/2);
+                    uCtx.shadowBlur = 10 * screenScale; uCtx.fillText(userLabel, reqW/2, reqH/2);
+                    uCtx.shadowBlur = 5 * screenScale;  uCtx.fillText(userLabel, reqW/2, reqH/2);
+                    window._lastRenderedUserText = userLabel;
+                }
+                const uY = bottomY - 55 * screenScale;
+                c.drawImage(uCanv, (w / 2) - (reqW / 2), uY - (reqH / 2));
+            }
             
             c.restore();
         }
@@ -2749,7 +2831,11 @@ const paranormalQuestions = [
         if(logoImg.complete && logoImg.naturalWidth > 0) ctx.drawImage(logoImg, 0, 0, 80, 80); 
         
         ctx.fillStyle = "white"; ctx.font = "bold 16px 'Orbitron', sans-serif"; ctx.fillText("EXPLORACIONES OBR", 90, 30); 
-        const now = new Date(); ctx.fillStyle = "#ff3333"; ctx.font = "16px 'Share Tech Mono', monospace"; ctx.fillText(now.toLocaleDateString() + " - " + now.toLocaleTimeString(), 90, 52); 
+        
+        if (DOM_CACHE && DOM_CACHE.clock) {
+             ctx.fillStyle = "#ff3333"; ctx.font = "16px 'Share Tech Mono', monospace"; 
+             ctx.fillText(DOM_CACHE.clock.innerText, 90, 52); 
+        }
         
         ctx.restore(); 
         if(state.isSLS) {
@@ -2912,7 +2998,6 @@ const paranormalQuestions = [
             let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
             let validHeadPoints = 0;
             
-            // Analizar SOLO los puntos de la cabeza: 0(nariz), 1,2(ojos), 3,4(orejas)
             for (let i = 0; i <= 4; i++) {
                 const kp = pose.keypoints[i];
                 if (!kp || kp.score < AI_SENSITIVITY * 0.2) continue;
@@ -2922,23 +3007,20 @@ const paranormalQuestions = [
                 validHeadPoints++;
             }
 
-            // Si detectó al menos una parte de la cabeza
             if (validHeadPoints >= 1) {
                 let w = pMaxX - pMinX;
                 let h = pMaxY - pMinY;
                 
-                // Si solo encontró 1 punto aislado, le damos un tamaño inicial
                 if (w === 0 && h === 0) { w = 20; h = 20; pMinX -= 10; pMinY -= 10; }
                 
-                const maxSize = Math.max(w, h, 25); // Tamaño mínimo 25px para evitar cajas microscópicas
+                const maxSize = Math.max(w, h, 25); 
                 const cx = pMinX + w/2;
                 const cy = pMinY + h/2;
                 
-                if (maxSize <= dW * 0.6) { // Ignorar falsos positivos del tamaño de la pantalla
-                    // Crear un recuadro proporcionado, centrado en el rostro/cabeza
+                if (maxSize <= dW * 0.6) { 
                     poseBBox = { 
                         x: cx - (maxSize * 0.8), 
-                        y: cy - (maxSize * 1.0), // Elevado hacia arriba para incluir la "frente" imaginaria
+                        y: cy - (maxSize * 1.0), 
                         w: maxSize * 1.6, 
                         h: maxSize * 2.0 
                     };
@@ -2999,9 +3081,12 @@ const paranormalQuestions = [
         ctx.clearRect(0, 0, cW, cH); audioLayerCtx.clearRect(0, 0, cW, cH); updateSmoothing();
         
         if (vW && vH) {
-            const vRatio = vW / vH, cRatio = cW / cH; let dW, dH, dX, dY;
-            if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
-            window.drawCoords = { dW, dH, dX, dY, vW, vH };
+            if (vW !== lastVW || vH !== lastVH || cW !== lastCW || cH !== lastCH) {
+                const vRatio = vW / vH, cRatio = cW / cH; let dW, dH, dX, dY;
+                if (cRatio > vRatio) { dW = cW; dH = cW / vRatio; dX = 0; dY = (cH - dH) / 2; } else { dW = cH * vRatio; dH = cH; dX = (cW - dW) / 2; dY = 0; }
+                window.drawCoords = { dW, dH, dX, dY, vW, vH };
+                lastVW = vW; lastVH = vH; lastCW = cW; lastCH = cH;
+            }
             
             if (state.isLidar) { 
                 audioLayerCtx.fillStyle = 'rgba(0,0,0,0.25)'; 
@@ -3032,13 +3117,11 @@ const paranormalQuestions = [
         // 🚀 TRANSMISIÓN AL ESTUDIO (1080p y 30FPS Estables sin Lag)
         // =========================================================
         if (isTransmitting && window._streamCanvas && window._streamCtx) {
-            // OPTIMIZACIÓN: Solo redibujar y procesar filtros para el estudio a ~30FPS
-            // aunque el lienzo local (60FPS) vaya más rápido. Esto salva la batería y elimina el delay.
             if (now - (window._lastStudioFrameTime || 0) >= 33) {
                 window._lastStudioFrameTime = now;
                 
                 const sCtx = window._streamCtx;
-                const targetH = Math.min(cH, 1080); // Transmisión subida a 1080p
+                const targetH = Math.min(cH, 1080); 
                 const targetW = Math.floor(cW * (targetH / cH));
 
                 if (window._streamCanvas.width !== targetW) window._streamCanvas.width = targetW;
@@ -3047,13 +3130,12 @@ const paranormalQuestions = [
                 sCtx.clearRect(0, 0, targetW, targetH);
                 sCtx.save();
 
-                // Filtros quemados nativamente para el Estudio
                 if(state.filter === 'night') sCtx.filter = 'grayscale(100%) sepia(100%) hue-rotate(90deg) saturate(2.0) contrast(1.2) brightness(1.0)';
                 else if(state.filter === 'thermal') sCtx.filter = 'invert(100%) sepia(80%) hue-rotate(260deg) saturate(300%) contrast(150%) brightness(1.2)';
                 else if(state.filter === 'urbex') sCtx.filter = 'invert(100%) hue-rotate(180deg) saturate(250%) contrast(115%) brightness(0.85)';
                 else sCtx.filter = 'none';
 
-                const { dW, dH, dX, dY, vW: vwL, vH: vhL } = window.drawCoords;
+                const { dW, dH, dX, dY, vW: vwL, vH: vhL } = window.drawCoords || {dW: targetW, dH: targetH, dX: 0, dY: 0, vW: targetW, vH: targetH};
 
                 if (window._softwareZoomActive && state.zoom > 1) {
                     const zX = vwL * (window._zoomXPct || 0.5);
@@ -3077,18 +3159,19 @@ const paranormalQuestions = [
                 sCtx.drawImage(el.canvas, 0, 0, cW, cH, 0, 0, targetW, targetH);
                 sCtx.drawImage(el.audioCanvas, 0, 0, cW, cH, 0, 0, targetW, targetH);
 
-                // QUEMAR GPS EN VIDEO PARA ESTUDIO
                 if (window._currentGPS) {
                     sCtx.save();
                     const scaleF = targetW / cW;
-                    sCtx.fillStyle = "rgba(0, 0, 0, 0.75)";
-                    sCtx.shadowColor = "#ff0000";
-                    sCtx.shadowBlur = 10;
-                    sCtx.fillRect(30 * scaleF, targetH - (80 * scaleF), 310 * scaleF, 40 * scaleF);
+                    
+                    sCtx.fillStyle = "rgba(0, 0, 0, 0.85)";
+                    sCtx.fillRect(30 * scaleF, targetH - (80 * scaleF), 320 * scaleF, 40 * scaleF);
+                    
+                    sCtx.strokeStyle = "#ff0000";
+                    sCtx.lineWidth = 2 * scaleF;
+                    sCtx.strokeRect(30 * scaleF, targetH - (80 * scaleF), 320 * scaleF, 40 * scaleF);
                     
                     sCtx.fillStyle = "#00ff00";
                     sCtx.font = `bold ${16 * scaleF}px 'Share Tech Mono'`;
-                    sCtx.shadowBlur = 0;
                     sCtx.fillText(`[SAT-LINK] LAT:${window._currentGPS.lat.toFixed(5)} LON:${window._currentGPS.lon.toFixed(5)}`, 50 * scaleF, targetH - (55 * scaleF));
                     
                     const pulse = (Math.sin(now * 0.005) + 1) / 2;
@@ -3105,8 +3188,9 @@ const paranormalQuestions = [
     }
 
     function updateClock() {
+        if (!DOM_CACHE) return;
         const now = new Date(), dateStr = now.toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'}), timeStr = now.toLocaleTimeString();
-        const clockEl = document.getElementById('hud-time'); if (clockEl) clockEl.innerText = `${dateStr} - ${timeStr}`;
+        if (DOM_CACHE.clock) DOM_CACHE.clock.innerText = `${dateStr} - ${timeStr}`;
     }
 
     let watchdogZeroFps = 0;
@@ -3117,6 +3201,7 @@ const paranormalQuestions = [
     }, 1000);
 
     function telemetryLoop() {
+        if (!DOM_CACHE) initDOMCache();
         const now = performance.now(); const elapsed = now - lastTime;
         if (elapsed >= 1000) { currentFps = Math.round((frameCount * 1000) / elapsed); frameCount = 0; lastTime = now; }
         updateClock(); 
@@ -3126,26 +3211,33 @@ const paranormalQuestions = [
         
         const hasRemote = window.remoteMicStream && window.remoteMicStream.getAudioTracks().length > 0;
         const hasStudio = conn && conn.open;
-        const micStatusEl = document.getElementById('mic-remote-status');
         
         if (hasRemote) {
-            if(micStatusEl) { micStatusEl.innerText = "MIC REM: ONLINE"; micStatusEl.className = "text-green-500 font-bold"; }
+            if(DOM_CACHE.micStat) { DOM_CACHE.micStat.innerText = "MIC REM: ONLINE"; DOM_CACHE.micStat.className = "text-green-500 font-bold"; }
         } else if (hasStudio) {
-            if(micStatusEl) { micStatusEl.innerText = "MIC LOCAL (ESTUDIO)"; micStatusEl.className = "text-yellow-500 font-bold"; }
+            if(DOM_CACHE.micStat) { DOM_CACHE.micStat.innerText = "MIC LOCAL (ESTUDIO)"; DOM_CACHE.micStat.className = "text-yellow-500 font-bold"; }
         } else if (isLocalMicForced && audioStream && audioStream.getAudioTracks().length > 0) {
-            if(micStatusEl) { micStatusEl.innerText = "MIC LOCAL (MANUAL)"; micStatusEl.className = "text-green-500 font-bold"; }
+            if(DOM_CACHE.micStat) { DOM_CACHE.micStat.innerText = "MIC LOCAL (MANUAL)"; DOM_CACHE.micStat.className = "text-green-500 font-bold"; }
         } else {
-            if(micStatusEl) { micStatusEl.innerText = "MIC: OFFLINE"; micStatusEl.className = "text-gray-500 font-bold"; }
+            if(DOM_CACHE.micStat) { DOM_CACHE.micStat.innerText = "MIC: OFFLINE"; DOM_CACHE.micStat.className = "text-gray-500 font-bold"; }
         }
         
         if(window.updateAudioScanVisibility) updateAudioScanVisibility();
 
         const vW = el.video.videoWidth || 0, vH = el.video.videoHeight || 0;
-        document.getElementById('meta-res').innerText = `${vW}x${vH}`; document.getElementById('meta-fps').innerText = `${currentFps} FPS`;
-        document.getElementById('signal-ui').className = `signal-bars signal-level-${signal}`;
-        const statusEl = document.getElementById('status-text'), dotEl = document.getElementById('status-dot'), tallyEl = document.getElementById('tally-border');
-        if(conn && conn.open) { statusEl.innerText = "ONLINE"; statusEl.className = "text-green-500 font-bold font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; tallyEl.className = "online"; } 
-        else { statusEl.innerText = "PREVIEW"; statusEl.className = "text-gray-400 font-mono"; dotEl.className = "w-2 h-2 rounded-full bg-red-900"; tallyEl.className = "preview"; }
+        if (DOM_CACHE.res) DOM_CACHE.res.innerText = `${vW}x${vH}`; 
+        if (DOM_CACHE.fps) DOM_CACHE.fps.innerText = `${currentFps} FPS`;
+        if (DOM_CACHE.sig) DOM_CACHE.sig.className = `signal-bars signal-level-${signal}`;
+        
+        if(conn && conn.open) { 
+            if (DOM_CACHE.statTxt) { DOM_CACHE.statTxt.innerText = "ONLINE"; DOM_CACHE.statTxt.className = "text-green-500 font-bold font-mono"; }
+            if (DOM_CACHE.statDot) DOM_CACHE.statDot.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"; 
+            if (DOM_CACHE.tally) DOM_CACHE.tally.className = "online"; 
+        } else { 
+            if (DOM_CACHE.statTxt) { DOM_CACHE.statTxt.innerText = "PREVIEW"; DOM_CACHE.statTxt.className = "text-gray-400 font-mono"; }
+            if (DOM_CACHE.statDot) DOM_CACHE.statDot.className = "w-2 h-2 rounded-full bg-red-900"; 
+            if (DOM_CACHE.tally) DOM_CACHE.tally.className = "preview"; 
+        }
     }
 
     function openConnect() { 
@@ -3202,14 +3294,13 @@ const paranormalQuestions = [
                 document.body.appendChild(streamCanvas);
             }
             window._streamCanvas = streamCanvas;
-            window._streamCtx = streamCanvas.getContext('2d');
+            window._streamCtx = streamCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
             
             if (el.canvas) {
                 streamCanvas.width = el.canvas.width;
                 streamCanvas.height = el.canvas.height;
             }
             
-            // OPTIMIZACIÓN: Transmisión exacta a 30 FPS.
             const stream = streamCanvas.captureStream(30); 
             if (mixDestination && mixDestination.stream) mixDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track)); else if (audioStream) { const audioTracks = audioStream.getAudioTracks(); if(audioTracks.length > 0) stream.addTrack(audioTracks[0]); }
             setTimeout(() => { const call = peerVideoSender.call(videoTarget, stream, { metadata: { name: name } }); call.on('close', () => { if(peerVideoSender) peerVideoSender.destroy(); }); call.on('error', (e) => {}); showToast("Transmitiendo Video...", false); }, 1500);
@@ -3285,20 +3376,14 @@ const paranormalQuestions = [
         }, 'image/jpeg', 0.8);
         const base64 = aiSnapCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
         
-        // --- PROMPTS DE IA ROTATIVOS ---
         const AI_PROMPTS = [
-  "Actúa como médium acompañándome. Primera persona plural. Estamos aquí. Veo, hay algo, está. Detecta anomalías y rostros en sombras. Sin referencias a sonido. Lenguaje humano, final inquietante. Máx 20 palabras.",
-
-  "Actúa como médium conmigo. Primera persona plural. Exploramos juntos. Veo, hay algo, está. Busca anomalías paranormales y rostros. Usa ¿lo viste?. Sin sonido. Tono siniestro, final inquietante. Máx 20 palabras.",
-
-  "Actúa como médium a mi lado. Primera persona plural. Sentimos presencias aquí. Veo, hay algo, está. Detecta anomalías, rostros en sombras. Sin audio. Tensión creciente, final inquietante. Máx 20 palabras.",
-
-  "Actúa como médium acompañante. Primera persona plural. Algo no encaja aquí. Veo, hay algo, está. Busca anomalías ocultas y rostros. Sin referencias auditivas. Incomodidad, final inquietante. Máx 20 palabras.",
-
-  "Actúa como médium en exploración conmigo. Primera persona plural. Esto empeora aquí. Veo, hay algo, está. Detecta anomalías y presencias. Di vámonos o cuidado. Sin sonido. Final inquietante. Máx 20 palabras.",
-
-  "Actúa como médium a mi lado. Primera persona plural. Estamos en peligro aquí. Veo, hay algo, está. Detecta anomalías y rostros. Reacción humana, miedo real. Sin audio, final inquietante. Máx 20 palabras."
-];
+            "Actúa como médium digital. Primera persona. Percibo presencias únicas. Veo, hay algo, está. Rostros en sombras. Describe distinto, aumenta tensión, final inquietante. Máx 20 palabras.",
+            "Actúa como médium digital. Primera persona. Observo detalles ocultos. Veo, hay algo, está. Detecto rostros en sombras. Evita repetir, tono siniestro, final inquietante. Máx 20 palabras.",
+            "Actúa como médium digital. Primera persona. Siento presencias. Veo, hay algo, está. Rostros en sombras. Describe sensaciones, tensión creciente, final inquietante. Máx 20 palabras.",
+            "Actúa como médium digital. Primera persona. Algo no encaja. Veo, hay algo, está. Rostros en sombras. Genera incomodidad, evita repetir, final inquietante. Máx 20 palabras.",
+            "Actúa como médium digital en serie. Primera persona. La presencia avanza. Veo, hay algo, está. Rostros en sombras. Conecta antes, aumenta peligro, final inquietante. Máx 20 palabras.",
+            "Actúa como médium digital. Primera persona. La presencia está cerca. Veo, hay algo, está. Rostros en sombras. Amenaza directa, máxima tensión, final inquietante. Máx 20 palabras."
+        ];
         const prompt = AI_PROMPTS[Math.floor(Math.random() * AI_PROMPTS.length)];
         
         try {
@@ -3313,7 +3398,7 @@ const paranormalQuestions = [
                         if (resp.ok && data.choices && data.choices[0].message) { success = true; textResult = data.choices[0].message.content; } 
                         else { if(data.error && data.error.code === 'model_decommissioned') { textResult = "MODELO GROQ OBSOLETO"; success = true; break; } attempts++; await new Promise(r => setTimeout(r, 1000)); }
                     } else {
-                        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CURRENT_AI_MODEL}:generateContent?key=${AI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }] }) });
+                        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CURRENT_AI_MODEL}:generateContent?key=${AI_API_KEY}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] }) });
                         clearTimeout(reqTimer); const data = await resp.json(); 
                         if (data.candidates && data.candidates[0].content) { success = true; textResult = data.candidates[0].content.parts[0].text; } else { attempts++; await new Promise(r => setTimeout(r, 1000)); }
                     }
@@ -3337,19 +3422,44 @@ const paranormalQuestions = [
 
     function togglePareidolia(btnElement) {
         if(!AI_API_KEY) { showToast("SIN API KEY — CONFIGURA EN ⚙ AJUSTES", true); return; }
-        const _nextActive = !isPareidoliaActive;
-        if (_nextActive) { const elOk = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY; const vrOk = voicerssRemaining > 0; if (!elOk && !vrOk) { ttsNoDisponible('sin créditos para activar IA VISION'); return; } }
-        const btn = btnElement || document.getElementById('btn-ia'); isPareidoliaActive = _nextActive; state.isPareidolia = isPareidoliaActive;
+        const btn = btnElement || document.getElementById('btn-ia');
         
-        if(isPareidoliaActive) {
+        if (isPareidoliaActive) {
+            if (window._waitingVisionDeactivation) return;
+            
+            // Cierre silencioso esperando a que termine la locución
+            if (isTtsPlaying || isSpookySpeaking || isAIProcessing) {
+                window._waitingVisionDeactivation = true;
+                const checkInterval = setInterval(() => {
+                    if (!isTtsPlaying && !isSpookySpeaking && !isAIProcessing) {
+                        clearInterval(checkInterval);
+                        window._waitingVisionDeactivation = false;
+                        if(isPareidoliaActive) executePareidoliaDeactivation(btn);
+                    }
+                }, 500);
+            } else {
+                executePareidoliaDeactivation(btn);
+            }
+        } else {
+            const elOk = elevenlabsCreditsRemaining > 5 && ELEVENLABS_API_KEY; 
+            const vrOk = voicerssRemaining > 0; 
+            if (!elOk && !vrOk) { ttsNoDisponible('sin créditos para activar IA VISION'); return; }
+            
+            isPareidoliaActive = true; 
+            state.isPareidolia = true;
             if(btn) btn.classList.add('active-state'); animState.hudTarget = 0.0; animState.aiTarget = 1.0;
             currentAiText = ""; currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; isAIProcessing = false; aiScannerTimer = 0; aiScannerState = 0; startScanningEffect(); clearTimeout(pareidoliaInterval);
             speakAnnouncement('VISIÓN ACTIVADA').then(() => { if (!isPareidoliaActive) return; pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); }).catch(() => { pareidoliaInterval = setTimeout(() => { if (isPareidoliaActive) schedulePareidolia(); }, 4000 + Math.random() * 2000); });
-        } else {
-            if(btn) btn.classList.remove('active-state'); animState.hudTarget = 1.0; animState.aiTarget = 0.0; clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
-            if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } if (window.speechSynthesis) window.speechSynthesis.cancel();
-            isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISIÓN DESACTIVADA', true).catch(() => {});
+            showMenus(); sendScanDataToStudio();
         }
+    }
+
+    function executePareidoliaDeactivation(btn) {
+        isPareidoliaActive = false; 
+        state.isPareidolia = false;
+        if(btn) btn.classList.remove('active-state'); animState.hudTarget = 1.0; animState.aiTarget = 0.0; clearTimeout(pareidoliaInterval); clearTimeout(_ttsWatchdog);
+        if (_activeBufSrc) { try { _activeBufSrc.stop(); } catch(e){} _activeBufSrc = null; } if (cloudTTSPlayer) { cloudTTSPlayer.pause(); cloudTTSPlayer.src = ''; } if (window.speechSynthesis) window.speechSynthesis.cancel();
+        isTtsPlaying = false; isSpookySpeaking = false; isAIProcessing = false; stopScanningEffect(); currentAiText = ""; if (currentAiImage) { try { URL.revokeObjectURL(currentAiImage); } catch(e){} } currentAiImage = null; currentAiImgEl = null; window._aiImageCache = null; lastPareidoliaCall = 0; aiScannerTimer = 0; aiScannerState = 0; speakAnnouncement('VISIÓN DESACTIVADA', true).catch(() => {});
         showMenus(); sendScanDataToStudio();
     }
 
