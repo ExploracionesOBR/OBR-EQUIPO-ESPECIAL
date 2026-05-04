@@ -1980,7 +1980,7 @@ const paranormalQuestions = [
                     doubleClickZoom: false,
                     touchZoom: false,
                     attributionControl: false 
-                }).setView(point, 19); // <-- Cambia el 11 por 18 - 11: Nivel ciudad/región (actual). - 15: Nivel colonia/barrio. - 18: Nivel calle/casas (muy cerca).
+                }).setView(point, 18); // <-- Cambia el 11 por 18 - 11: Nivel ciudad/región (actual). - 15: Nivel colonia/barrio. - 18: Nivel calle/casas (muy cerca).
 
                 L.tileLayer(
                     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -1998,7 +1998,7 @@ const paranormalQuestions = [
                 setTimeout(() => { miniMapInstance.invalidateSize(); }, 500);
             }
 
-            miniMapInstance.setView(point, 19); // <-- Cambia el 11 por 18 - 11: Nivel ciudad/región (actual). - 15: Nivel colonia/barrio. - 18: Nivel calle/casas (muy cerca).
+            miniMapInstance.setView(point, 18); // <-- Cambia el 11 por 18 - 11: Nivel ciudad/región (actual). - 15: Nivel colonia/barrio. - 18: Nivel calle/casas (muy cerca).
             mapMarker.setLatLng(point);
 
             mapPath.push(point);
